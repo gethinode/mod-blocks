@@ -14,17 +14,17 @@
     <a href="https://gethinode.com" alt="Hinode theme">
         <img src="https://img.shields.io/badge/theme-hinode-blue">
     </a>
-    <a href="https://github.com/gethinode/mod-template/commits/main" alt="Last commit">
-        <img src="https://img.shields.io/github/last-commit/gethinode/mod-template.svg">
+    <a href="https://github.com/gethinode/mod-blocks/commits/main" alt="Last commit">
+        <img src="https://img.shields.io/github/last-commit/gethinode/mod-blocks.svg">
     </a>
-    <a href="https://github.com/gethinode/mod-template/issues" alt="Issues">
-        <img src="https://img.shields.io/github/issues/gethinode/mod-template.svg">
+    <a href="https://github.com/gethinode/mod-blocks/issues" alt="Issues">
+        <img src="https://img.shields.io/github/issues/gethinode/mod-blocks.svg">
     </a>
-    <a href="https://github.com/gethinode/mod-template/pulls" alt="Pulls">
-        <img src="https://img.shields.io/github/issues-pr-raw/gethinode/mod-template.svg">
+    <a href="https://github.com/gethinode/mod-blocks/pulls" alt="Pulls">
+        <img src="https://img.shields.io/github/issues-pr-raw/gethinode/mod-blocks.svg">
     </a>
-    <a href="https://github.com/gethinode/mod-template/blob/main/LICENSE" alt="License">
-        <img src="https://img.shields.io/github/license/gethinode/mod-template">
+    <a href="https://github.com/gethinode/mod-blocks/blob/main/LICENSE" alt="License">
+        <img src="https://img.shields.io/github/license/gethinode/mod-blocks">
     </a>
 </p>
 

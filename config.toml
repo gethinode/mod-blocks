@@ -1,14 +1,33 @@
+# define module integration
+[params.modules.bookshop]
+  integration = "core"
+
 [module]
-  [module.hugoVersion]
-    extended = true
-    min = "0.110.0"
-    max = ""
+  hugoVersion.extended = true
+  hugoVersion.min = '0.147.6'
+  # expose bookshop partials to Hugo
   [[module.mounts]]
-    source = 'layouts'
-    target = 'layouts'
+    source = 'component-library'
+    target = 'layouts/partials/bookshop' # note: bookshop engine 3.17.1 does not recognize layouts/_partials/bookshop yet
+    includeFiles = [
+      '**/*.hugo.html',
+    ]
+  # expose bookshop config for Bookshop integrations using cloudcannon-hugo
   [[module.mounts]]
-    source = 'assets'
-    target = 'assets'
+    source = 'component-library'
+    target = 'assets/bookshop'
+  # expose bookshop specifications as Hinode data structure
   [[module.mounts]]
-    source = 'static'
-    target = 'static'
+    source = 'component-library'
+    target = 'data/structures'
+    includeFiles = ['**/*.bookshop.yml']
+  # integrate main bookshop style with Hinode styles pipeline
+  [[module.mounts]]
+    source = 'component-library/bookshop.scss'
+    target = 'assets/scss/bookshop.scss'
+  # integrate bookshop component styles with Hinode styles pipeline
+  [[module.mounts]]
+    source = 'component-library'
+    target = 'assets/scss/modules/bookshop'
+    includeFiles = ['**/*.scss']
+    excludeFiles = ['bookshop.scss']
