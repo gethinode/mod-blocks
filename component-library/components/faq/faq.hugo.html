@@ -12,42 +12,6 @@
 {{/* Initialize global arguments */}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
 
-{{ define "_partials/inline/accordion-faq.html" }}
-	{{ $id := .id }}
-	{{ $contrast := .contrast }}
-	{{ $class := .class }}
-	{{ $color := .color }}
-	{{ $items := .items }}
-	
-	<div id="{{ $id }}" class="accordion accordion-faq {{ if $contrast }}accordion-faq-contrast text-white {{ end -}}
-		accordion-flush{{ with $class }} {{ . }}{{ end }} col-12 col-md-6 mx-auto">
-		{{ range $index, $item := $items }}
-			<div class="accordion-item">
-				{{- with $item.title -}}
-					<div class="accordion-header m-0" id="{{ $id }}-heading-{{ $id }}">
-						<button class="accordion-button collapsed" 
-							type="button" 
-							data-bs-toggle="collapse"
-							data-bs-target="#{{ $id }}-item-{{ $index }}"
-							aria-expanded="false"
-							aria-controls="{{ $id }}-item-{{ $index }}"
-						>
-						{{ if $color }}<div class="text-{{ $color }}">{{ . }}</div>{{ else }}{{ . }}{{ end }}
-						</button>
-					</div>
-				{{- end -}}
-				<div id="{{ $id }}-item-{{ $index }}" 
-					class="accordion-collapse collapse"
-					aria-labelledby="{{ $id }}-heading-{{ $index }}"
-					data-bs-parent="#{{ $id }}"
-				>
-					<div class="accordion-body">{{ $item.description | page.RenderString | safeHTML }}</div>
-				</div>
-			</div>
-		{{ end }}
-	</div>
-{{ end }}
-
 {{/* Main code */}}
 {{ $color := "" }}
 {{ if .contrast }}{{ $color = "white" }}{{ end }}
@@ -60,7 +24,7 @@
 {{ $class := "" }}
 {{ $id := printf "faq-%s" (md5 (delimit (slice . now) "-")) }}
 
-{{ $raw = printf "%s%s" $raw (partial "inline/accordion-faq.html" (dict
+{{ $raw = printf "%s%s" $raw (partial "assets/faq.html" (dict
 	"id"       $id
 	"contrast" .contrast
 	"class"    .class
