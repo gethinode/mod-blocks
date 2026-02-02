@@ -22,12 +22,11 @@
 {{- $raw = printf "%s%s" $raw (partial "assets/menu.html" (dict 
 	"page"         page
 	"menu"         .menu
-	"menu-style"   .menuStyle
+	"menu-style"   (or .menu_style (index . "menu-style"))
 	"cols"         .cols
-	"icon-rounded" .iconRounded
-	"icon-style"   .iconStyle
+	"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
+	"icon-style"   (or .icon_style (index . "icon-style"))
 )) -}}
-
 
 {{ if $raw }}
 	{{ partial "utilities/section.html" (dict 
