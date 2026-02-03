@@ -11,7 +11,7 @@
 
 {{ $raw := partial "assets/hero.html"  (dict 
 	"page"         page
-	"heading"      (merge (dict "width" 8) .heading)
+	"heading"      (merge (dict "arrangement" "above" "width" 8) .heading)
 	"illustration" (merge (dict "ratio" "auto") .illustration)
 	"order"        .order
 	"link-type"    (or .link_type (index . "link-type"))
