@@ -98,7 +98,7 @@
 	{{ if gt (len $pages) 0 }}
 		{{ $raw = printf "%s%s" $raw (partial $partial $params) }}
 	{{ else }}
-		{{ $raw = printf `%s<p class="pt-%d">%s.</p>` $raw $padding.y T "emptyList" }}
+		{{ $raw = printf `%s<p class="pt-%d">%s.</p>` $raw $padding.y (T "emptyList") }}
 	{{ end }}
 
 	{{ if $raw }}
