@@ -31,3 +31,9 @@
     target = 'assets/scss/modules/bookshop'
     includeFiles = ['**/*.scss']
     excludeFiles = ['bookshop.scss']
+  # expose block-specific partials
+  [[module.mounts]]
+    source = 'layouts'
+    target = 'layouts'
+  [[module.imports]]
+    path = "github.com/cloudcannon/bookshop/hugo/v3"

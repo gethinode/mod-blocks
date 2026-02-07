@@ -1,0 +1,4 @@
+{{ with .Params.content_blocks }}
+    {{ partial "bookshop_bindings" `.Params.content_blocks` | safeHTML }}
+    {{ partial "bookshop_partial" (slice "page" .) | safeHTML }}
+{{ end }}

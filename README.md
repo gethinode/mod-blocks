@@ -1,8 +1,8 @@
-# Hinode Module - Template
+# Hinode Module - Blocks
 
 <!-- Tagline -->
 <p align="center">
-    <b>A template to define a Hugo module compatible with Hinode</b>
+    <b>Pre-built Bookshop blocks and page templates for Hinode sites</b>
     <br />
 </p>
 
@@ -32,18 +32,79 @@
 
 ![Logo](https://raw.githubusercontent.com/gethinode/hinode/main/static/img/logo.png)
 
-Hinode is a clean blog theme for [Hugo][hugo], an open-source static site generator. Hinode is available as a [template][repository_template], and a [main theme][repository]. <!-- This repository maintains a Hugo module to add [module][module] to a Hinode site. --> Visit the Hinode documentation site for [installation instructions][hinode_docs].
+Hinode is a clean blog theme for [Hugo][hugo], an open-source static site generator. Hinode is available as a [template][repository_template], and a [main theme][repository].
+
+This module provides **pre-built Bookshop blocks** for quickly building layouts and pages in Hinode sites. It includes:
+
+- **16 Bookshop components** for visual page building
+- **Block-specific partials** (hero, section-title, contact, faq, testimonial-carousel, menu)
+- **Page templates** (contact page)
+- **Section wrapper utility** for consistent theming
+
+## Features
+
+- 🧱 **Content Blocks**: 16 reusable Bookshop components (hero, cards, FAQ, testimonials, etc.)
+- 🎨 **Visual Editing**: Compatible with CloudCannon CMS for visual page building
+- 📦 **Self-Contained**: All block-specific partials included
+- 🔧 **Modular**: Optional extension for Hinode v2+
+
+## Installation
+
+Add mod-blocks to your Hinode site's `hugo.toml`:
+
+```toml
+[[module.imports]]
+  path = "github.com/gethinode/mod-blocks"
+```
+
+Then run:
+
+```bash
+hugo mod get -u
+```
+
+## Requirements
+
+- **Hugo Extended** v0.147.6 or higher
+- **Hinode v2** for:
+  - mod-utils utilities (GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.)
+  - Shared asset partials (card-group, video, table, timeline, etc.)
+
+## Architecture
+
+This module exposes:
+
+### Bookshop Components (16)
+Located in `component-library/components/`:
+- hero, about, cards, features, faq, testimonials, menu, teams, cta, timeline, newsletter, logos, articles, video, sponsors, stats
+
+### Block-Specific Partials (7)
+
+**Asset Partials (5):**
+- `assets/hero.html` - Hero section rendering
+- `assets/contact.html` - Contact information display
+- `assets/faq.html` - FAQ accordion rendering
+- `assets/testimonial-carousel.html` - Testimonial carousel
+- `assets/menu.html` - Menu item rendering
+
+**Utility Partial (1):**
+- `utilities/section.html` - Wraps all components for consistent theming
+
+**Page Template (1):**
+- `page/contact.html` - Contact page layout
+
+### Dependencies on Hinode
+
+mod-blocks depends on Hinode v2 for:
+- **mod-utils utilities**: GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.
+- **Shared asset partials**: card-group, video, table, timeline, live-image, section-title, etc.
+- **Bootstrap styling** and theming system
+
+Visit the Hinode documentation site for [installation instructions][hinode_docs].
 
 ## Contributing
 
 This module uses [semantic-release][semantic-release] to automate the release of new versions. The package uses `husky` and `commitlint` to ensure commit messages adhere to the [Conventional Commits][conventionalcommits] specification. You can run `npx git-cz` from the terminal to help prepare the commit message.
-
-<!-- ## Configuration
-
-This module supports the following parameters (see the section `params.modules` in `config.toml`):
-
-| Setting                   | Default | Description |
-|---------------------------|---------|-------------| -->
 
 <!-- MARKDOWN LINKS -->
 [hugo]: https://gohugo.io
