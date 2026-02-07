@@ -17,8 +17,8 @@
     <a href="https://github.com/gethinode/mod-blocks/commits/main" alt="Last commit">
         <img src="https://img.shields.io/github/last-commit/gethinode/mod-blocks.svg">
     </a>
-    <a href="https://github.com/gethinode/hinode/issues" alt="Issues">
-        <img src="https://img.shields.io/github/issues/gethinode/hinode.svg">
+    <a href="https://github.com/gethinode/mod-blocks/issues" alt="Issues">
+        <img src="https://img.shields.io/github/issues/gethinode/mod-blocks.svg">
     </a>
     <a href="https://github.com/gethinode/mod-blocks/pulls" alt="Pulls">
         <img src="https://img.shields.io/github/issues-pr-raw/gethinode/mod-blocks.svg">
