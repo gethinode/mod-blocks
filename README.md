@@ -2,7 +2,7 @@
 
 <!-- Tagline -->
 <p align="center">
-    <b>Pre-built Bookshop blocks and page templates for Hinode sites</b>
+    <b>Pre-built Bookshop blocks for Hinode sites</b>
     <br />
 </p>
 
