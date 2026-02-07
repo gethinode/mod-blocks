@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Hugo module that adds Bookshop blocks to Hinode sites. It provides reusable UI components (hero, cards, FAQ, testimonials, etc.) that can be used in Hugo static sites and edited visually through CloudCannon CMS.
+This is a Hugo module that adds Bookshop blocks to Hinode sites. It provides reusable UI components (hero, cards, FAQ, testimonials, etc.) for quickly building layouts and pages. Visual editing is handled separately via setup-cloudcannon-cms.
+
+**Key Purpose**: mod-blocks is an optional Hinode extension for rapidly building page layouts using pre-built blocks. It is NOT required for basic Hinode functionality.
 
 ## Development Commands
 
@@ -38,9 +40,9 @@ npx git-cz              # Interactive commit message builder (Conventional Commi
 
 ### Module Structure
 
-The module uses Hugo's module mounts to expose Bookshop components to consuming sites:
+The module uses Hugo's module mounts to expose components and partials to consuming sites:
 
-- **component-library/components/**: Individual Bookshop components
+- **component-library/components/**: Individual Bookshop components (16 total)
   - Each component has 3 files: `[name].bookshop.yml`, `[name].hugo.html`, `[name].scss`
   - `.bookshop.yml` defines the component schema and CMS metadata
   - `.hugo.html` implements the Hugo template logic
@@ -50,11 +52,17 @@ The module uses Hugo's module mounts to expose Bookshop components to consuming 
   - `hugo/page.hugo.html`: Renders an array of Bookshop components via `partial "bookshop"`
   - `styles/global.scss`: Global SCSS styles imported by all components
 
+- **layouts/partials/**: Block-specific partials (7 files, moved from Hinode)
+  - `assets/`: hero.html, contact.html, faq.html, testimonial-carousel.html, menu.html
+  - `utilities/`: section.html (wraps all components for consistent theming)
+  - `page/`: contact.html (contact page template)
+
 - **Module mounts** (defined in `config.toml`):
   - `*.hugo.html` files → `layouts/partials/bookshop/`
   - `*.bookshop.yml` files → `data/structures/` (for CMS)
   - `*.scss` files → `assets/scss/modules/bookshop/`
   - `bookshop.scss` → `assets/scss/bookshop.scss` (main stylesheet)
+  - `layouts/partials/` → `layouts/partials/` (block-specific partials)
 
 ### Component Pattern
 
@@ -68,8 +76,9 @@ All components follow the same structure:
 2. **Hugo Template** (`.hugo.html`):
    - Cannot use InitArgs partial (Bookshop live editing requirement)
    - Access arguments directly from dot notation (`.breadcrumb`, `.heading`, etc.)
-   - Call Hinode partials like `assets/hero.html` with component-specific params
-   - Wrap output in `utilities/section.html` for consistent section styling
+   - Call mod-blocks partials like `assets/hero.html` (now owned by mod-blocks)
+   - Call Hinode shared partials like `assets/card-group.html`, `assets/video.html` (still in Hinode)
+   - Wrap output in `utilities/section.html` (now owned by mod-blocks)
    - Handle both snake_case and kebab-case parameter names: `(or .link_type (index . "link-type"))`
 
 3. **SCSS Styles** (`.scss`):
@@ -78,7 +87,36 @@ All components follow the same structure:
 
 ### Integration with Hinode
 
-Components delegate to Hinode's asset partials (`assets/hero.html`, `assets/card-group.html`, etc.) for rendering, then wrap the output in `utilities/section.html` for consistent theming. This allows Bookshop components to maintain visual consistency with Hinode's design system.
+**Ownership Model (as of v1.1.0):**
+
+**mod-blocks owns (7 partials):**
+- Asset partials: hero.html, contact.html, faq.html, testimonial-carousel.html, menu.html
+- Utility partial: utilities/section.html (wraps all components)
+- Page template: page/contact.html
+
+**Hinode provides (accessed via module inheritance):**
+- mod-utils utilities: GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.
+- Shared asset partials: card-group.html, video.html, table.html, timeline.html, live-image.html, section-title.html, etc.
+- Bootstrap styling and theming system
+
+**Dependency Flow:**
+```
+Hinode v2 (core theme)
+  ├── mod-utils (GetPadding, LogWarn, InitArgs, etc.)
+  ├── Shared partials (card-group, video, table, timeline, section-title)
+  └── Bootstrap theming
+
+mod-blocks v1.1 (optional extension)
+  ├── 16 Bookshop components
+  ├── Block-specific partials (hero, contact, faq, testimonial-carousel, menu)
+  ├── utilities/section.html (component wrapper)
+  └── Depends on Hinode v2 for utilities & shared partials (including section-title)
+```
+
+This architecture ensures:
+- ✅ Hinode works standalone (no circular dependencies)
+- ✅ mod-blocks is self-contained for building layouts and pages
+- ✅ Clear ownership of partials (block-specific vs shared)
 
 ### Example Site
 
