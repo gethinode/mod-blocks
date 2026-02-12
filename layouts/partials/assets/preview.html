@@ -1,0 +1,89 @@
+{{/*
+    Copyright © 2026 The Hinode Team / Mark Dumay. All rights reserved.
+    Use of this source code is governed by The MIT License (MIT) that can be found in the LICENSE file.
+    Visit gethinode.com/license for more details.
+*/}}
+
+{{ $error := false }}
+
+{{/* Initialize arguments */}}
+{{ $args := partial "utilities/InitArgs.html" (dict "structure" "preview" "args" . "group" "partial") }}
+{{ if or $args.err $args.warnmsg }}
+    {{ partial (cond $args.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict
+        "partial" "assets/preview.html"
+        "warnid"  "warn-invalid-arguments"
+        "msg"     "Invalid arguments"
+        "details" ($args.errmsg | append $args.warnmsg)
+        "file"    page.File
+    )}}
+    {{ $error = $args.err }}
+{{ end }}
+
+{{/* Initialize global variables */}}
+{{- $padding := partial "utilities/GetPadding.html" -}}
+
+{{/* Initialize local variables */}}
+{{- $devices := slice "desktop" "tablet" "mobile" -}}
+{{- $defaultDevice := $args.device | default "desktop" -}}
+{{- $id := printf "preview-%s" (md5 (delimit (slice . now) "-")) -}}
+
+{{ if not $error }}
+    {{/* Optional section heading */}}
+    {{ if $args.heading.title }}
+        {{ partial "assets/section-title.html" (dict
+            "heading" $args.heading
+        ) }}
+    {{ end }}
+
+    {{/* Device selection button group */}}
+    <div class="container-xxl">
+        <div class="preview-controls d-flex justify-content-center mb-3">
+            <div class="btn-group" role="tablist" aria-label="Device selection">
+                {{- range $index, $device := $devices -}}
+                    {{- $isActive := eq $device $defaultDevice -}}
+                    {{- $iconName := cond (eq $device "desktop") "desktop" (cond (eq $device "tablet") "tablet-alt" "mobile-alt") -}}
+                    <button type="button"
+                            id="{{ $id }}-{{ $device }}-tab"
+                            class="btn btn-outline-primary preview-device-btn{{ if $isActive }} active{{ end }}"
+                            data-bs-toggle="tab"
+                            data-bs-target="#{{ $id }}-{{ $device }}"
+                            role="tab"
+                            aria-controls="{{ $id }}-{{ $device }}"
+                            aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
+                            title="{{ $device | title }}"
+                            aria-label="{{ $device | title }} view">
+                        {{ partial "assets/icon.html" (dict "icon" (printf "fas fa-%s" $iconName) "spacing" false) }}
+                    </button>
+                {{- end -}}
+            </div>
+        </div>
+    </div>
+
+    {{/* Tab content with iframes */}}
+    <div class="tab-content preview-content bg-body-tertiary border width-100">
+        {{- range $index, $device := $devices -}}
+            {{- $isActive := eq $device $defaultDevice -}}
+            <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
+                 id="{{ $id }}-{{ $device }}"
+                 role="tabpanel"
+                 aria-labelledby="{{ $id }}-{{ $device }}-tab">
+                <iframe src="{{ $args.url }}"
+                        class="preview-iframe preview-{{ $device }}"
+                        title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
+                        loading="lazy"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+                <div class="preview-error" style="display: none;">
+                    <div class="alert alert-warning" role="alert">
+                        {{ partial "assets/icon.html" (dict "icon" "fas fa-exclamation-triangle" "spacing" false) }}
+                        {{ T "previewError" }} <code>{{ $args.url }}</code>.
+                        <a href="{{ $args.url }}" target="_blank" rel="noopener" class="alert-link">
+                            {{ T "previewOpenTab" }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        {{- end -}}
+    </div>
+{{ end }}
