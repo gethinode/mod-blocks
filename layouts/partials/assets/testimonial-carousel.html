@@ -22,6 +22,8 @@
 {{/* Initialize global variables */}}
 {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
+{{- $carouselPrev := site.Params.icons.carouselPrev | default "fas chevron-left" -}}
+{{- $carouselNext := site.Params.icons.carouselNext | default "fas chevron-right" -}}
 
 {{/* Initialize local variables */}}
 {{ $colGrid := printf "row-cols-%d" ($args.cols | default 1) }}
@@ -77,11 +79,11 @@
 				{{ end}}
 			</div>
 			<button class="carousel-control-prev" type="button" data-bs-target="#{{ $id }}" data-bs-slide="prev">
-				{{ partial "assets/icon.html" (dict "icon" "fas chevron-left fa-2xl") }}
+				{{ partial "assets/icon.html" (dict "icon" (printf "%s fa-2xl" $carouselPrev)) }}
 				<span class="visually-hidden">{{ T "testimonialPrevious" }}</span>
 			</button>
 			<button class="carousel-control-next" type="button" data-bs-target="#{{ $id }}" data-bs-slide="next">
-				{{ partial "assets/icon.html" (dict "icon" "fas chevron-right fa-2xl") }}
+				{{ partial "assets/icon.html" (dict "icon" (printf "%s fa-2xl" $carouselNext)) }}
 				<span class="visually-hidden">{{ T "testimonialNext" }}</span>
 			</button>
 		</div>

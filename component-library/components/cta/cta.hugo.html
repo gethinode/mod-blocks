@@ -10,12 +10,13 @@
 */}}
 
 {{/* Main code */}}
+{{- $ctaAction := site.Params.icons.ctaAction | default "fas chevron-right" -}}
 {{ $links := slice }}
 {{ if and (reflect.IsSlice .links) (gt (len .links) 0) }}
 	{{ $links = .links }}
 {{ else }}
 	{{ with site.Params.modules.bookshop.cta.defaultURL }}
-		{{ $links = $links | append (dict "title" (T "contactAction") "url" . "icon" "fas chevron-right") }}
+		{{ $links = $links | append (dict "title" (T "contactAction") "url" . "icon" $ctaAction) }}
 	{{ end }}
 {{ end }}
 
