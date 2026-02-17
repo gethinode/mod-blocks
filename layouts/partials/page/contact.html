@@ -3,6 +3,7 @@
 {{- $orientation := .orientation -}}
 {{- $align := .align | default "start" }}
 {{- $title := .title | default (T "contactHeaderTopic") }}
+{{- $ctaAction := site.Params.icons.ctaAction | default "fas chevron-right" -}}
 
 {{- with $contact -}}
     {{- $link := "" -}}
@@ -19,7 +20,7 @@
             "orientation" $orientation
             "class"       "contact-img"
             "contact"     $contact
-            "links"       (slice (dict "title" (T "contactAction") "url" $link "icon" "fas chevron-right"))
+            "links"       (slice (dict "title" (T "contactAction") "url" $link "icon" $ctaAction))
             "data"        site.Params.modules.bookshop.cta.section
         ) }}
     {{ else }}

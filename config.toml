@@ -51,6 +51,19 @@
   [[module.imports]]
     path = "github.com/cloudcannon/bookshop/hugo/v3"
 
+# Icon defaults for mod-blocks components
+[params.icons]
+  # Testimonial carousel controls
+  carouselPrev    = "fas chevron-left"
+  carouselNext    = "fas chevron-right"
+  # CTA and contact action links
+  ctaAction       = "fas chevron-right"
+  # Preview component device tabs and error state
+  previewDesktop  = "fas fa-desktop"
+  previewTablet   = "fas fa-tablet-alt"
+  previewMobile   = "fas fa-mobile-alt"
+  previewError    = "fas fa-exclamation-triangle"
+
 # Bookshop module configuration
 # These defaults are used by mod-blocks components
 [params.modules.bookshop]
