@@ -79,11 +79,11 @@
 				{{ end}}
 			</div>
 			<button class="carousel-control-prev" type="button" data-bs-target="#{{ $id }}" data-bs-slide="prev">
-				{{ partial "assets/icon.html" (dict "icon" (printf "%s fa-2xl" $carouselPrev)) }}
+				{{ partial "assets/icon.html" (dict "icon" $carouselPrev "class" "fa-2xl") }}
 				<span class="visually-hidden">{{ T "testimonialPrevious" }}</span>
 			</button>
 			<button class="carousel-control-next" type="button" data-bs-target="#{{ $id }}" data-bs-slide="next">
-				{{ partial "assets/icon.html" (dict "icon" (printf "%s fa-2xl" $carouselNext)) }}
+				{{ partial "assets/icon.html" (dict "icon" $carouselNext "class" "fa-2xl") }}
 				<span class="visually-hidden">{{ T "testimonialNext" }}</span>
 			</button>
 		</div>
