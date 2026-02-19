@@ -22,8 +22,8 @@
 {{/* Initialize global variables */}}
 {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
-{{- $carouselPrev := site.Params.icons.carouselPrev | default "fas chevron-left" -}}
-{{- $carouselNext := site.Params.icons.carouselNext | default "fas chevron-right" -}}
+{{- $carouselPrev := partial "utilities/GetThemeIcon.html" (dict "id" "carouselPrev" "default" "fas chevron-left") -}}
+{{- $carouselNext := partial "utilities/GetThemeIcon.html" (dict "id" "carouselNext" "default" "fas chevron-right") -}}
 
 {{/* Initialize local variables */}}
 {{ $colGrid := printf "row-cols-%d" ($args.cols | default 1) }}
