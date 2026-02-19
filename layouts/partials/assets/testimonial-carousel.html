@@ -65,7 +65,6 @@
 							"logo"          $item.logo
 							"icon"          $item.icon
 							"icon-style"    $args.iconStyle
-							"scale"         $item.scale
 							"contact"       (cond ($item.client | not | not) $item.client.contact "")
 							"role"          (cond ($item.client | not | not) $item.client.role "")
 							"image"         (cond ($item.client | not | not) $item.client.image "")
@@ -98,7 +97,6 @@
 							"logo"        .logo
 							"icon"        .icon
 							"icon-style"  $args.iconStyle
-							"scale"       .scale
 							"contact"     (cond (.client | not | not) .client.contact "")
 							"role"        (cond (.client | not | not) .client.role "")
 							"image"       (cond (.client | not | not) .client.image "")
