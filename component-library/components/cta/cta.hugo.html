@@ -10,7 +10,7 @@
 */}}
 
 {{/* Main code */}}
-{{- $ctaAction := site.Params.icons.ctaAction | default "fas chevron-right" -}}
+{{- $ctaAction := partial "utilities/GetThemeIcon.html" (dict "id" "ctaAction" "default" "fas chevron-right") -}}
 {{ $links := slice }}
 {{ if and (reflect.IsSlice .links) (gt (len .links) 0) }}
 	{{ $links = .links }}

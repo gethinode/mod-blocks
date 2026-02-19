@@ -29,7 +29,7 @@
 {{ $scale := "" }}
 {{ $icon := "" }}
 {{ with $args.illustration }}
-    {{ $scale = .scale }}
+    {{ $scale = .width }}
     {{ $icon = .icon }}
 {{ end }}
 {{ $heading := cond (eq $args.orientation "horizontal") (merge $args.heading (dict "width" 12)) $args.heading }}

@@ -22,8 +22,8 @@
 {{/* Initialize global variables */}}
 {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
-{{- $carouselPrev := site.Params.icons.carouselPrev | default "fas chevron-left" -}}
-{{- $carouselNext := site.Params.icons.carouselNext | default "fas chevron-right" -}}
+{{- $carouselPrev := partial "utilities/GetThemeIcon.html" (dict "id" "carouselPrev" "default" "fas chevron-left") -}}
+{{- $carouselNext := partial "utilities/GetThemeIcon.html" (dict "id" "carouselNext" "default" "fas chevron-right") -}}
 
 {{/* Initialize local variables */}}
 {{ $colGrid := printf "row-cols-%d" ($args.cols | default 1) }}
@@ -65,7 +65,6 @@
 							"logo"          $item.logo
 							"icon"          $item.icon
 							"icon-style"    $args.iconStyle
-							"scale"         $item.scale
 							"contact"       (cond ($item.client | not | not) $item.client.contact "")
 							"role"          (cond ($item.client | not | not) $item.client.role "")
 							"image"         (cond ($item.client | not | not) $item.client.image "")
@@ -98,7 +97,6 @@
 							"logo"        .logo
 							"icon"        .icon
 							"icon-style"  $args.iconStyle
-							"scale"       .scale
 							"contact"     (cond (.client | not | not) .client.contact "")
 							"role"        (cond (.client | not | not) .client.role "")
 							"image"       (cond (.client | not | not) .client.image "")

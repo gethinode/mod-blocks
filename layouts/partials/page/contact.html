@@ -3,7 +3,7 @@
 {{- $orientation := .orientation -}}
 {{- $align := .align | default "start" }}
 {{- $title := .title | default (T "contactHeaderTopic") }}
-{{- $ctaAction := site.Params.icons.ctaAction | default "fas chevron-right" -}}
+{{- $ctaAction := partial "utilities/GetThemeIcon.html" (dict "id" "ctaAction" "default" "fas chevron-right") -}}
 
 {{- with $contact -}}
     {{- $link := "" -}}

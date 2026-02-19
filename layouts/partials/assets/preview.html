@@ -21,12 +21,11 @@
 
 {{/* Initialize global variables */}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
-{{- $deviceIcons := dict
-    "desktop" (site.Params.icons.previewDesktop | default "fas fa-desktop")
-    "tablet"  (site.Params.icons.previewTablet  | default "fas fa-tablet-alt")
-    "mobile"  (site.Params.icons.previewMobile  | default "fas fa-mobile-alt")
--}}
-{{- $previewError := site.Params.icons.previewError | default "fas fa-exclamation-triangle" -}}
+{{- $previewDesktop := partial "utilities/GetThemeIcon.html" (dict "id" "previewDesktop" "default" "fas desktop") -}}
+{{- $previewTablet := partial "utilities/GetThemeIcon.html" (dict "id" "previewTablet" "default" "fas tablet-alt") -}}
+{{- $previewMobile := partial "utilities/GetThemeIcon.html" (dict "id" "previewMobile" "default" "fas mobile-alt") -}}
+{{- $previewError := partial "utilities/GetThemeIcon.html" (dict "id" "previewError" "default" "fas exclamation-triangle") -}}
+{{- $deviceIcons := dict "desktop" $previewDesktop "tablet"  $previewTablet "mobile"  $previewMobile -}}
 
 {{/* Initialize local variables */}}
 {{- $devices := slice "desktop" "tablet" "mobile" -}}

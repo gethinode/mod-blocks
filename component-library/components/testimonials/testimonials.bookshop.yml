@@ -19,7 +19,6 @@ blueprint:
   testimonials:
     - logo:
       icon:
-      scale:
       content:
       client:
         name:
