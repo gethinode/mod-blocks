@@ -65,6 +65,18 @@
 	"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
 ))) -}}
 
+{{ $links := "" }}
+{{ if .links }}
+    {{ $links = partial "assets/links.html" (dict
+        "page"      page
+        "links"     .links
+        "align"     "start"
+        "justify"   "start"
+        "link-type" .link_type
+    ) }}
+	{{ $raw = printf "%s%s" $raw $links }}
+{{ end }}
+
 {{ if $raw }}
 	{{ partial "utilities/section.html" (dict 
 		"component-name" "cards"

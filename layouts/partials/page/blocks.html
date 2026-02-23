@@ -1,4 +1,13 @@
 {{ with .Params.content_blocks }}
     {{ partial "bookshop_bindings" `.Params.content_blocks` | safeHTML }}
     {{ partial "bookshop_partial" (slice "page" .) | safeHTML }}
+
+    {{ $last := . | last 1 }}
+    {{ with index $last 0 }}
+        {{ $fluid := index . "fluid" | default true }}
+        {{ if and (index (index . "background") "color") (not $fluid) }}
+            {{- $padding := partial "utilities/GetPadding.html" -}}
+            <div class="mt-{{ $padding.y }}"></div>
+        {{ end }}
+    {{ end }}
 {{ end }}

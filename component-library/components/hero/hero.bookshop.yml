@@ -32,6 +32,11 @@ blueprint:
     width:
   link-type:
   links:
+    -
+      title:
+      url:
+      icon:
+      force:
   align:
   order:
   overlay-mode:

@@ -9,14 +9,25 @@
 	https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
 */}}
 
+{{/* Initialize global arguments */}}
+{{- $padding := partial "utilities/GetPadding.html" -}}
+
 {{/* Main code */}}
-{{ $raw := partial "assets/testimonial-carousel.html" (dict 
+{{- $raw := partial "assets/section-title.html" (dict
+	"heading" .heading
+	"justify" .justify
+	"class"   (printf "pb-%d" $padding.y))
+-}}
+
+{{ $partial := partial "assets/testimonial-carousel.html" (dict 
 	"carousel"     .carousel
 	"testimonials" .testimonials
 	"card"         .card
 	"cols"         .cols
 	"icon-style"   (or .icon_style (index . "icon-style"))
 ) }}
+
+{{ $raw = printf "%s%s" $raw $partial }}
 
 {{ if $raw }}
 	{{ partial "utilities/section.html" (dict 
