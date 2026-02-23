@@ -27,7 +27,7 @@ blueprint:
       icon:
       content:
       client:
-        name:
+        contact:
         url:
         image:
         mode:
