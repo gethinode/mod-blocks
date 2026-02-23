@@ -31,6 +31,12 @@ blueprint:
       mode:
       content:
       link:
+  links:
+    -
+      title:
+      url:
+      icon:
+      force:
   orientation:
   class:
   width:
