@@ -75,7 +75,8 @@
                         class="preview-iframe preview-{{ $device }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
                         loading="lazy"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        allow="storage-access"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
                 </iframe>
                 <div class="preview-error" style="display: none;">
