@@ -28,7 +28,7 @@
     {{ end }}
 
     {{ $illustration := dict }}
-    {{ if and $contact $contact.image }}
+    {{ if and $contact (reflect.IsMap $contact) $contact.image }}
         {{ $illustration = dict
             "image"       $contact.image
             "ratio"       "1x1"
