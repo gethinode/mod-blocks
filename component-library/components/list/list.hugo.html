@@ -65,7 +65,11 @@
 		{{ else }}
 			{{ $content = "| Title | Description |\n|-|-|\n" }}
 			{{ range $pages }}
-				{{ $content = printf "%s[%s](#%s) | %s |\n" $content .LinkTitle .RelPermalink .Description }}
+				{{ if site.Params.env_bookshop_live }}
+					{{ $content = printf "%s[%s](#!) | %s |\n" $content .title .description }}
+				{{ else }}
+					{{ $content = printf "%s[%s](#%s) | %s |\n" $content .LinkTitle .RelPermalink .Description }}
+				{{ end }}
 			{{ end }}
 		{{ end }}
 
