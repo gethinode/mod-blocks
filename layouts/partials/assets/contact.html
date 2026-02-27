@@ -18,26 +18,36 @@
 
 {{/* Main code */}}
 {{ if not $args.err }}
-    {{ $contact := "" }}
-    {{ if $args.contact }}
-        {{ $contact = partial "utilities/GetContact" (dict
-            "contact"      $args.contact
-            "data"         $args.data
-            "language-tag" site.Language.Lang
-        ) }}
-    {{ end }}
-
     {{ $illustration := dict }}
-    {{ if and $contact (reflect.IsMap $contact) $contact.image }}
+    {{ if site.Params.env_bookshop_live }}
         {{ $illustration = dict
-            "image"       $contact.image
+            "image"       "/img/placeholder.svg"
             "ratio"       "1x1"
             "class"       $args.class
-            "caption"     $contact.name
+            "caption"     $args.contact
             "caption-url" $args.captionUrl
         }}
-    {{ else if $args.illustration }}
-        {{ $illustration = $args.illustration }}
+    {{ else }}
+        {{ $contact := "" }}
+        {{ if $args.contact }}
+            {{ $contact = partial "utilities/GetContact" (dict
+                "contact"      $args.contact
+                "data"         $args.data
+                "language-tag" site.Language.Lang
+            ) }}
+        {{ end }}
+
+        {{ if and $contact (reflect.IsMap $contact) $contact.image }}
+            {{ $illustration = dict
+                "image"       $contact.image
+                "ratio"       "1x1"
+                "class"       $args.class
+                "caption"     $contact.name
+                "caption-url" $args.captionUrl
+            }}
+        {{ else if $args.illustration }}
+            {{ $illustration = $args.illustration }}
+        {{ end }}
     {{ end }}
 
     {{ $heading := "" }}
@@ -54,7 +64,7 @@
 
     {{ partial "assets/hero.html"  (dict
         "page"          $args.page
-        "heading"       (merge $heading (dict "size" 4))
+        "heading"       (merge $heading (dict "size" 4 "width" 10))
         "background"    $args.background
         "illustration"  $illustration
         "order"         $args.order
