@@ -5,6 +5,8 @@ arguments:
     optional: false
   device:
     optional: true
+  controls-placement:
+    optional: true
   desktop-responsive:
     optional: true
   heading:

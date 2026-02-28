@@ -58,6 +58,7 @@ section.preview {
         height: min(calc(100vh - var(--preview-controls-height) - var(--navbar-height) - 4rem), calc(var(--max-section-height, 1024px) - var(--preview-controls-height)));
         min-height: 400px;
         overflow: hidden;
+        border-radius: $theme-border-radius;
     }
 
     .tab-pane.show {
@@ -157,6 +158,15 @@ section.preview {
         .preview-controls .btn-group .btn[data-bs-target*="mobile"] {
             border-top-left-radius: var(--bs-btn-border-radius) !important;
             border-bottom-left-radius: var(--bs-btn-border-radius) !important;
+        }
+    }
+
+    // Flip tooltip above the button when controls are below the preview
+    .preview-controls.controls-bottom .btn-group .btn {
+        &::after {
+            top: auto;
+            bottom: 100%;
+            transform: translateX(-50%) translateY(-8px);
         }
     }
 

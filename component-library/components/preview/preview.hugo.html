@@ -13,6 +13,7 @@
 {{ $raw := partial "assets/preview.html" (dict
 	"url"                .url
 	"device"             .device
+	"controls-placement" (or .controls_placement (index . "controls-placement"))
 	"desktop-responsive" (or .desktop_responsive (index . "desktop-responsive"))
 	"heading"            .heading
 ) }}
