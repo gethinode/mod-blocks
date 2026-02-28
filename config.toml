@@ -39,6 +39,11 @@
 
   # Expose block-specific structure files
   [[module.mounts]]
+    source = "assets"
+    target = "assets"
+
+  # Expose block-specific structure files
+  [[module.mounts]]
     source = "data"
     target = "data"
 

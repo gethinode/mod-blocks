@@ -12,8 +12,6 @@ section.preview {
         padding: 1rem 0;
 
         .btn-group {
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
             .btn {
                 min-width: 3rem;
                 padding: 0.5rem 1rem;
@@ -56,14 +54,14 @@ section.preview {
     .preview-content {
         padding: 0;
         background-color: var(--bs-tertiary-bg);
-        // Fixed height capped by viewport, accommodate tallest iframe (896px) with 32px buffer for flex centering
-        height: min(calc(100vh - var(--preview-controls-height) - var(--navbar-height) - 4rem), 928px);
+        // Height capped by viewport or section max, accommodate tallest device (tablet: 1180px)
+        height: min(calc(100vh - var(--preview-controls-height) - var(--navbar-height) - 4rem), calc(var(--max-section-height, 1024px) - var(--preview-controls-height)));
         min-height: 400px;
         overflow: hidden;
     }
 
     .tab-pane.show {
-        // Full height with flex centering for iframes (only apply to active/visible panes)
+        // Full height with flex layout for iframes (only apply to active/visible panes)
         height: 100%;
         display: flex;
         justify-content: center;
@@ -71,49 +69,48 @@ section.preview {
     }
 
     .preview-iframe {
+        --preview-scale: 1;
         border: 1px solid var(--bs-border-color);
         border-radius: #{$theme-border-radius};
         display: block;
         flex-shrink: 0;
+        transform: scale(var(--preview-scale));
+        transform-origin: center center;
 
         &.preview-desktop {
-            // 16:9 landscape - fixed dimensions
-            width: 1200px;
-            height: 675px;
-            max-width: 100%;
-            max-height: 100%;
+            // MacBook/laptop logical resolution (@1× DPR reference).
+            // Height is overridden by JS (containerHeight / scale) so the iframe
+            // fills both container dimensions after the CSS transform.
+            width: 1440px;
+            height: 900px;
         }
 
         &.preview-tablet {
-            // 3:4 portrait - fixed dimensions
-            width: 672px;
-            height: 896px;
-            max-width: 100%;
-            max-height: 100%;
+            // 9:11 portrait — iPad 10th gen / iPad Air M2 logical resolution (@2× DPR)
+            width: 820px;
+            height: 1180px;
         }
 
         &.preview-mobile {
-            // 9:16 portrait - fixed dimensions
-            width: 375px;
-            height: 667px;
-            max-width: 100%;
-            max-height: 100%;
+            // 9:19.5 portrait — iPhone 17 Pro logical resolution (@3× DPR, 460 ppi)
+            width: 402px;
+            height: 874px;
         }
     }
 
     // Responsive visibility: hide panels based on WIDTH only
-    // Desktop panel: only visible on xl+ screens (≥1200px width)
+    // Desktop panel: only visible on screens ≥1024px (post-scale breakpoint)
     .preview-controls .btn-group .btn[data-bs-target*="desktop"],
     .tab-pane[id*="desktop"] {
-        @media (max-width: 1199px) {
+        @media (max-width: 1023px) {
             display: none !important;
         }
     }
 
-    // Tablet panel: only visible on md+ screens (≥768px width)
+    // Tablet panel: only visible on screens ≥640px (post-scale breakpoint)
     .preview-controls .btn-group .btn[data-bs-target*="tablet"],
     .tab-pane[id*="tablet"] {
-        @media (max-width: 767px) {
+        @media (max-width: 639px) {
             display: none !important;
         }
     }
@@ -130,8 +127,8 @@ section.preview {
         border-bottom-right-radius: 0 !important;
     }
 
-    // Desktop button: left rounded (when visible at ≥1200px width)
-    @media (min-width: 1200px) {
+    // Desktop button: left rounded (when visible at ≥1024px width)
+    @media (min-width: 1024px) {
         .preview-controls .btn-group .btn[data-bs-target*="desktop"] {
             border-top-left-radius: var(--bs-btn-border-radius) !important;
             border-bottom-left-radius: var(--bs-btn-border-radius) !important;
@@ -139,9 +136,9 @@ section.preview {
     }
 
     // Tablet button: left rounded (when desktop is hidden AND tablet is visible)
-    // Desktop hidden: width < 1200px
-    // Tablet visible: width ≥ 768px
-    @media (min-width: 768px) and (max-width: 1199px) {
+    // Desktop hidden: width < 1024px
+    // Tablet visible: width ≥ 640px
+    @media (min-width: 640px) and (max-width: 1023px) {
         .preview-controls .btn-group .btn[data-bs-target*="tablet"] {
             border-top-left-radius: var(--bs-btn-border-radius) !important;
             border-bottom-left-radius: var(--bs-btn-border-radius) !important;
@@ -155,8 +152,8 @@ section.preview {
     }
 
     // Mobile button: also left rounded when it's the ONLY visible button
-    // This happens when both desktop AND tablet are hidden (width < 768px)
-    @media (max-width: 767px) {
+    // This happens when both desktop AND tablet are hidden (width < 640px)
+    @media (max-width: 639px) {
         .preview-controls .btn-group .btn[data-bs-target*="mobile"] {
             border-top-left-radius: var(--bs-btn-border-radius) !important;
             border-bottom-left-radius: var(--bs-btn-border-radius) !important;
@@ -176,7 +173,7 @@ section.preview {
     }
 
     // Responsive behavior for small screens
-    @media (max-width: 768px) {
+    @media (max-width: 639px) {
         .preview-controls {
             padding: 0.5rem 0;
 
@@ -189,9 +186,6 @@ section.preview {
                 }
             }
         }
-
-        // Keep fixed dimensions for mobile preview
-        // Viewport will scroll horizontally if needed
     }
 
     // Dark mode support
@@ -205,8 +199,5 @@ section.preview {
             border-color: var(--bs-border-color-translucent);
         }
 
-        .preview-controls .btn-group {
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
     }
 }

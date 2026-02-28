@@ -5,5 +5,7 @@ arguments:
     optional: false
   device:
     optional: true
+  desktop-responsive:
+    optional: true
   heading:
     optional: true
