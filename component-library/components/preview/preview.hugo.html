@@ -11,9 +11,10 @@
 
 {{/* Main code */}}
 {{ $raw := partial "assets/preview.html" (dict
-	"url"      .url
-	"device"   .device
-	"heading"  .heading
+	"url"                .url
+	"device"             .device
+	"desktop-responsive" (or .desktop_responsive (index . "desktop-responsive"))
+	"heading"            .heading
 ) }}
 
 {{ if $raw }}
