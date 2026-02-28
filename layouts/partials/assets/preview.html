@@ -31,6 +31,7 @@
 {{- $devices := slice "desktop" "tablet" "mobile" -}}
 {{- $defaultDevice := $args.device | default "desktop" -}}
 {{- $id := printf "preview-%s" (md5 (delimit (slice . now) "-")) -}}
+{{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 
 {{ if not $error }}
     {{/* Optional section heading */}}
@@ -40,7 +41,8 @@
         ) }}
     {{ end }}
 
-    {{/* Device selection button group */}}
+    {{/* Device selection button group — rendered above or below the preview */}}
+    {{- if not $controlsBelow }}
     <div class="container-xxl">
         <div class="preview-controls d-flex justify-content-center mb-3">
             <div class="btn-group" role="tablist" aria-label="Device selection">
@@ -62,9 +64,10 @@
             </div>
         </div>
     </div>
+    {{- end }}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100" data-desktop-responsive="{{ $args.desktopResponsive }}">
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}">
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
@@ -91,4 +94,28 @@
             </div>
         {{- end -}}
     </div>
+
+    {{- if $controlsBelow }}
+    <div class="container-xxl">
+        <div class="preview-controls controls-bottom d-flex justify-content-center mt-3">
+            <div class="btn-group" role="tablist" aria-label="Device selection">
+                {{- range $index, $device := $devices -}}
+                    {{- $isActive := eq $device $defaultDevice -}}
+                    <button type="button"
+                            id="{{ $id }}-{{ $device }}-tab"
+                            class="btn btn-outline-primary preview-device-btn{{ if $isActive }} active{{ end }}"
+                            data-bs-toggle="tab"
+                            data-bs-target="#{{ $id }}-{{ $device }}"
+                            role="tab"
+                            aria-controls="{{ $id }}-{{ $device }}"
+                            aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
+                            title="{{ $device | title }}"
+                            aria-label="{{ $device | title }} view">
+                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false) }}
+                    </button>
+                {{- end -}}
+            </div>
+        </div>
+    </div>
+    {{- end }}
 {{ end }}
