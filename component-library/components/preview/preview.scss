@@ -215,6 +215,12 @@ section.preview {
             height: auto;
             min-height: unset;
         }
+
+        // Keep the active tab pane visible at all viewport widths — responsive hiding
+        // rules use !important but this selector has higher specificity, so it wins.
+        .tab-pane.show.active {
+            display: flex !important;
+        }
     }
 
     // Responsive behavior for small screens
