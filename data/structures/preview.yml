@@ -11,3 +11,7 @@ arguments:
     optional: true
   heading:
     optional: true
+  image:
+    optional: true
+  show-fallback:
+    optional: true

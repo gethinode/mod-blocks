@@ -34,6 +34,51 @@
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 
 {{ if not $error }}
+    {{/* Build-time detection of iframe embedding restrictions */}}
+    {{- $showFallback := $args.showFallback -}}
+    {{- if and $args.url (not $showFallback) -}}
+        {{- with try (resources.GetRemote $args.url (dict
+            "method"          "HEAD"
+            "responseHeaders" (slice "X-Frame-Options" "Content-Security-Policy")
+        )) -}}
+            {{- if not .Err -}}
+                {{- $headers := .Value.Data.Headers -}}
+                {{- with index $headers "X-Frame-Options" -}}
+                    {{- $showFallback = true -}}
+                    {{- partial "utilities/LogWarn.html" (dict
+                        "partial" "assets/preview.html"
+                        "warnid"  "warn-preview-restricted"
+                        "msg"     "iframe embedding blocked"
+                        "details" (slice (printf "URL '%s' sets X-Frame-Options; showing fallback" $args.url))
+                        "file"    page.File
+                    ) -}}
+                {{- end -}}
+                {{- range index $headers "Content-Security-Policy" -}}
+                    {{- if findRE `frame-ancestors\s+'none'` . -}}
+                        {{- $showFallback = true -}}
+                        {{- partial "utilities/LogWarn.html" (dict
+                            "partial" "assets/preview.html"
+                            "warnid"  "warn-preview-restricted"
+                            "msg"     "iframe embedding blocked"
+                            "details" (slice (printf "URL '%s' sets CSP frame-ancestors 'none'; showing fallback" $args.url))
+                            "file"    page.File
+                        ) -}}
+                    {{- end -}}
+                {{- end -}}
+            {{- else -}}
+                {{- if $showFallback -}}
+                    {{- partial "utilities/LogWarn.html" (dict
+                        "partial" "assets/preview.html"
+                        "warnid"  "warn-preview-restricted"
+                        "msg"     "HEAD request failed"
+                        "details" (slice (printf "Could not check '%s' for embedding restrictions; fallback shown due to show-fallback setting" $args.url))
+                        "file"    page.File
+                    ) -}}
+                {{- end -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+
     {{/* Optional section heading */}}
     {{ if $args.heading.title }}
         {{ partial "assets/section-title.html" (dict
@@ -42,7 +87,7 @@
     {{ end }}
 
     {{/* Device selection button group — rendered above or below the preview */}}
-    {{- if not $controlsBelow }}
+    {{- if and (not $showFallback) (not $controlsBelow) }}
     <div class="container-xxl">
         <div class="preview-controls d-flex justify-content-center mb-3">
             <div class="btn-group" role="tablist" aria-label="Device selection">
@@ -75,14 +120,23 @@
                  role="tabpanel"
                  aria-labelledby="{{ $id }}-{{ $device }}-tab">
                 <iframe src="{{ $args.url }}"
-                        class="preview-iframe preview-{{ $device }}"
+                        class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
                         loading="lazy"
                         allow="storage-access"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
                 </iframe>
-                <div class="preview-error" style="display: none;">
+                <div class="preview-error{{ if not $showFallback }} d-none{{ end }}">
+                    {{- if $args.image }}
+                    {{ partial "assets/image.html" (dict
+                        "src"     $args.image
+                        "page"    page
+                        "class"   "preview-fallback-image"
+                        "title"   (or $args.heading.title (printf "Preview of %s" $args.url))
+                        "loading" "lazy"
+                    ) }}
+                    {{- end }}
                     <div class="alert alert-warning" role="alert">
                         {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false) }}
                         {{ T "previewError" }} <code>{{ $args.url }}</code>.
@@ -95,7 +149,7 @@
         {{- end -}}
     </div>
 
-    {{- if $controlsBelow }}
+    {{- if and (not $showFallback) $controlsBelow }}
     <div class="container-xxl">
         <div class="preview-controls controls-bottom d-flex justify-content-center mt-3">
             <div class="btn-group" role="tablist" aria-label="Device selection">

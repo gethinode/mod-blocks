@@ -22,6 +22,8 @@ blueprint:
     subtle:
   url:
   device:
+  image:
+  show-fallback:
   controls-placement:
   desktop-responsive:
   width:
