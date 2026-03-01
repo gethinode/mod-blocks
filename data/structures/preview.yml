@@ -2,7 +2,7 @@ comment: >-
   Renders a live URL preview with switchable device views (desktop, tablet, mobile).
 arguments:
   url:
-    optional: false
+    optional: true
   device:
     optional: true
   controls-placement:

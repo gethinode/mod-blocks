@@ -19,6 +19,16 @@
     {{ $error = $args.err }}
 {{ end }}
 
+{{- if and (not $error) (not $args.url) (not $args.image) -}}
+    {{- partial "utilities/LogErr.html" (dict
+        "partial" "assets/preview.html"
+        "msg"     "Missing required argument"
+        "details" (slice "Either 'url' or 'image' must be provided")
+        "file"    page.File
+    ) -}}
+    {{- $error = true -}}
+{{- end -}}
+
 {{/* Initialize global variables */}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
 {{- $previewDesktop := partial "utilities/GetThemeIcon.html" (dict "id" "previewDesktop" "default" "fas desktop") -}}
@@ -35,7 +45,7 @@
 
 {{ if not $error }}
     {{/* Build-time detection of iframe embedding restrictions */}}
-    {{- $showFallback := $args.showFallback -}}
+    {{- $showFallback := or $args.showFallback (not $args.url) -}}
     {{- if and $args.url (not $showFallback) -}}
         {{- with try (resources.GetRemote $args.url (dict
             "method"          "HEAD"
@@ -119,6 +129,7 @@
                  id="{{ $id }}-{{ $device }}"
                  role="tabpanel"
                  aria-labelledby="{{ $id }}-{{ $device }}-tab">
+                {{- if $args.url }}
                 <iframe src="{{ $args.url }}"
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
@@ -127,16 +138,18 @@
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
                 </iframe>
+                {{- end }}
                 <div class="preview-error{{ if not $showFallback }} d-none{{ end }}">
                     {{- if $args.image }}
                     {{ partial "assets/image.html" (dict
                         "src"     $args.image
                         "page"    page
                         "class"   "preview-fallback-image"
-                        "title"   (or $args.heading.title (printf "Preview of %s" $args.url))
+                        "title"   (or $args.heading.title "Preview")
                         "loading" "lazy"
                     ) }}
                     {{- end }}
+                    {{- if $args.url }}
                     <div class="alert alert-warning" role="alert">
                         {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false) }}
                         {{ T "previewError" }} <code>{{ $args.url }}</code>.
@@ -144,6 +157,7 @@
                             {{ T "previewOpenTab" }}
                         </a>
                     </div>
+                    {{- end }}
                 </div>
             </div>
         {{- end -}}
