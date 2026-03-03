@@ -26,3 +26,7 @@ h1[class*="display-"] {
     margin-left: calc(var(--bs-gutter-x)*-.5); // compensate for padding of wrapper container
 }
 
+.section-xxl {
+    border-radius: #{$theme-border-radius} if($enable-important-utilities, !important, null);
+    overflow: hidden;
+}
