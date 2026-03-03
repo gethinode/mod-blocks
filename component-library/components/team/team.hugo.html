@@ -28,7 +28,7 @@
 		"categories" .categories
 		"tags"       .tags
 		"sort"       .sort
-		"reverse"    .reverse
+		"reverse"    (.reverse | default false)
 	)}}
 	{{ $pages = $result.pages }}
 {{ end }}
@@ -80,7 +80,7 @@
 
 	{{ $params = merge $params (dict 
 		"ratio"          "1x1"
-		"header-style"   (or .header_style (index . "header-style"))
+		"header-style"   (or .header_style (index . "header-style") "none")
 		"body-style"     (or .body_style (index . "body-style"))
 		"footer-style"   (or .footer_style (index . "footer-style"))
 		"class"          (or .class "border-0")
