@@ -21,3 +21,8 @@ h1[class*="display-"] {
 .navbar-offset {
     padding-top: var(--navbar-offset);
 }
+
+.background-container img {
+    margin-left: calc(var(--bs-gutter-x)*-.5); // compensate for padding of wrapper container
+}
+
