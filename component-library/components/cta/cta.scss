@@ -1,12 +1,12 @@
-div.cta {
+section.cta {
     background-color: var(--#{$prefix}primary-bg-subtle);
 }
 
-div.cta, .background-img-fluid  {
+.section-xxl section.cta {
     border-radius: #{$theme-border-radius} if($enable-important-utilities, !important, null);
 }
 
-div.cta .contact-img {
+section.cta .contact-img {
     background-color: var(--#{$prefix}body-bg);
     border-radius: var(--bs-border-radius);
 }
