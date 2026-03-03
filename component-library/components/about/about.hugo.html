@@ -9,10 +9,18 @@
 	https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
 */}}
 
+{{/* Capture common ratio settting */}}
+{{ $settings := dict }}
+{{ if reflect.IsMap site.Params.modules.blocks }}
+	{{ $settings = index site.Params.modules.blocks "about" }}
+{{ end }}
+{{ $ratio := index $settings "ratio" | default "auto" }}
+
+{{/* Generate the hero */}}
 {{ $raw := partial "assets/hero.html"  (dict 
 	"page"         page
 	"heading"      (merge (dict "arrangement" "above" "width" 8) .heading)
-	"illustration" (merge (dict "ratio" "auto") .illustration)
+	"illustration" (merge (dict "ratio" $ratio) .illustration)
 	"order"        .order
 	"link-type"    (or .link_type (index . "link-type"))
 	"links"        .links

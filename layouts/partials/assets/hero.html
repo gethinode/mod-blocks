@@ -23,7 +23,7 @@
 {{- $padding := partial "utilities/GetPadding.html" -}}
 
 {{/* Initialize local variables */}}
-{{ $arrangement := or $args.heading.arrangement .Params.modules.bookshop.title.arrangement "above" }}
+{{ $arrangement := $args.heading.arrangement }}
 {{ $align := $args.align }}
 {{ $class := $args.class | default "" }}
 {{ $scale := "" }}

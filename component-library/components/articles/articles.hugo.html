@@ -12,6 +12,13 @@
 {{/* Initialize global arguments */}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
 
+{{/* Capture common class settting */}}
+{{ $settings := dict }}
+{{ if reflect.IsMap site.Params.modules.blocks }}
+	{{ $settings = index site.Params.modules.blocks "articles" }}
+{{ end }}
+{{ $class := index $settings "class" | default "" }}
+
 {{/* Initialize local variables */}}
 {{ $raw := "" }}
 {{ $pages := slice }}
@@ -108,7 +115,7 @@
 			"header-style"   (or .header_style (index . "header-style"))
 			"body-style"     (or .body_style (index . "body-style"))
 			"footer-style"   (or .footer_style (index . "footer-style"))
-			"class"          (or .class "border-0")
+			"class"          (or .class $class "border-0")
 			"align"          "start"
 			"orientation"    .orientation
 			"ratio"          .ratio
