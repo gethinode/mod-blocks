@@ -23,18 +23,25 @@
     {{- $containerPadding := printf "px-%d %spy-%d" $padding.x (cond $args.fluid "px-xxl-0 " "") $padding.y -}}
     {{- $paddingOuter := printf "px-xxl-0 px-%d py-0" $padding.x -}}
     {{ $wrapper := "" }}
-    {{ $backdrop := "" }}
+
+    {{ $settings := dict }}
+    {{ if reflect.IsMap site.Params.modules.blocks }}
+        {{ $settings = index site.Params.modules.blocks $args.componentName }}
+    {{ end }}
+
+    {{ $backdrop := index $settings "backdrop" }}
     {{ with $args.background }}
         {{ $wrapper = partial "utilities/GetBackgroundStyle.html" (dict "background" . "class" $wrapper) }}
         {{ if reflect.IsMap $args.background }}
             {{ with $args.background.backdrop }}{{ $wrapper = "" }}{{ $backdrop = . }}{{ end }}
         {{ end }}
     {{ end }}
+
     {{- $overlayMode := (or $args.overlayMode page.Params.overlayMode) | default "dark" -}}
     {{ if not $backdrop }}{{ $overlayMode = page.Params.overlayMode }}{{ end }}
     {{ if eq $overlayMode "none" }}{{ $overlayMode = "" }}{{ end }}
 
-    {{ if not $args.fluid }}<div class="container-xxl {{ $paddingOuter }}">{{ end }}
+    {{ if not $args.fluid }}<div class="container-xxl section-xxl {{ $paddingOuter }}">{{ end }}
     <section {{ with $args.id }}id="{{ . }}" {{ end }}class="{{ $args.componentName }}
         container-fluid {{ $args.sectionClass }}
         {{ with $wrapper }}{{ . }}{{ end -}}
@@ -59,6 +66,7 @@
         {{ if $args.passthrough }}
             {{ $args.raw | safeHTML }}
         {{ else }}
+            {{- if and $backdrop $overlayMode }}<div class="overlay-spacer"></div>{{ end -}}
             <div class="container-{{ cond $args.fluid "xxl" "fluid" }} {{ $containerPadding }} d-flex flex-column align-items-{{ $args.justify }}">
                 {{ with $col }}
                     <div class="{{ . }}">{{ $args.raw | safeHTML }}</div>

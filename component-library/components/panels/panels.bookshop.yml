@@ -15,12 +15,12 @@ blueprint:
     content:
     align:
     width:
-  cols:
   padding:
   background:
     backdrop:
     color:
     subtle:
+  content_style:
   elements:
     - title:
       icon:
