@@ -19,6 +19,7 @@
 {{ $toc := slice }}
 {{ $parentID := printf "panel-%v" (md5 (delimit (slice . now) "-")) }}
 {{ $inner := "" }}
+{{ $contentStyle := .content_style | default "fs-6" }}
 {{ range $i, $element := .elements }}
 	{{ $toc = $toc | append (dict "href" "panel-0-1" "level" 2 "title" .title) }}
 
@@ -33,7 +34,7 @@
         "orientation"   "horizontal"
 		"align"         "start"
 		"width"         12
-        "content-style" "fs-6"
+        "content-style" $contentStyle
         )
     }}
 

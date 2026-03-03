@@ -20,6 +20,7 @@ blueprint:
     backdrop:
     color:
     subtle:
+  content_style:
   elements:
     - title:
       icon:
