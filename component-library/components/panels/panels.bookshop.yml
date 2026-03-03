@@ -15,7 +15,6 @@ blueprint:
     content:
     align:
     width:
-  cols:
   padding:
   background:
     backdrop:
