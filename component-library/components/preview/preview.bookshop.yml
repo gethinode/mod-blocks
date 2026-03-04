@@ -23,6 +23,7 @@ blueprint:
   url:
   device:
   image:
+  mode:
   show-fallback:
   controls-placement:
   desktop-responsive:
