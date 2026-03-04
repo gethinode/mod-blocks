@@ -130,24 +130,25 @@
                  role="tabpanel"
                  aria-labelledby="{{ $id }}-{{ $device }}-tab">
                 {{- if $args.url }}
-                <iframe src="{{ $args.url }}"
+                    <iframe src="{{ $args.url }}"
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
                         loading="lazy"
                         allow="storage-access"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
-                </iframe>
+                    </iframe>
                 {{- end }}
                 <div class="preview-error{{ if not $showFallback }} d-none{{ end }}">
                     {{- if $args.image }}
-                    {{ partial "assets/image.html" (dict
-                        "src"     $args.image
-                        "page"    page
-                        "class"   "preview-fallback-image"
-                        "title"   (or $args.heading.title "Preview")
-                        "loading" "lazy"
-                    ) }}
+                        {{ partial "assets/image.html" (dict
+                            "src"     $args.image
+                            "mode"    $args.mode
+                            "page"    page
+                            "class"   "preview-fallback-image"
+                            "title"   (or $args.heading.title "Preview")
+                            "loading" "lazy"
+                        ) }}
                     {{- end }}
                     {{- if $args.url }}
                     <div class="alert alert-warning" role="alert">

@@ -13,5 +13,7 @@ arguments:
     optional: true
   image:
     optional: true
+  mode:
+    optional: true
   show-fallback:
     optional: true
