@@ -27,19 +27,22 @@
 
 {{/* Initialize local variables */}}
 {{ $colGrid := printf "row-cols-%d" ($args.cols | default 1) }}
-{{- if eq $args.cols 1 }}
-	{{ $colGrid = "row-cols-1" -}}
-{{- else if eq $args.cols 2 }}
-	{{ $colGrid = printf "row-cols-1 row-cols-%s-2" $breakpoint.next }}
-{{- else if eq $args.cols 3 }}
-	{{ $colGrid = printf "row-cols-1 row-cols-%s-3" $breakpoint.next }}
-{{- else if eq $args.cols 4 }}
-	{{ $colGrid = printf "row-cols-1 row-cols-%s-2 row-cols-%s-4" $breakpoint.current $breakpoint.next }}
-{{- else if eq $args.cols 5 }}
-	{{ $colGrid = printf "row-cols-1 row-cols-%s-3 row-cols-%s-5" $breakpoint.current $breakpoint.next }}
-{{ end -}}
+{{ if $args.responsive }}
+	{{- if eq $args.cols 1 }}
+		{{ $colGrid = "row-cols-1" -}}
+	{{- else if eq $args.cols 2 }}
+		{{ $colGrid = printf "row-cols-1 row-cols-%s-2" $breakpoint.next }}
+	{{- else if eq $args.cols 3 }}
+		{{ $colGrid = printf "row-cols-1 row-cols-%s-3" $breakpoint.next }}
+	{{- else if eq $args.cols 4 }}
+		{{ $colGrid = printf "row-cols-1 row-cols-%s-2 row-cols-%s-4" $breakpoint.current $breakpoint.next }}
+	{{- else if eq $args.cols 5 }}
+		{{ $colGrid = printf "row-cols-1 row-cols-%s-3 row-cols-%s-5" $breakpoint.current $breakpoint.next }}
+	{{ end -}}
+{{ end }}
 
 {{ if not $error }}
+	{{ $padding := cond (isset $args "padding") $args.padding $padding.x }}
 	{{ if and $args.carousel (gt (len $args.testimonials) 1) }}
 		{{ $id := printf "testimonial-carousel-%s" (md5 (delimit (slice . now) "-")) }}
 		<div id="{{ $id }}" class="carousel slide">
@@ -71,7 +74,7 @@
 							"url"           (cond ($item.client | not | not) $item.client.url "")
 							"link"          $item.link
 							"show-controls" true
-							"padding"       $padding.x
+							"padding"       $padding
 							"class"         $cardStyle
 							"align"         $args.align
 						)}}
@@ -89,7 +92,7 @@
 		</div>
 	{{ else }}
 		<div class="testimonial-grid container p-0">
-			<div class="row {{ $args.colGrid }} g-3">
+			<div class="row {{ $colGrid }} g-3">
 				{{ range $args.testimonials }}
 					<div class="col">
 						{{ partial "assets/testimonial.html" (dict
@@ -103,7 +106,7 @@
 							"image"       (cond (.client | not | not) .client.image "")
 							"url"         (cond (.client | not | not) .client.url "")
 							"link"        .link
-							"padding"     $padding.x
+							"padding"     $padding
 							"class"       (partial "utilities/GetBackgroundStyle" (dict "background" $args.card))
 							"align"       $args.align
 						)}}

@@ -22,6 +22,8 @@ blueprint:
     color:
     subtle:
   icon_style:
+  responsive:
+  padding:
   testimonials:
     - logo:
       icon:
