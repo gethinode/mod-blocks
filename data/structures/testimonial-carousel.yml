@@ -16,3 +16,5 @@ arguments:
   carousel:
   cols:
   align:
+  responsive:
+  padding:
