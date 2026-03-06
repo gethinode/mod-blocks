@@ -63,9 +63,9 @@
 	"padding"      .padding
 	"header-style" "none"
 	"footer-style" "none"
-	"icon-rounded" .icon_rounded
-	"icon-style"   (or .icon_style "fa-2x")
-	"link-type"    .link_type
+	"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
+	"icon-style"   (or .icon_style (index . "icon-style") "fa-2x")
+	"link-type"    (or .link_type (index . "link-type"))
 	"align"        .align
 	"hook"         "assets/live-card.html"
 }}

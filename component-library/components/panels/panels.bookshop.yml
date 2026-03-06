@@ -27,7 +27,7 @@ blueprint:
       image:
       mode:
       content:
-  tab-type:
+  tab_type:
   ratio:
   responsive:
   class:

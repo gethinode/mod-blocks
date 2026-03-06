@@ -125,10 +125,60 @@ The `exampleSite/` directory uses Hugo workspaces to test the module locally:
 - `mod-blocks.work` file points to the parent directory
 - This allows development without publishing the module
 
+## Type Systems and Key Naming Conventions
+
+This module operates across three distinct type systems that each use different key naming conventions. **Do not conflate them.**
+
+### 1. Bookshop Blueprints (`.bookshop.yml`) — snake_case
+
+CloudCannon/Bookshop reads component schemas from `.bookshop.yml` blueprint fields. These keys are accessed directly in `.hugo.html` templates via Go template dot notation (e.g., `.link_type`, `.icon_rounded`). **Always use snake_case here.**
+
+```yaml
+# component-library/components/cards/cards.bookshop.yml
+blueprint:
+  link_type:       # accessed as .link_type in cards.hugo.html
+  icon_rounded:
+  icon_style:
+```
+
+### 2. Hugo Partial Structures (`data/structures/*.yml`) — kebab-case
+
+Structure files define the argument interface for **Hugo partials** (e.g., `assets/menu.html`, `assets/hero.html`). These are processed by `InitArgs` (mod-utils), which stores keys as-is and then camelizes any key containing `-`. **Always use kebab-case here** so that `$args.menuStyle`, `$args.linkType` etc. work correctly.
+
+```yaml
+# data/structures/menu.yml
+arguments:
+  menu-style:      # → $args.menuStyle after camelization
+  icon-rounded:    # → $args.iconRounded
+  icon-style:      # → $args.iconStyle
+```
+
+**Critical**: `InitArgs` does exact key matching against the structure. If the structure uses snake_case (`menu_style`) but the caller passes kebab-case (`"menu-style"`), `InitArgs` reports an unknown argument, sets `$error = true`, and breaks out of the range loop — potentially leaving required args (like `menu`) as nil, causing a runtime panic.
+
+### 3. Hugo Template Dict Keys (`.hugo.html` → partials) — kebab-case
+
+When `.hugo.html` components call Hugo partials, they pass a dict with kebab-case keys matching the partial's structure definition. To support both CloudCannon-authored content (snake_case) and existing content (kebab-case), use the dual-lookup pattern:
+
+```html
+{{/* Reading from bookshop context — support both formats */}}
+"link-type"    (or .link_type (index . "link-type"))
+"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
+"overlay-mode" (or .overlay_mode (index . "overlay-mode"))
+```
+
+### Summary Table
+
+| Context | Key format | Example | Reason |
+|---|---|---|---|
+| `.bookshop.yml` blueprint | snake_case | `link_type` | CloudCannon CMS requirement |
+| `data/structures/*.yml` | kebab-case | `link-type` | `InitArgs` camelizes `-` keys; `_` keys are NOT camelized |
+| Dict key passed to Hugo partial | kebab-case | `"link-type"` | Must match structure definition exactly |
+| Value read from bookshop context | `(or .snake (index . "kebab"))` | `(or .link_type (index . "link-type"))` | Backwards compatibility |
+
 ## Key Constraints
 
 - **Bookshop live editing**: Components must access arguments directly (not through helper partials)
-- **Dual parameter names**: Support both snake_case (CloudCannon) and kebab-case (Hugo)
+- **Dual parameter names**: Support both snake_case (CloudCannon) and kebab-case (Hugo) using `(or .snake_case (index . "kebab-case"))`
 - **Hugo version**: Requires Hugo Extended 0.147.6+
 - **Conventional Commits**: All commits must follow the specification (enforced by commitlint + husky)
 - **Semantic versioning**: Releases are automated via semantic-release on the `main` branch

@@ -43,7 +43,7 @@
 {{ with .more }}
 	{{ if .title }}{{ $moreTitle = .title }}{{ end }}
 	{{ if .link }}{{ $moreLink = .link }}{{ end }}
-	{{ if (or .link_type index . "link-type") }}{{ $moreType = or .link_type (index . "link-type") }}{{ end }}
+	{{ if (or .link_type (index . "link-type")) }}{{ $moreType = (or .link_type (index . "link-type")) }}{{ end }}
 	{{ if .icon }}{{ $moreIcon = .icon }}{{ end }}
 {{ end }}
 

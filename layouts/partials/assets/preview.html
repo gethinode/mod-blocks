@@ -81,7 +81,7 @@
                         "partial" "assets/preview.html"
                         "warnid"  "warn-preview-restricted"
                         "msg"     "HEAD request failed"
-                        "details" (slice (printf "Could not check '%s' for embedding restrictions; fallback shown due to show-fallback setting" $args.url))
+                        "details" (slice (printf "Could not check '%s' for embedding restrictions; fallback shown due to show_fallback setting" $args.url))
                         "file"    page.File
                     ) -}}
                 {{- end -}}
