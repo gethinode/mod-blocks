@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: Articles
-  description: Articles section
-  icon: post
+  description: Show a group of article cards
+  icon: article
   tags: []
 
 # Defines the structure of this component, as well as the default values

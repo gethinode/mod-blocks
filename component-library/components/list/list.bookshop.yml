@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: List
-  description: List section
-  icon: post
+  description: Show a sortable, filterable list of articles
+  icon: format_list_bulleted
   tags: []
 
 # Defines the structure of this component, as well as the default values

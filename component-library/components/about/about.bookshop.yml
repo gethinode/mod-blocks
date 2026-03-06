@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: About
-  description: About section
-  icon: fingerprint
+  description: Display a lead text next to a featured illustration
+  icon: info
   tags: []
 
 # Defines the structure of this component, as well as the default values

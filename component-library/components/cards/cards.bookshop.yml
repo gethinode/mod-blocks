@@ -2,9 +2,9 @@
 spec:
   structures:
     - content_blocks
-  label: Benefits
-  description: Introduction section
-  icon: check
+  label: Cards
+  description: Show a group of content cards
+  icon: view_module
   tags: []
 
 # Defines the structure of this component, as well as the default values

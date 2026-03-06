@@ -3,7 +3,7 @@ spec:
   structures:
     - content_blocks
   label: Menu
-  description: Index of menu items
+  description: Render a grid of level 1 and level 2 menu items
   icon: menu
   tags: []
 
