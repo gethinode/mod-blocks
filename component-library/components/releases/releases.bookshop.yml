@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: Releases
-  description: Release timeline
-  icon: fingerprint
+  description: Display a timeline with release information
+  icon: new_releases
   tags: []
 
 # Defines the structure of this component, as well as the default values

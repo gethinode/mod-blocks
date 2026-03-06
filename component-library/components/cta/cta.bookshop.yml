@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: CTA
-  description: Call to action
-  icon: contact_page
+  description: Display an action link with an optional contact
+  icon: campaign
   tags: []
 
 # Defines the structure of this component, as well as the default values

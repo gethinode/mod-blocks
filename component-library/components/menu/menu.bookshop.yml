@@ -3,7 +3,7 @@ spec:
   structures:
     - content_blocks
   label: Menu
-  description: Index of menu items
+  description: Render a grid of level 1 and level 2 menu items
   icon: menu
   tags: []
 
@@ -17,9 +17,9 @@ blueprint:
     width:
   cols:
   menu:
-  menu-style:
-  icon-rounded: false
-  icon-style:
+  menu_style:
+  icon_rounded: false
+  icon_style:
   background:
     backdrop:
     color:

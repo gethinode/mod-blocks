@@ -3,7 +3,7 @@ spec:
   structures:
     - content_blocks
   label: Hero
-  description: Main page Hero block
+  description: Show a hero banner with headline, optional breadcrumb, and background image
   icon: title
   tags: []
 
@@ -30,7 +30,7 @@ blueprint:
     anchor:
     mode:
     width:
-  link-type:
+  link_type:
   links:
     -
       title:
@@ -39,7 +39,7 @@ blueprint:
       force:
   align:
   order:
-  overlay-mode:
+  overlay_mode:
   fluid:
   theme:
   cover:

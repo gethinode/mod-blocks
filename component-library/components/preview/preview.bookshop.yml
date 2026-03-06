@@ -24,12 +24,12 @@ blueprint:
   device:
   image:
   mode:
-  show-fallback:
-  controls-placement:
-  desktop-responsive:
+  show_fallback:
+  controls_placement:
+  desktop_responsive:
   width:
   justify:
   fluid:
   theme:
   cover:
-  overlay-mode:
+  overlay_mode:

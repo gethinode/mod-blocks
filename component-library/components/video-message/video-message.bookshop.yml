@@ -2,9 +2,9 @@
 spec:
   structures:
     - content_blocks
-  label: Video
-  description: Video section
-  icon: build
+  label: Video message
+  description: Feature a video with optional messages
+  icon: videocam
   tags: []
 
 # Defines the structure of this component, as well as the default values

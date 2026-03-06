@@ -4,7 +4,7 @@ spec:
     - content_blocks
   label: FAQ
   description: Accordion of frequently asked questions
-  icon: expand_more
+  icon: quiz
   tags: []
 
 # Defines the structure of this component, as well as the default values

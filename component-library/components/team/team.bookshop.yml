@@ -2,8 +2,8 @@
 spec:
   structures:
     - content_blocks
-  label: Teams
-  description: Teams section
+  label: Team
+  description: Show a group of team members
   icon: groups
   tags: []
 

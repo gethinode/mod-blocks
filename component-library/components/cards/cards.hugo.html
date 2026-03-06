@@ -72,7 +72,7 @@
         "links"     .links
         "align"     "start"
         "justify"   "start"
-        "link-type" .link_type
+        "link-type" (or .link_type (index . "link-type"))
     ) }}
 	{{ $raw = printf "%s%s" $raw $links }}
 {{ end }}

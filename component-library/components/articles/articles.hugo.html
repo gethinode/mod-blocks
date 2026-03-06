@@ -64,7 +64,7 @@
 {{ with .more }}
 	{{ if .title }}{{ $moreTitle = .title }}{{ end }}
 	{{ if .link }}{{ $moreLink = .link }}{{ end }}
-	{{ if or (.link_type) (index . "link-type") }}{{ $moreType = (.link_type) (index . "link-type") }}{{ end }}
+	{{ if (or .link_type (index . "link-type")) }}{{ $moreType = (or .link_type (index . "link-type")) }}{{ end }}
 	{{ if .icon }}{{ $moreIcon = .icon }}{{ end }}
 {{ end }}
 
@@ -120,8 +120,8 @@
 			"orientation"    .orientation
 			"ratio"          .ratio
 			"href-title"     (cond $moreButton $moreTitle "")
-			"icon-rounded"   .icon_rounded
-			"icon-style"     .icon_style
+			"icon-rounded"   (or .icon_rounded (index . "icon-rounded"))
+			"icon-style"     (or .icon_style (index . "icon-style"))
 			"hook"           "assets/live-card.html"
 			"more-link-type" $moreType
 			"more-link-icon" $moreIcon

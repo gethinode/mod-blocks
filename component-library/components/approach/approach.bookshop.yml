@@ -3,8 +3,8 @@ spec:
   structures:
     - content_blocks
   label: Approach
-  description: Approach section
-  icon: step
+  description: Show a featured image with one or more steps
+  icon: stairs
   tags: []
 
 # Defines the structure of this component, as well as the default values
