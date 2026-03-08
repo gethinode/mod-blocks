@@ -11,10 +11,12 @@ spec:
 blueprint:
   heading:
     preheading:
-    heading:
+    title:
     content:
     align:
+    arrangement:
     width:
+    size:
   background:
     color:
     subtle:
