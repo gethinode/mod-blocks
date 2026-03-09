@@ -24,8 +24,8 @@ blueprint:
     color:
     subtle:
   icon_style:
-  responsive:
-  padding:
+  responsive: true
+  padding: 3
   testimonials:
     - logo:
       icon:
@@ -37,5 +37,5 @@ blueprint:
         mode:
       link:
   carousel:
-  cols:
-  align:
+  cols: 3
+  align: start

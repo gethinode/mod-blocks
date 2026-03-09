@@ -30,19 +30,19 @@ blueprint:
     anchor:
     mode:
     width:
-  link_type:
+  link_type: button
   links:
     -
       title:
       url:
       icon:
       force:
-  align:
-  order:
+  align: start
+  order: last
   overlay_mode:
   fluid:
   theme:
   cover:
-  orientation:
+  orientation: stacked
   width:
-  justify:
+  justify: start

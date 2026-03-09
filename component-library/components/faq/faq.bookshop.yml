@@ -19,7 +19,7 @@ blueprint:
     size:
   contrast:
   width:
-  justify:
+  justify: start
   background:
     backdrop:
     color:

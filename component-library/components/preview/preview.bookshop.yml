@@ -22,12 +22,12 @@ blueprint:
     color:
     subtle:
   url:
-  device:
+  device: desktop
   image:
   mode:
   show_fallback:
-  controls_placement:
-  desktop_responsive:
+  controls_placement: top
+  desktop_responsive: true
   width:
   justify:
   fluid:
