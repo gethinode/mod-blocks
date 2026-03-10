@@ -13,20 +13,24 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
-  contrast:
-  width:
-  justify: start
   background:
     backdrop:
     color:
     subtle:
+  contrast:
+  width:
+  justify: start
   items:
     - title:
       description:
+  wrapper:
   fluid:
   theme:
   cover:
+  overlay_mode:
+  section_class:
+  bg_class:

@@ -9,32 +9,49 @@
 	https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
 */}}
 
-{{ $raw := partial "assets/hero.html"  (dict 
-	"page"         page
-	"heading"      (merge (dict "width" 8) (or .heading dict))
-	"illustration" (merge (dict "ratio" "auto") (or .illustration dict))
-	"order"        .order
-	"link-type"    (or .link_type (index . "link-type"))
-	"links"        .links
-	"orientation"  "horizontal"
-	)
-}}
+{{/* Validate arguments */}}
+{{ $error := false }}
+{{ if not site.Params.env_bookshop_live }}
+	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" "featured" "args" .) }}
+	{{ if or $args.err $args.warnmsg }}
+		{{ partial (cond $args.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
+			"partial" "component-library/components/featured/featured.hugo.html" 
+			"warnid"  "warn-invalid-arguments"
+			"msg"     "Invalid arguments"
+			"details" ($args.errmsg | append $args.warnmsg)
+			"file"    page.File
+		)}}
+		{{ $error = true }}
+	{{- end -}}
+{{- end -}}
 
-{{ if $raw }}
-	{{ partial "utilities/section.html" (dict 
-		"component-name" "featured"
-		"id"             .id
-		"raw"            $raw
-		"background"     .background
-		"width"          .width
-		"justify"        .justify
-		"wrapper"        .wrapper
-		"fluid"          .fluid
-		"theme"          .theme
-		"cover"          .cover
-		"overlay-mode"   (or .overlay_mode (index . "overlay-mode"))
-		"section-class"  (or .section_class (index . "section-class"))
-		"bg-class"       (or .bg_class (index . "bg-class"))
-	)}}
+{{ if not $error }}
+	{{ $raw := partial "assets/hero.html"  (dict 
+		"page"         page
+		"heading"      (merge (dict "width" 8) (or .heading dict))
+		"illustration" (merge (dict "ratio" "auto") (or .illustration dict))
+		"order"        .order
+		"link-type"    (or .link_type (index . "link-type"))
+		"links"        .links
+		"orientation"  "horizontal"
+		)
+	}}
+
+	{{ if $raw }}
+		{{ partial "utilities/section.html" (dict 
+			"component-name" "featured"
+			"id"             .id
+			"raw"            $raw
+			"background"     .background
+			"width"          .width
+			"justify"        .justify
+			"wrapper"        .wrapper
+			"fluid"          .fluid
+			"theme"          .theme
+			"cover"          .cover
+			"overlay-mode"   (or .overlay_mode (index . "overlay-mode"))
+			"section-class"  (or .section_class (index . "section-class"))
+			"bg-class"       (or .bg_class (index . "bg-class"))
+		)}}
+	{{ end }}
 {{ end }}
-

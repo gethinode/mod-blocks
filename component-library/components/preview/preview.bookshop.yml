@@ -13,7 +13,7 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
@@ -29,8 +29,11 @@ blueprint:
   controls_placement: top
   desktop_responsive: true
   width:
-  justify:
+  justify: start
+  wrapper:
   fluid:
   theme:
   cover:
   overlay_mode:
+  section_class:
+  bg_class:

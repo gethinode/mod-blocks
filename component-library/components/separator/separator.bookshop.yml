@@ -8,3 +8,5 @@ spec:
   tags: []
 
 blueprint:
+  section_class:
+  bg_class:
