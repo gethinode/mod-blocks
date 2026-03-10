@@ -14,7 +14,7 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
@@ -39,10 +39,13 @@ blueprint:
       force:
   align: start
   order: last
-  overlay_mode:
-  fluid:
-  theme:
-  cover:
   orientation: stacked
   width:
   justify: start
+  wrapper:
+  fluid:
+  theme:
+  cover:
+  overlay_mode:
+  section_class:
+  bg_class:

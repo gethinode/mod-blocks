@@ -21,8 +21,4 @@ arguments:
     default: false
   overlay-mode:
   section-class:
-    type: string
-    optional: true
   bg-class:
-    type: string
-    optional: true

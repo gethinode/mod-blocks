@@ -14,88 +14,106 @@
 	the section title and the card group.
 */}}
 
-{{/* Initialize global arguments */}}
-{{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
-{{- $padding := partial "utilities/GetPadding.html" -}}
+{{/* Validate arguments */}}
+{{ $error := false }}
+{{ if not site.Params.env_bookshop_live }}
+	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" "approach" "args" .) }}
+	{{ if or $args.err $args.warnmsg }}
+		{{ partial (cond $args.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
+			"partial" "component-library/components/approach/approach.hugo.html" 
+			"warnid"  "warn-invalid-arguments"
+			"msg"     "Invalid arguments"
+			"details" ($args.errmsg | append $args.warnmsg)
+			"file"    page.File
+		)}}
+		{{ $error = true }}
+	{{- end -}}
+{{- end -}}
 
-{{/* Initialize local variables */}}
-{{ $raw := "" }}
-{{ $list := slice }}
-{{ range .elements }}
-	<!-- TODO: check mode -->
-	{{ $list = $list | append (dict 
-		"title"        .title
-		"description"  (.content | page.RenderString)
-		"icon"         .icon
-		"thumbnail"    .image
-		"href"         .link
-		"button"       (isset . "link")
-		"button-label" .label
-	) }}
-{{ end}}
+{{ if not $error }}
+	{{/* Initialize global arguments */}}
+	{{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
+	{{- $padding := partial "utilities/GetPadding.html" -}}
 
-{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
-	"heading" .heading
-	"justify" .justify
-	"class"   (printf "pb-%d" $padding.y)))
--}}
+	{{/* Initialize local variables */}}
+	{{ $raw := "" }}
+	{{ $list := slice }}
+	{{ range .elements }}
+		<!-- TODO: check mode -->
+		{{ $list = $list | append (dict 
+			"title"        .title
+			"description"  (.content | page.RenderString)
+			"icon"         .icon
+			"thumbnail"    .image
+			"href"         .link
+			"button"       (isset . "link")
+			"button-label" .label
+		) }}
+	{{ end}}
 
-{{/* Add featured illustration */}}
-{{ with .illustration }}
-	{{ $raw = printf "%s%s" $raw (partial "assets/featured-illustration.html" (dict 
-		"page"    page
-		"image"   .image
-		"ratio"   (or .ratio "21x9")
-		"anchor"  .anchor
-		"title"   page.Title
-		"wrapper" "mb-5 col-12 col-md-8 mx-auto"
-		"mode"    .mode
-	)) }}
-{{ end }}
+	{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
+		"heading" .heading
+		"justify" .justify
+		"class"   (printf "pb-%d" $padding.y)))
+	-}}
 
-{{/* Init base arguments for card group */}}
-{{ $params := dict 
-	"page"         page
-	"list"         $list
-	"class"        (printf "border-0 card-icon-primary %s" (or .class ""))
-	"cols"         .cols
-	"gutter"       "4"
-	"padding"      .padding
-	"header-style" "none"
-	"footer-style" "none"
-	"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
-	"icon-style"   (or .icon_style (index . "icon-style") "fa-2x")
-	"link-type"    (or .link_type (index . "link-type"))
-	"align"        .align
-	"hook"         "assets/live-card.html"
-}}
+	{{/* Add featured illustration */}}
+	{{ with .illustration }}
+		{{ $raw = printf "%s%s" $raw (partial "assets/featured-illustration.html" (dict 
+			"page"    page
+			"image"   .image
+			"ratio"   (or .ratio "21x9")
+			"anchor"  .anchor
+			"title"   page.Title
+			"wrapper" "mb-5 col-12 col-md-8 mx-auto"
+			"mode"    .mode
+		)) }}
+	{{ end }}
 
-{{/* Layout for small screens */}}
-{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
-	"orientation"  (.orientation | default "horizontal-sm")
-	"wrapper"      (printf "d-%s-none" $breakpoint.prev)
-))) -}}
+	{{/* Init base arguments for card group */}}
+	{{ $params := dict 
+		"page"         page
+		"list"         $list
+		"class"        (printf "border-0 card-icon-primary %s" (or .class ""))
+		"cols"         .cols
+		"gutter"       "4"
+		"padding"      .padding
+		"header-style" "none"
+		"footer-style" "none"
+		"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
+		"icon-style"   (or .icon_style (index . "icon-style") "fa-2x")
+		"link-type"    (or .link_type (index . "link-type"))
+		"align"        .align
+		"hook"         "assets/live-card.html"
+	}}
 
-{{/* Layout for regular screens */}}
-{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
-	"orientation"  (.orientation | default "stacked")
-	"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
-))) -}}
+	{{/* Layout for small screens */}}
+	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
+		"orientation"  (.orientation | default "horizontal-sm")
+		"wrapper"      (printf "d-%s-none" $breakpoint.prev)
+	))) -}}
 
-{{ if $raw }}
-	{{ partial "utilities/section.html" (dict 
-		"component-name" "approach"
-		"id"             .id
-		"raw"            $raw
-		"background"     .background
-		"width"          .width
-		"justify"        .justify
-		"wrapper"        .wrapper
-		"fluid"          .fluid
-		"theme"          .theme
-		"cover"          .cover
-		"overlay-mode"   (or .overlay_mode (index . "overlay-mode"))
-		"section-class"  (or .section_class (index . "section-class"))
-		"bg-class"       (or .bg_class (index . "bg-class"))
-	)}}
+	{{/* Layout for regular screens */}}
+	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
+		"orientation"  (.orientation | default "stacked")
+		"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
+	))) -}}
+
+	{{ if $raw }}
+		{{ partial "utilities/section.html" (dict 
+			"component-name" "approach"
+			"id"             .id
+			"raw"            $raw
+			"background"     .background
+			"width"          .width
+			"justify"        .justify
+			"wrapper"        .wrapper
+			"fluid"          .fluid
+			"theme"          .theme
+			"cover"          .cover
+			"overlay-mode"   (or .overlay_mode (index . "overlay-mode"))
+			"section-class"  (or .section_class (index . "section-class"))
+			"bg-class"       (or .bg_class (index . "bg-class"))
+		)}}
+	{{ end }}
 {{ end }}

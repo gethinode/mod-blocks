@@ -13,19 +13,19 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
-  cols:
-  icon_rounded:
-  icon_style:
-  link_type:
-  padding:
   background:
     backdrop:
     color:
     subtle:
+  cols:
+  icon_rounded:
+  icon_style:
+  link_type: button
+  padding:
   illustration:
     image:
     icon:
@@ -43,8 +43,12 @@ blueprint:
   orientation:
   class:
   width:
-  justify:
-  align:
+  justify: start
+  align: start
+  wrapper:
   fluid:
   theme:
   cover:
+  overlay_mode:
+  section_class:
+  bg_class:

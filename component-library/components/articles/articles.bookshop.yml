@@ -13,10 +13,14 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
+  background:
+    backdrop:
+    color:
+    subtle:
   hide_empty:
   input:
     section:
@@ -29,7 +33,7 @@ blueprint:
   more:
     title:
     link:
-    link_type:
+    link_type: button
     icon:
   icon_rounded:
   icon_style:
@@ -39,10 +43,6 @@ blueprint:
   limit:
   pagination:
   paginate:
-  background:
-    backdrop:
-    color:
-    subtle:
   scroll:
   bento:
   animated:
@@ -52,13 +52,17 @@ blueprint:
       stacked:
       portrait:
       width:
-  cover:
   header_style:
   body_style:
   footer_style:
   orientation:
   class:
   width:
-  justify:
+  justify: start
+  wrapper:
   fluid:
   theme:
+  cover:
+  overlay_mode:
+  section_class:
+  bg_class:

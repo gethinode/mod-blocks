@@ -13,10 +13,14 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
+  background:
+    backdrop:
+    color:
+    subtle:
   contact:
   caption_url:
   illustration:
@@ -26,20 +30,20 @@ blueprint:
     class:
     anchor:
     mode:
-  background:
-    backdrop:
-    color:
-    subtle:
   links:
     -
       title:
       url:
       icon:
       force:
-  align:
+  align: start
   padding:
-  order:
+  order: first
   width:
+  wrapper:
   fluid:
   theme:
   cover:
+  overlay_mode:
+  section_class:
+  bg_class:

@@ -13,7 +13,7 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
@@ -28,13 +28,10 @@ blueprint:
     class:
     anchor:
     mode:
-  order:
+  order: last
   width:
-  justify:
-  link_type:
-  fluid:
-  theme:
-  cover:
+  justify: start
+  link_type: button
   links:
     -
       title:
@@ -42,3 +39,10 @@ blueprint:
       download:
       icon:
       force:
+  wrapper:
+  fluid:
+  theme:
+  cover:
+  overlay_mode:
+  section_class:
+  bg_class:

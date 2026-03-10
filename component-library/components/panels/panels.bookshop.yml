@@ -13,15 +13,15 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
-  padding:
   background:
     backdrop:
     color:
     subtle:
+  padding:
   content_style:
   elements:
     - title:
@@ -34,7 +34,11 @@ blueprint:
   responsive:
   class:
   width:
-  justify:
+  justify: start
+  wrapper:
   fluid:
   theme:
   cover:
+  overlay_mode:
+  section_class:
+  bg_class:

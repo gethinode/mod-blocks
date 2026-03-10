@@ -13,7 +13,7 @@ blueprint:
     preheading:
     title:
     content:
-    align:
+    align: start
     arrangement:
     width:
     size:
@@ -21,7 +21,7 @@ blueprint:
     backdrop:
     color:
     subtle:
-  link_type:
+  link_type: button
   orientation:
   icon_rounded:
   icon_style:
@@ -41,10 +41,14 @@ blueprint:
       label:
   border:
   width:
-  justify:
+  justify: start
+  wrapper:
   fluid:
   theme:
   cover:
+  overlay_mode:
+  section_class:
+  bg_class:
 
 _structures:
   messages:
