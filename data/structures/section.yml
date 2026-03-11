@@ -10,6 +10,7 @@ arguments:
       Name of the bookshop component, excluding its path relative to the
       bookshop folder.
   raw:
+  passthrough:
   background:
   width:
     default: 12
