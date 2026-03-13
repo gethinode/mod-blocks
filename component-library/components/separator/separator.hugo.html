@@ -16,7 +16,7 @@
 			"details" ($args.errmsg | append $args.warnmsg)
 			"file"    page.File
 		)}}
-		{{ $error = true }}
+		{{ $error = $args.err }}
 	{{- end -}}
 {{- end -}}
 

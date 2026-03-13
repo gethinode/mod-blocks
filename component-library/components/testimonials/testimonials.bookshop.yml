@@ -39,6 +39,7 @@ blueprint:
       link:
   carousel:
   cols: 3
+  justify: start
   align: start
   wrapper:
   fluid:
