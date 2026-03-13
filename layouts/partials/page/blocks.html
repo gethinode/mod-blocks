@@ -8,7 +8,7 @@
         {{ $fluid := index . "fluid" | default true }}
         {{ if and (index (index . "background") "color") (not $fluid) }}
             {{- $padding := partial "utilities/GetPadding.html" -}}
-            <div class="mt-{{ $padding.y }}"></div>
+            <div class="pb-{{ $padding.y }}"></div>
         {{ end }}
     {{ end }}
 {{ end }}
