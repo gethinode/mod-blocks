@@ -12,6 +12,7 @@
     target = "layouts/partials/bookshop"
     includeFiles = [
       "**/*.hugo.html",
+      "**/*.hugo.md",
     ]
 
   # Expose bookshop config for Bookshop integrations using cloudcannon-hugo
