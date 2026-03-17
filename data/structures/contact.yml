@@ -1,5 +1,6 @@
 comment: >-
   Displays a contact banner, typically placed at the bottom or right-hand side of the page.
+group: partial
 arguments:
   page:
   data:

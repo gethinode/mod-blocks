@@ -1,0 +1,17 @@
+comment: >-
+  Renders a hero banner with heading, optional background, and action links.
+arguments:
+  heading:
+    optional: false
+example: |
+  heading:
+    title: Welcome to Hinode
+    preheading: Get started
+    align: start
+  background:
+    color: primary
+  links:
+    - title: Get started
+      url: /docs/
+    - title: Learn more
+      url: /about/

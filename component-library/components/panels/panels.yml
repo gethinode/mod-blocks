@@ -1,0 +1,12 @@
+comment: >-
+  Renders a set of expandable panels with icons and content.
+example: |
+  heading:
+    title: Features
+  elements:
+    - title: Panel One
+      icon: star
+      content: Content of the first panel.
+    - title: Panel Two
+      icon: bolt
+      content: Content of the second panel.

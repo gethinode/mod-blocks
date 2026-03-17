@@ -1,0 +1,15 @@
+comment: >-
+  Renders an Approach section with heading and a list of elements with icons.
+example: |
+  heading:
+    title: Our Approach
+  elements:
+    - title: Research
+      icon: search
+      content: We start with thorough research and discovery.
+    - title: Design
+      icon: draw
+      content: We create clean, modern designs tailored to your needs.
+    - title: Deliver
+      icon: rocket_launch
+      content: We ship high-quality results on time.

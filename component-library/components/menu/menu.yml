@@ -1,0 +1,11 @@
+comment: >-
+  Renders a navigation menu in masonry or grid layout.
+arguments:
+  menu:
+    optional: false
+example: |
+  heading:
+    title: Navigation
+  menu: main
+  menu_style: masonry
+  cols: 3

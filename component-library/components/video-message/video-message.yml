@@ -1,0 +1,12 @@
+comment: >-
+  Renders a video with side messages highlighting key features.
+example: |
+  heading:
+    title: Watch Our Overview
+  video:
+    provider: youtube
+    media_id: dQw4w9WgXcQ
+  messages:
+    - title: Key Feature
+      icon: star
+      content: This is a key feature description.

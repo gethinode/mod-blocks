@@ -1,0 +1,19 @@
+comment: >-
+  Renders a testimonials carousel with client quotes.
+arguments:
+  testimonials:
+    optional: false
+example: |
+  heading:
+    title: What Our Clients Say
+  testimonials:
+    - content: Hinode is an excellent theme for building documentation sites.
+      client:
+        contact: Jane Doe
+        url: https://example.com
+    - content: Highly recommended for documentation and blog sites alike.
+      client:
+        contact: John Smith
+        url: https://example.org
+  cols: 1
+  carousel: true

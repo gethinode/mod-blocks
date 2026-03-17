@@ -1,0 +1,11 @@
+comment: >-
+  Renders a featured article with illustration, heading, and optional links.
+example: |
+  heading:
+    title: Featured Article
+  illustration:
+    image: img/featured.jpg
+    ratio: "16x9"
+  links:
+    - title: Read more
+      url: /blog/featured-post/

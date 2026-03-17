@@ -1,0 +1,11 @@
+comment: >-
+  Renders a call-to-action section with heading and optional action links.
+example: |
+  heading:
+    title: Ready to get started?
+    content: Join thousands of users already using Hinode.
+  links:
+    - title: Get started
+      url: /docs/
+    - title: Contact us
+      url: /contact/

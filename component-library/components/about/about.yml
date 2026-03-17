@@ -1,0 +1,13 @@
+comment: >-
+  Renders an About section with heading, illustration, and optional links.
+example: |
+  heading:
+    title: About Us
+    preheading: Our story
+    align: start
+  illustration:
+    image: img/about.jpg
+    ratio: "4x3"
+  links:
+    - title: Learn more
+      url: /about/

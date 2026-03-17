@@ -24,7 +24,13 @@
   [[module.mounts]]
     source = "component-library"
     target = "data/structures"
-    includeFiles = ["**/*.bookshop.yml"]
+    includeFiles = ["**/*.bookshop.yml", "**/*.yml"]
+
+  # Expose bookshop specifications with module namespace for llms-components
+  [[module.mounts]]
+    source = "component-library"
+    target = "data/structures/blocks"
+    includeFiles = ["**/*.bookshop.yml", "**/*.yml"]
 
   # Integrate main bookshop style with Hinode styles pipeline
   [[module.mounts]]

@@ -1,6 +1,7 @@
 comment: >-
   Renders a bookshop component as section, using common styling options such as
   background, width, and justification.
+group: partial
 arguments:
   id:
   component-name:
