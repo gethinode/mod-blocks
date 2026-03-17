@@ -1,0 +1,9 @@
+comment: >-
+  Renders a sortable, searchable list of articles from a Hugo section.
+example: |
+  heading:
+    title: Articles
+  input:
+    section: blog
+  sortable: true
+  searchable: true

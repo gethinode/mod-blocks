@@ -1,0 +1,11 @@
+comment: >-
+  Renders a grid of articles from a Hugo section with optional filtering and pagination.
+example: |
+  heading:
+    title: Latest Articles
+  input:
+    section: blog
+  cols: 3
+  more:
+    title: View all articles
+    link: /blog/

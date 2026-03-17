@@ -1,0 +1,16 @@
+comment: >-
+  Renders a grid of cards with icons, titles, and descriptions.
+example: |
+  heading:
+    title: Our Services
+  cols: 3
+  elements:
+    - title: Service One
+      icon: star
+      content: Description of service one.
+    - title: Service Two
+      icon: bolt
+      content: Description of service two.
+    - title: Service Three
+      icon: shield
+      content: Description of service three.

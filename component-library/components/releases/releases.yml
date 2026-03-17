@@ -1,0 +1,12 @@
+comment: >-
+  Renders a release history section sourced from a data file.
+arguments:
+  data:
+    optional: false
+example: |
+  heading:
+    title: Release History
+    preheading: Changelog
+  background:
+    color: body-tertiary
+  data: releases

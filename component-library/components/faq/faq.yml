@@ -1,0 +1,12 @@
+comment: >-
+  Renders an FAQ accordion with heading and a list of question/answer items.
+example: |
+  heading:
+    title: Frequently Asked Questions
+  background:
+    color: body-tertiary
+  items:
+    - title: What is Hinode?
+      description: Hinode is a Hugo theme for documentation and blog sites built on Bootstrap 5.
+    - title: How do I install it?
+      description: Run npm install and then npm start to launch the development server.

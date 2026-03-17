@@ -1,0 +1,10 @@
+comment: >-
+  Renders a live URL preview with switchable device views.
+arguments:
+  url:
+    optional: false
+example: |
+  heading:
+    title: Live Preview
+  url: https://demo.gethinode.com
+  device: desktop

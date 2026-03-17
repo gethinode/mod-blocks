@@ -1,0 +1,8 @@
+comment: >-
+  Renders a team member grid sourced from a Hugo section.
+example: |
+  heading:
+    title: Meet the Team
+  input:
+    section: team
+  cols: 3
