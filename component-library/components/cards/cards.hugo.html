@@ -57,7 +57,7 @@
 	{{ $params := dict 
 		"page"         page
 		"list"         $list
-		"class"        (printf "border-0 card-icon-primary %s" (or .class ""))
+		"class"        (or .class "border-0 card-icon-primary")
 		"cols"         .cols
 		"gutter"       "4"
 		"padding"      .padding
