@@ -3,7 +3,8 @@
 {{- $reverse := .input.reverse -}}
 {{- $nested := .input.nested -}}
 {{- with .input -}}
-  {{- $sec := site.GetPage .section -}}
+  {{- $sec := "" -}}
+  {{- with .section -}}{{- $sec = site.GetPage . -}}{{- end -}}
   {{- with $sec -}}
     {{- if $nested -}}
       {{- $pages = .RegularPagesRecursive -}}
