@@ -1,0 +1,7 @@
+comment: >-
+  Renders a section heading with optional regular content.
+example: |
+  heading:
+    preheading: Preheading
+    title: Section heading
+    content: Regular content that is placed below the title.
