@@ -66,7 +66,7 @@
         {{ if $args.passthrough }}
             {{ $args.raw | safeHTML }}
         {{ else }}
-            {{- if and $backdrop $overlayMode }}<div class="overlay-spacer"></div>{{ end -}}
+            {{- if and $backdrop $overlayMode (eq $args.componentName "hero") }}<div class="overlay-spacer"></div>{{ end -}}
             <div class="container-{{ cond $args.fluid "xxl" "fluid" }} {{ $containerPadding }} d-flex flex-column align-items-{{ $args.justify }}">
                 {{ with $col }}
                     <div class="{{ . }}">{{ $args.raw | safeHTML }}</div>
