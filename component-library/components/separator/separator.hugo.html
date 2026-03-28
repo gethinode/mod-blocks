@@ -6,6 +6,9 @@
 
 {{/* Validate arguments */}}
 {{ $error := false }}
+{{ $id := .id }}
+{{ $clear := .clear }}
+{{ $class := .section_class }}
 {{ if not site.Params.env_bookshop_live }}
 	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" "separator" "args" .) }}
 	{{ if or $args.err $args.warnmsg }}
@@ -17,9 +20,18 @@
 			"file"    page.File
 		)}}
 		{{ $error = $args.err }}
+	{{ else }}
+		{{ $id = $args.id }}
+		{{ $clear = $args.clear }}
+		{{ $class = $args.section_class }}
 	{{- end -}}
 {{- end -}}
 
 {{ if not $error }}
-    <hr class="container-xxl width-100">
+	{{ if $clear }}
+		{{- $padding := partial "utilities/GetPadding.html" -}}
+		<div {{ with $id }}id="{{ . }}"{{ end }} class="clear-separator container-xxl pt-{{ $padding.y}} width-100 {{ $class }}"></div>
+	{{ else }}
+		<hr {{ with $id }}id="{{ . }}"{{ end }} class="separator container-xxl width-100 {{ $class }}">
+	{{ end }}
 {{ end }}
