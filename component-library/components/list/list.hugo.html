@@ -12,16 +12,28 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" "list" "args" .) }}
-	{{ if or $args.err $args.warnmsg }}
-		{{ partial (cond $args.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
+    {{ $bookshop := "list" }}
+	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" $bookshop "args" .) }}
+    {{ $err := $args.err }}
+    {{ $msg := ($args.errmsg | append $args.warnmsg) }}
+
+    {{ if and (not $err) $args.hook }}
+		{{ $hook := cond (path.Ext $args.hook) $args.hook (printf "%s.html" $args.hook)  }}
+		{{ if (not (templates.Exists (printf "_partials/%s" $hook))) }}
+			{{ $msg = $msg | append (printf "[%s] cannot find render hook '%s'" $bookshop $args.hook) }}
+			{{ $err = true }}
+		{{ end }}
+    {{ end }}
+
+	{{ if or $err $args.warnmsg }}
+		{{ partial (cond $err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/list/list.hugo.html" 
 			"warnid"  "warn-invalid-arguments"
 			"msg"     "Invalid arguments"
-			"details" ($args.errmsg | append $args.warnmsg)
+			"details" $msg
 			"file"    page.File
 		)}}
-		{{ $error = $args.err }}
+		{{ $error = $err }}
 	{{- end -}}
 {{- end -}}
 
