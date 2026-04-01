@@ -1,0 +1,37 @@
+# Metadata about this component, to be used in the CMS
+spec:
+  structures:
+    - content_blocks
+  label: Contact form
+  description: Contact form with illustration
+  icon: contact_mail
+  tags: []
+
+# Defines the structure of this component, as well as the default values
+blueprint:
+  id:
+  heading:
+    preheading:
+    title:
+    content:
+    align:
+    width:
+  background:
+    backdrop:
+    color:
+    subtle:
+  image:
+  hook:
+  action:
+  form_id:
+  responsive:
+  class:
+  width:
+  justify:
+  wrapper:
+  fluid:
+  theme:
+  cover:
+  overlay_mode:
+  section_class:
+  bg_class:

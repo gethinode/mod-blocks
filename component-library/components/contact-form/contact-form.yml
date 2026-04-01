@@ -1,0 +1,27 @@
+comment: >-
+  Renders a contact form with an optional heading and custom form handler.
+arguments:
+  hook:
+    type: string
+    optional: false
+    comment: Render hook for the actual form.
+  action:
+    type: string
+    optional: false
+    comment: >-
+      The form submission callback URL.
+  form_id:
+    type: string
+    optional: true
+    comment: >-
+      The form's ID, which is used to retrieve the form definition.
+example: |
+  heading:
+    preheading: Get in touch
+    title: Contact Us
+    content: We'd love to hear from you.
+    align: center
+  background:
+    color: body-tertiary
+  hook: assets/netlify-contact-form-hook.html
+  action: /thank-you/
