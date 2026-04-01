@@ -1,0 +1,77 @@
+{{/*
+    Copyright © 2026 The Hinode Team / Mark Dumay. All rights reserved.
+    Use of this source code is governed by The MIT License (MIT) that can be found in the LICENSE file.
+    Visit gethinode.com/license for more details.
+
+    Note: To support live editing, bookshop components should use a clear path to the provided arguments.
+    Therefore, we cannot use the InitArgs partial at this point, and we need to access each argument
+    directly. See the docs for more background:
+    https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
+*/}}
+
+{{/* Validate arguments */}}
+{{ $error := false }}
+{{ if not site.Params.env_bookshop_live }}
+    {{ $bookshop := "contact-form" }}
+    {{ $args := partial "utilities/InitArgs.html" (dict "bookshop" $bookshop "args" .)}}
+    {{ $err := $args.err }}
+    {{ $msg := ($args.errmsg | append $args.warnmsg) }}
+
+    {{ if not $err }}
+        {{ if not $args.hook }}
+            {{ $msg = $msg | append (printf "[%s] requires argument 'hook'" $bookshop) }}
+            {{ $err = true }}
+        {{ else if (not (templates.Exists (printf "_partials/%s" $args.hook))) }}
+            {{ $hook := cond (path.Ext $args.hook) $args.hook (printf "%s.html" $args.hook)  }}
+            {{ if (not (templates.Exists (printf "_partials/%s" $hook))) }}
+                {{ $msg = $msg | append (printf "[%s] cannot find render hook '%s'" $bookshop $args.hook) }}
+                {{ $err = true }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+
+    {{ if or $err $args.warnmsg }}
+        {{ partial (cond $err "utilities/LogErr.html" "utilities/LogWarn.html") (dict
+            "partial" "component-library/components/contact-form/contact-form.hugo.html"
+            "warnid"  "warn-invalid-arguments"
+            "msg"     "Invalid arguments"
+            "details" $msg
+            "file"    page.File
+        )}}
+        {{ $error = $err }}
+    {{- end -}}
+{{- end -}}
+
+{{ if not $error }}
+    {{/* Initialize global arguments */}}
+    {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
+    {{- $padding := partial "utilities/GetPadding.html" -}}
+
+	{{/* Main code */}}
+	{{ $color := "" }}
+	{{ if .contrast }}{{ $color = "white" }}{{ end }}
+	{{- $raw := partial "assets/section-title.html" (dict
+		"heading" .heading
+		"justify" .justify
+		"class"   (printf "pb-%d" $padding.y))
+	-}}
+
+    {{ $raw = printf "%s%s" $raw (partial .hook (dict "action" .action "form-id" .form_id)) }}
+    {{ if $raw }}
+        {{ partial "utilities/section.html" (dict
+            "component-name" "contact-form"
+            "id"             .id
+            "raw"            $raw
+            "background"     .background
+            "width"          .width
+            "justify"        .justify
+            "wrapper"        .wrapper
+            "fluid"          .fluid
+            "theme"          .theme
+            "cover"          .cover
+            "overlay-mode"   (or .overlay_mode (index . "overlay-mode"))
+            "section-class"  (or .section_class (index . "section-class"))
+            "bg-class"       (or .bg_class (index . "bg-class"))
+        )}}
+    {{ end }}
+{{ end }}
