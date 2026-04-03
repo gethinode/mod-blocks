@@ -20,7 +20,15 @@ blueprint:
     backdrop:
     color:
     subtle:
-  image:
+  illustration:
+    image:
+    icon:
+    ratio:
+    class:
+    anchor:
+    mode:
+    width:
+  order: last
   hook:
   action:
   form_id:
