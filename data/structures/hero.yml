@@ -24,6 +24,7 @@ arguments:
     default: 8
   fluid:
   theme:
+  raw:
   hook:
     default: assets/hero-image.html
   heading-style:

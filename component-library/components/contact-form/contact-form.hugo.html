@@ -49,14 +49,34 @@
 
 	{{/* Main code */}}
 	{{ $color := "" }}
+    {{ $raw := "" }}
 	{{ if .contrast }}{{ $color = "white" }}{{ end }}
-	{{- $raw := partial "assets/section-title.html" (dict
-		"heading" .heading
-		"justify" .justify
-		"class"   (printf "pb-%d" $padding.y))
-	-}}
 
-    {{ $raw = printf "%s%s" $raw (partial .hook (dict "action" .action "form-id" .form_id)) }}
+    {{ $form := (partial .hook (dict "action" .action "form-id" .form_id)) }}
+    {{ if .illustration }}
+        {{/* Embed the form in a horizontal hero with an illustration */}}
+        {{ $width := sub 12 (.illustration.width | default 6) }}
+        {{ $raw = partial "assets/hero.html"  (dict 
+            "page"         page
+            "raw"          (printf `<div class="p-0 pt-%d"></div>%s` $padding.y $form)
+            "heading"      (merge .heading (dict "width" $width))
+            "illustration" (merge .illustration (dict "width" 12))
+            "order"        .order
+            "link-type"    (or .link_type (index . "link-type"))
+            "links"        .links
+            "orientation"  "horizontal"
+            "width"        .width
+            )
+        }}
+    {{ else }}
+        {{- $raw = partial "assets/section-title.html" (dict
+            "heading" .heading
+            "justify" .justify
+            "class"   (printf "pb-%d" $padding.y))
+        -}}
+        {{ $raw = printf "%s%s" $raw $form }}
+    {{ end }}
+
     {{ if $raw }}
         {{ partial "utilities/section.html" (dict
             "component-name" "contact-form"
