@@ -1,6 +1,6 @@
 {{ range .items -}}
-**{{ .question }}**
+**{{ .title }}**
 
-{{ .answer }}
+{{ .description }}
 
 {{ end -}}
