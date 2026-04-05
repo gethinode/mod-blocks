@@ -43,7 +43,7 @@
 
     {{ if not $args.fluid }}<div class="container-xxl section-xxl {{ $paddingOuter }}">{{ end }}
     <section {{ with $args.id }}id="{{ . }}" {{ end }}class="{{ $args.componentName }}
-        container-fluid {{ $args.sectionClass }}
+        container-fluid {{ $args.sectionClass }} p-0
         {{ with $wrapper }}{{ . }}{{ end -}}
         {{- if and $backdrop $overlayMode }} background-container{{ end -}}
         {{- if $args.cover }} section-cover d-flex align-items-center{{ end }}"
