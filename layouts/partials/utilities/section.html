@@ -17,10 +17,12 @@
 {{ end }}
 
 {{- $padding := partial "utilities/GetPadding.html" -}}
+{{- $embed := page.Scratch.Get "blocks_embed" | default false }}
+{{- $embed := and $embed (eq $args._ordinal 0) }}
 
 {{/* Main code */}}
 {{ if not $args.err }}
-    {{- $containerPadding := printf "px-%d %spy-%d" $padding.x (cond $args.fluid "px-xxl-0 " "") $padding.y -}}
+    {{- $containerPadding := printf "px-%d %s%s-%d" $padding.x (cond $args.fluid "px-xxl-0 " "") (cond $embed "pb" "py") $padding.y -}}
     {{- $paddingOuter := printf "px-xxl-0 px-%d py-0" $padding.x -}}
     {{ $wrapper := "" }}
 

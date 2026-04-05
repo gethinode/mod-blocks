@@ -41,6 +41,7 @@
 
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
+			"_ordinal"       ._ordinal
 			"component-name" "hero"
 			"id"             .id
 			"raw"            $raw

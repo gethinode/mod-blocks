@@ -37,6 +37,7 @@
 
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
+			"_ordinal"       ._ordinal
 			"component-name" "releases"
 			"id"             .id
 			"raw"            $raw

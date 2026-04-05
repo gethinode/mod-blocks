@@ -3,6 +3,7 @@ comment: >-
   background, width, and justification.
 group: partial
 arguments:
+  _ordinal:
   id:
   component-name:
     type: string

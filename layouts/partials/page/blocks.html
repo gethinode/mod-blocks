@@ -1,9 +1,17 @@
 {{ with .Params.content_blocks }}
+    {{/* Inject an ordinal number for each block */}}
+    {{ $blocks := slice }}
+    {{ range $k, $v := .  }}
+        {{ $b := merge $v (dict "_ordinal" $k) }}
+        {{ $blocks = $blocks | append $b }}
+    {{ end }}
+
+    {{/* Render the bindings and bookshop partials */}}
     {{ partial "bookshop_bindings" `.Params.content_blocks` | safeHTML }}
-    {{ partial "bookshop_partial" (slice "page" .) | safeHTML }}
+    {{ partial "bookshop_partial" (slice "page" $blocks) | safeHTML }}
 
     {{/* Apply padding between last item and footer when appropriate*/}}
-    {{ $last := . | last 1 }}
+    {{ $last := $blocks | last 1 }}
     {{ with index $last 0 }}
         {{ $fluid := index . "fluid" | default true }}
         {{ if and (index (index . "background") "color") (not $fluid) }}
