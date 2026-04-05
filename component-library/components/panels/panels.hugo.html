@@ -96,6 +96,7 @@
 
     {{ if $raw }}
         {{ partial "utilities/section.html" (dict 
+            "_ordinal"       ._ordinal
             "component-name" "panels"
             "id"             .id
             "raw"            $raw

@@ -79,6 +79,7 @@
 
     {{ if $raw }}
         {{ partial "utilities/section.html" (dict
+            "_ordinal"       ._ordinal
             "component-name" "contact-form"
             "id"             .id
             "raw"            $raw
