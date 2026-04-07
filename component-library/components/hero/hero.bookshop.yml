@@ -16,7 +16,7 @@ blueprint:
     content:
     align: start
     arrangement:
-    width:
+    width: 8
     size:
   background:
     backdrop:
@@ -39,7 +39,7 @@ blueprint:
       force:
   align: start
   order: last
-  orientation: stacked
+  orientation: horizontal
   width:
   justify: start
   wrapper:
