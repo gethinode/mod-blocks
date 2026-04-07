@@ -26,7 +26,7 @@
 {{- end -}}
 
 {{ if not $error }}
-	{{ $raw := partial "assets/hero.html"  (dict 
+	{{ $raw := partial "assets/hero.html"  (dict
 		"page"         page
 		"breadcrumb"   .breadcrumb
 		"heading"      .heading
@@ -36,6 +36,7 @@
 		"link-type"    (or .link_type (index . "link-type"))
 		"links"        .links
 		"orientation"  .orientation
+		"width"        .width
 		)
 	}}
 

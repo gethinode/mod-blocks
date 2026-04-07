@@ -26,34 +26,38 @@
 {{ $arrangement := $args.heading.arrangement }}
 {{ $align := $args.align }}
 {{ $class := $args.class | default "" }}
-{{ $scale := "" }}
+{{ $scale := 12 }}
 {{ $icon := "" }}
 {{ with $args.illustration }}
-    {{ $scale = .width }}
+    {{ if .width }}{{ $scale = int .width }}{{ end }}
     {{ $icon = .icon }}
 {{ end }}
 {{ $heading := cond (eq $args.orientation "horizontal") (merge $args.heading (dict "width" 12)) $args.heading }}
 
-{{ if $scale }}
+{{ if lt $scale 12 }}
     {{ $class = trim (printf "%s col-%d" $class $scale) " " }}
-{{ else }}
-    {{ $scale = 12 }}
+{{ end }}
+
+{{/* Derive image column width from heading.width, defaulting to 8 (consistent with featured/panels).
+     Only applies to horizontal orientation; stacked uses $scale for the image wrapper instead. */}}
+{{ $imgColWidth := 12 }}
+{{ if eq $args.orientation "horizontal" }}
+    {{ $imgColWidth = sub 12 (or $args.heading.width 8) }}
+    {{ if lt $imgColWidth 1 }}{{ $imgColWidth = 1 }}{{ end }}
 {{ end }}
 
 {{ $sizes := "100vw" }}
-{{ if or (lt $args.width 12) (lt $scale 12) }}
-    {{ $container := "" }}
+{{ if or (lt $args.width 12) (lt $scale 12) (and (eq $args.orientation "horizontal") (lt $imgColWidth 12)) }}
+    {{ $container := 100.0 }}
     {{ if and $args.width (lt $args.width 12) }}
-        {{ if (eq $args.orientation "stacked") }}
-            {{ $container = mul (div (int $args.width) 12.0) 100 }}
-        {{ else }}
-            {{ $container = mul (div (int (sub 12 $args.width)) 12.0) 100 }}
-        {{ end }}
-    {{ else }}
-        {{ $container = 100 }}
+        {{ $container = mul (div (float $args.width) 12.0) 100.0 }}
     {{ end }}
-    {{ if and $scale (lt $scale 12) }}
-        {{ $container = mul (div (int $scale) 12.0) $container }}
+    {{ if eq $args.orientation "horizontal" }}
+        {{/* Apply image column fraction, then illustration fraction within that column */}}
+        {{ $container = mul (div (float $imgColWidth) 12.0) $container }}
+    {{ end }}
+    {{ if lt $scale 12 }}
+        {{ $container = mul (div (float $scale) 12.0) $container }}
     {{ end }}
     {{ $sizes = replace (printf "(min-width: 768px) %.1fvw, 100vw" $container) ".0" "" }}
 {{ end }}
@@ -137,15 +141,12 @@
                 {{ $order2 = "order-0" }}
             {{ end }}
 
-            {{ $imgWidth := sub 12 (or $args.heading.width 12) }}
-            {{ if lt $imgWidth 1 }}{{ $imgWidth = 1 }}{{ end }}
-
-            <div class="col col-12 {{ if $illustration }} col-md-{{sub 12 $imgWidth }}{{ end }} {{ $order1 }} my-md-auto pt-{{ $padding.y }} pt-md-0 hero-content">
+            <div class="col col-12 {{ if $illustration }} col-md-{{ sub 12 $imgColWidth }}{{ end }} {{ $order1 }} my-md-auto pt-{{ $padding.y }} pt-md-0 hero-content">
                 {{ $title | safeHTML }}
                 {{ $args.raw | safeHTML }}
             </div>
             {{ if $illustration }}
-            <div class="col col-8 col-md-{{ $imgWidth }} {{ $order2 }} m-auto {{ if not $args.cover }}my-md-auto align-self-end{{ else }}hero-image-full-height{{ end }}">
+            <div class="col col-8 col-md-{{ $imgColWidth }} {{ $order2 }} m-auto {{ if not $args.cover }}my-md-auto align-self-end{{ else }}hero-image-full-height{{ end }}">
                 {{ $illustration | safeHTML }}
                 {{ $caption | safeHTML }}
             </div>
