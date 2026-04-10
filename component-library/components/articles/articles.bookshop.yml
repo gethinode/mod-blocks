@@ -37,6 +37,7 @@ blueprint:
     icon:
   icon_rounded:
   icon_style:
+  link_icon:
   ratio:
   cols:
   padding:
