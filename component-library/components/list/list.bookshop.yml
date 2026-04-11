@@ -40,6 +40,8 @@ blueprint:
   pagination:
   pagination_select:
   searchable:
+  filter:
+  filter_col:
   wrap:
   wrapper:
   fluid:
