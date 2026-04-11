@@ -109,7 +109,7 @@
 			{{ $sortable := and .sortable (gt (len $pages) 1) }}
 			{{ $searchable := and .searchable (gt (len $pages) 1) }}
 
-			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" (dict 
+			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" (dict
 				"page"                   (or .page page)
 				"input"                  $content
 				"breakpoint"             .breakpoint
@@ -119,6 +119,8 @@
 				"pagination"             (cond $paginate $pagination "")
 				"pagination-select"      (cond $paginate (or .pagination_select (index . "pagination-select")) "")
 				"searchable"             $searchable
+				"filter"                 .filter
+				"filter-col"             (or .filter_col (index . "filter-col"))
 				"wrap"                   .wrap
 				"wrapper"                "width-100"
 				"_default"               .default
