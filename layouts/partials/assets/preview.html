@@ -4,6 +4,36 @@
     Visit gethinode.com/license for more details.
 */}}
 
+{{/* Inline partial — renders the device-selection btn-group for a single placement */}}
+{{- define "_partials/inline/preview-btn-group.html" -}}
+    {{- $id           := .id -}}
+    {{- $devices      := .devices -}}
+    {{- $deviceIcons  := .deviceIcons -}}
+    {{- $defaultDevice := .defaultDevice -}}
+    {{- $placement    := .placement -}}{{/* "above" or "below" */}}
+    <div class="container-xxl">
+        <div class="preview-controls{{ if eq $placement "below" }} controls-bottom{{ end }} d-flex justify-content-center {{ if eq $placement "below" }}mt-3{{ else }}mb-3{{ end }}">
+            <div class="btn-group" role="tablist" aria-label="Device selection">
+                {{- range $device := $devices -}}
+                    {{- $isActive := eq $device $defaultDevice -}}
+                    <button type="button"
+                            id="{{ $id }}-{{ $device }}-tab"
+                            class="btn btn-outline-primary{{ if $isActive }} active{{ end }}"
+                            data-bs-toggle="tab"
+                            data-bs-target="#{{ $id }}-{{ $device }}"
+                            role="tab"
+                            aria-controls="{{ $id }}-{{ $device }}"
+                            aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
+                            title="{{ $device | title }}"
+                            aria-label="{{ $device | title }} view">
+                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false) }}
+                    </button>
+                {{- end -}}
+            </div>
+        </div>
+    </div>
+{{- end -}}
+
 {{ $error := false }}
 
 {{/* Initialize arguments */}}
@@ -97,29 +127,9 @@
     {{ end }}
 
     {{/* Device selection button group — rendered above or below the preview */}}
-    {{- if and (not $showFallback) (not $controlsBelow) }}
-    <div class="container-xxl">
-        <div class="preview-controls d-flex justify-content-center mb-3">
-            <div class="btn-group" role="tablist" aria-label="Device selection">
-                {{- range $index, $device := $devices -}}
-                    {{- $isActive := eq $device $defaultDevice -}}
-                    <button type="button"
-                            id="{{ $id }}-{{ $device }}-tab"
-                            class="btn btn-outline-primary preview-device-btn{{ if $isActive }} active{{ end }}"
-                            data-bs-toggle="tab"
-                            data-bs-target="#{{ $id }}-{{ $device }}"
-                            role="tab"
-                            aria-controls="{{ $id }}-{{ $device }}"
-                            aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
-                            title="{{ $device | title }}"
-                            aria-label="{{ $device | title }} view">
-                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false) }}
-                    </button>
-                {{- end -}}
-            </div>
-        </div>
-    </div>
-    {{- end }}
+    {{- if and (not $showFallback) (not $controlsBelow) -}}
+        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "above") -}}
+    {{- end -}}
 
     {{/* Tab content with iframes */}}
     <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}">
@@ -164,27 +174,7 @@
         {{- end -}}
     </div>
 
-    {{- if and (not $showFallback) $controlsBelow }}
-    <div class="container-xxl">
-        <div class="preview-controls controls-bottom d-flex justify-content-center mt-3">
-            <div class="btn-group" role="tablist" aria-label="Device selection">
-                {{- range $index, $device := $devices -}}
-                    {{- $isActive := eq $device $defaultDevice -}}
-                    <button type="button"
-                            id="{{ $id }}-{{ $device }}-tab"
-                            class="btn btn-outline-primary preview-device-btn{{ if $isActive }} active{{ end }}"
-                            data-bs-toggle="tab"
-                            data-bs-target="#{{ $id }}-{{ $device }}"
-                            role="tab"
-                            aria-controls="{{ $id }}-{{ $device }}"
-                            aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
-                            title="{{ $device | title }}"
-                            aria-label="{{ $device | title }} view">
-                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false) }}
-                    </button>
-                {{- end -}}
-            </div>
-        </div>
-    </div>
-    {{- end }}
+    {{- if and (not $showFallback) $controlsBelow -}}
+        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "below") -}}
+    {{- end -}}
 {{ end }}
