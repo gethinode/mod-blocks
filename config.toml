@@ -96,3 +96,7 @@
 
   [params.modules.bookshop.title]
     arrangement = "above"
+
+# Preview module configuration
+[params.modules.preview]
+  integration = "optional"

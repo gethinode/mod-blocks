@@ -25,6 +25,21 @@
 	{{- end -}}
 {{- end -}}
 
+{{/* Warn if the preview JS module is not loaded on this page */}}
+{{ if not site.Params.env_bookshop_live }}
+	{{ $integration := index site.Params.modules "preview" "integration" | default "optional" }}
+	{{ $pageModules := page.Params.modules | default slice }}
+	{{ if and page.IsPage (ne $integration "core") (not (in $pageModules "preview")) }}
+		{{ partial "utilities/LogWarn.html" (dict
+			"partial" "component-library/components/preview/preview.hugo.html"
+			"warnid"  "warn-missing-module"
+			"msg"     "Missing bookshop JS module"
+			"details" (slice "Add 'preview' to the page's 'modules' front matter to enable preview scaling and device switching")
+			"file"    page.File
+		)}}
+	{{ end }}
+{{ end }}
+
 {{ if not $error }}
 	{{/* Main code */}}
 	{{ $raw := partial "assets/preview.html" (dict
