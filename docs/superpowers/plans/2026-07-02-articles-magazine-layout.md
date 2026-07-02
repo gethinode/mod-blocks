@@ -55,20 +55,21 @@ cd /Users/mark/Development/GitHub/gethinode/mod-docs && git checkout develop && 
 
 Expected: prints `feat/articles-magazine-layout`.
 
-- [ ] **Step 2: Enable local module replacements in the hinode exampleSite**
+- [ ] **Step 2: Point the exampleSite workspace at local mod-blocks + mod-docs**
 
-In `/Users/mark/Development/GitHub/gethinode/hinode/exampleSite/config/_default/hugo.toml`, find the `[module]` block containing `workspace = "hinode.work"` and the two commented `# replacements = ...` lines. Immediately after `workspace = "hinode.work"`, add this single line (leave the commented originals untouched):
+The exampleSite uses a Hugo module workspace (`exampleSite/hinode.work`) with an active `use` list; workspace `use` directives take precedence over config `replacements`, so add the local modules there. Append these two lines to `/Users/mark/Development/GitHub/gethinode/hinode/exampleSite/hinode.work` (after the existing `use ../`):
 
-```toml
-  replacements = 'github.com/gethinode/mod-blocks -> /Users/mark/Development/GitHub/gethinode/mod-blocks/, github.com/gethinode/mod-docs -> /Users/mark/Development/GitHub/gethinode/mod-docs/'
+```text
+use ../../mod-blocks
+use ../../mod-docs
 ```
 
-This is a LOCAL dev toggle in the hinode repo (a different repo from our feature branches) — it must not be committed.
+This is a LOCAL dev toggle in the hinode repo (a different repo from our feature branches) — it must not be committed. Note: builds must use the project-pinned binary `./node_modules/.bin/hugo` (the system `hugo` may be older and reject newer config keys).
 
 - [ ] **Step 3: Baseline build — confirm the harness renders the articles docs page**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | tail -5
+cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && ./node_modules/.bin/hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | tail -5
 ```
 
 Expected: build completes with `Total in ...` and no `ERROR`. (Ignore pre-existing warnings.)
@@ -142,7 +143,7 @@ list reflows below the featured article.
 - [ ] **Step 2: Rebuild and confirm the "red" state**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -i "unsupported argument 'layout'\|magazine" | head
+cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && ./node_modules/.bin/hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -i "unsupported argument 'layout'\|magazine" | head
 ```
 
 Expected: the build logs a warning mentioning `unsupported argument 'layout'` (magazine not yet a known arg). This confirms the demo reaches the articles block.
@@ -217,7 +218,7 @@ example: |
 - [ ] **Step 3: Rebuild and confirm the warning is gone**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -i "unsupported argument 'layout'" || echo "no layout warning (expected)"
+cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && ./node_modules/.bin/hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -i "unsupported argument 'layout'" || echo "no layout warning (expected)"
 ```
 
 Expected: `no layout warning (expected)` — `layout` is now accepted. The block still renders as the default grid (no branch yet).
@@ -383,7 +384,7 @@ with:
 - [ ] **Step 4: Rebuild and confirm the featured/list columns render ("green")**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -iE "ERROR|magazine" | head
+cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && ./node_modules/.bin/hugo -s exampleSite --logLevel info 2>&1 | tee /tmp/magazine-build.log | grep -iE "ERROR|magazine" | head
 ```
 
 Expected: no `ERROR` lines.
@@ -443,7 +444,7 @@ Expected: no errors.
 - [ ] **Step 3: Rebuild and confirm the rule reaches compiled CSS**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && hugo -s exampleSite 2>&1 | tail -2 && grep -rlo "card-magazine-list" /Users/mark/Development/GitHub/gethinode/hinode/exampleSite/public/*.css /Users/mark/Development/GitHub/gethinode/hinode/exampleSite/public/**/*.css 2>/dev/null | head || echo "check CSS manually"
+cd /Users/mark/Development/GitHub/gethinode/hinode && rm -rf exampleSite/public && ./node_modules/.bin/hugo -s exampleSite 2>&1 | tail -2 && grep -rlo "card-magazine-list" /Users/mark/Development/GitHub/gethinode/hinode/exampleSite/public/*.css /Users/mark/Development/GitHub/gethinode/hinode/exampleSite/public/**/*.css 2>/dev/null | head || echo "check CSS manually"
 ```
 
 Expected: build completes; the selector appears in a generated CSS file (PurgeCSS keeps it because `card-magazine-list`/`card-magazine-item` are emitted in the HTML). If not found, verify the classes appear in HTML (Task 4 grep) and that PurgeCSS is not stripping them.
@@ -474,7 +475,7 @@ Expected: mod-blocks build (`hugo -s exampleSite`) completes without error; mark
 - [ ] **Step 2: Visual check in a browser**
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && hugo server -s exampleSite --bind=0.0.0.0 --disableFastRender
+cd /Users/mark/Development/GitHub/gethinode/hinode && ./node_modules/.bin/hugo server -s exampleSite --bind=0.0.0.0 --disableFastRender
 ```
 
 Open the Articles block docs page and confirm at three widths:
@@ -487,7 +488,7 @@ Open the Articles block docs page and confirm at three widths:
 Undo the uncommitted `replacements` line added in Task 1 (it must never be committed):
 
 ```bash
-cd /Users/mark/Development/GitHub/gethinode/hinode && git checkout -- exampleSite/config/_default/hugo.toml && git status --short exampleSite/config/_default/hugo.toml
+cd /Users/mark/Development/GitHub/gethinode/hinode && git checkout -- exampleSite/hinode.work && git status --short exampleSite/hinode.work
 ```
 
 Expected: no output (clean).
