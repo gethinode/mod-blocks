@@ -104,6 +104,8 @@
 		-}}
 
 		{{ $partial := "assets/card-group.html" }}
+		{{ $useMagazine := eq (or .layout "default") "magazine" }}
+		{{ if $useMagazine }}{{ $partial = "assets/magazine.html" }}{{ end }}
 		{{ $params := dict }}
 		{{- $params = merge $params (dict
 			"page"           page
@@ -115,7 +117,7 @@
 			"href-force"     (gt $result.total (len $result.pages))
 		)}}
 
-		{{ if .scroll }}
+		{{ if and .scroll (not $useMagazine) }}
 			{{ $partial = "assets/stack.html" }}
 			{{ $params = merge $params (dict 
 				"header-style" "none"
