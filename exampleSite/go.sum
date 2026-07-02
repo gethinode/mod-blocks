@@ -4,6 +4,12 @@ github.com/cloudcannon/bookshop/hugo/v3 v3.18.0 h1:Hy4UrNwvXBC1TiTmsGnYp8T1VLbdK
 github.com/cloudcannon/bookshop/hugo/v3 v3.18.0/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
 github.com/cloudcannon/bookshop/hugo/v3 v3.18.2 h1:j3XUvvuCv/7SfGKzd7gzb3WEgs1DurqTRDe7gdMAAvU=
 github.com/cloudcannon/bookshop/hugo/v3 v3.18.2/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.3 h1:HMhrR7gkQt/cvOfSl64TgaBsD3mLLD/dAFVLLaj2boQ=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.3/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.4 h1:mZCALkYdpXKUrw7O1WtLcL5FSFt7nt5HXvs+TczRHf0=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.4/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.5 h1:AKWzUQpWcBSbJgHQ/5cfPQtGX40bn8vbHBGk4rlHEGE=
+github.com/cloudcannon/bookshop/hugo/v3 v3.18.5/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
 github.com/gethinode/mod-blocks v1.0.5 h1:IYWyz04kfCst8NXADivjvwRho3EOJRji74/kR+M4mAY=
 github.com/gethinode/mod-blocks v1.0.5/go.mod h1:H3Slh4BaxmYLX61YXyO/yqMZHlCwSlvX3VekDpnWCSM=
 github.com/gethinode/mod-blocks v1.0.6 h1:9lKJpChCwqYP6Hz1971TPnVrZiydz4nXoGlIzOlsIkw=
@@ -78,6 +84,8 @@ github.com/gethinode/mod-blocks v1.21.0 h1:PJnFiLAQysREjyDdc8LRIvcWgbdrLDWh/33E2
 github.com/gethinode/mod-blocks v1.21.0/go.mod h1:J5pThiZWwFsaYypOs+PXGJKWJ9DZ/USqRETM1bIxfXk=
 github.com/gethinode/mod-blocks v1.22.0 h1:/1Hpr4Ogeq9tesNKzeCPatol6bKZt/X5ULKDgBTk100=
 github.com/gethinode/mod-blocks v1.22.0/go.mod h1:7a0rJUYtWi9HJZ6sf/7aiuZiVnMxh/r8ZuArv0ELlbM=
+github.com/gethinode/mod-blocks v1.22.1 h1:akTuUmBbC81SvgfVIRXCu/g4UuelEYnlhjYNVmyE2UM=
+github.com/gethinode/mod-blocks v1.22.1/go.mod h1:7a0rJUYtWi9HJZ6sf/7aiuZiVnMxh/r8ZuArv0ELlbM=
 github.com/gethinode/mod-utils/v5 v5.10.0 h1:NlofAfa1YILV9pwS8vMkEwVUdrnKCoIlVwJPm3+UVGs=
 github.com/gethinode/mod-utils/v5 v5.10.0/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
 github.com/gethinode/mod-utils/v5 v5.11.0 h1:1BO9uK0zecHF6dNJcqX8NFNHSIdizlyj88n9ylLUsDc=
@@ -112,3 +120,7 @@ github.com/gethinode/mod-utils/v5 v5.22.0 h1:zVTzU4BQjqWcA4wrpvjrgxyLOHO+jxdLKiI
 github.com/gethinode/mod-utils/v5 v5.22.0/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
 github.com/gethinode/mod-utils/v5 v5.23.0 h1:PW4ceewrDiO7k3zVjtiLeyrKnAR4UEAxaXH6ja8CNSs=
 github.com/gethinode/mod-utils/v5 v5.23.0/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
+github.com/gethinode/mod-utils/v5 v5.23.1 h1:Y6c+039rk8vA2m4t739osgDrXbQe3SHX9mF7K0mZSmI=
+github.com/gethinode/mod-utils/v5 v5.23.1/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
+github.com/gethinode/mod-utils/v5 v5.23.2 h1:d89TkxTYeOVFdOpCtESmnXE7hQs53zxCwAIes4yNu1E=
+github.com/gethinode/mod-utils/v5 v5.23.2/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
