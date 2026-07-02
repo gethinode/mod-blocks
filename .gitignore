@@ -9,3 +9,5 @@ exampleSite/resources
 .hugo_build.lock
 hugo_stats.json
 .env
+.superpowers
+docs/superpowers

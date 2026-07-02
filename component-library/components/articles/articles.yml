@@ -5,7 +5,7 @@ example: |
     title: Latest Articles
   input:
     section: blog
-  cols: 3
+  layout: magazine
   more:
     title: View all articles
     link: /blog/
