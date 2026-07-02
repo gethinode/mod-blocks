@@ -1,18 +1,24 @@
-{{/*
+<!--
     Copyright © 2026 The Hinode Team / Mark Dumay. All rights reserved.
     Use of this source code is governed by The MIT License (MIT) that can be found in the LICENSE file.
     Visit gethinode.com/license for more details.
-*/}}
+-->
 
 {{/* Featured-first "magazine" layout for the articles block. Renders the first
      article as a large featured card (keeping its thumbnail) beside a compact,
      thumbnail-less list of the remaining articles. Columns follow the Hinode
      parameterized-breakpoint convention: stacked below the site breakpoint,
-     6/6 at it, and 8/4 one breakpoint up. */}}
+     6/6 at it, and 8/4 one breakpoint up. List rows are separated with Bootstrap
+     border utilities so the styling does not depend on the bookshop SCSS bundle. */}}
 
-{{ $page := .page }}
 {{ $list := .list }}
 {{ $bp := partial "utilities/GetBreakpoint.html" }}
+{{ $padding := .padding }}
+{{ $href := .href }}
+{{ $hrefTitle := index . "href-title" }}
+{{ $hrefForce := index . "href-force" }}
+{{ $moreLinkType := index . "more-link-type" }}
+{{ $moreLinkIcon := index . "more-link-icon" }}
 
 {{/* Apply the block limit across the whole set, then peel off the featured item */}}
 {{ $count := len $list }}
@@ -36,7 +42,9 @@
 
     <div class="container-fluid px-0">
         <div class="row g-4">
-            {{/* Featured article — keeps its thumbnail at every breakpoint */}}
+            {{/* Featured article — keeps its thumbnail at every breakpoint. The
+                 page arg is omitted; card.html resolves it via the global page
+                 context (card.html rejects an explicit page argument). */}}
             <div class="{{ $featuredCols }}">
                 {{ partial $hook (dict
                     "path"         $featured.RelPermalink
@@ -46,7 +54,7 @@
                     "header-style" $headerStyle
                     "body-style"   $bodyStyle
                     "footer-style" $footerStyle
-                    "padding"      .padding
+                    "padding"      $padding
                     "align"        "start"
                     "icon-rounded" (index . "icon-rounded")
                     "icon-style"   (index . "icon-style")
@@ -54,29 +62,36 @@
                 ) }}
             </div>
 
-            {{/* Remaining articles — compact, thumbnail-less list */}}
+            {{/* Remaining articles — compact, thumbnail-less list. Every row after
+                 the first gets a top border to act as a separator. */}}
             {{ if gt (len $rest) 0 }}
-                <div class="{{ $listCols }}">
-                    {{ partial "assets/card-group.html" (dict
-                        "page"           $page
-                        "list"           $rest
-                        "cols"           1
-                        "responsive"     false
-                        "orientation"    "none"
-                        "header-style"   $headerStyle
-                        "body-style"     $bodyStyle
-                        "footer-style"   "none"
-                        "class"          (trim (printf "%s card-magazine-item" $class) " ")
-                        "wrapper"        "card-magazine-list"
-                        "hook"           $hook
-                        "padding"        .padding
-                        "align"          "start"
-                        "href"           .href
-                        "href-title"     (index . "href-title")
-                        "href-force"     (index . "href-force")
-                        "more-link-type" (index . "more-link-type")
-                        "more-link-icon" (index . "more-link-icon")
-                    ) }}
+                <div class="{{ $listCols }} card-magazine-list">
+                    {{ range $i, $article := $rest }}
+                        <div class="{{ if $i }}border-top pt-3 mt-3{{ end }}">
+                            {{ partial $hook (dict
+                                "path"         $article.RelPermalink
+                                "class"        (trim (printf "%s border-0" $class) " ")
+                                "orientation"  "none"
+                                "header-style" $headerStyle
+                                "body-style"   $bodyStyle
+                                "footer-style" "none"
+                                "padding"      $padding
+                                "align"        "start"
+                            ) }}
+                        </div>
+                    {{ end }}
+                    {{ if and $hrefTitle $hrefForce }}
+                        <div class="mt-3 w-100 align-self-start">
+                            {{ partial "assets/button.html" (dict
+                                "href"      $href
+                                "title"     $hrefTitle
+                                "color"     "primary"
+                                "outline"   true
+                                "link-type" $moreLinkType
+                                "icon"      $moreLinkIcon
+                            ) }}
+                        </div>
+                    {{ end }}
                 </div>
             {{ end }}
         </div>
