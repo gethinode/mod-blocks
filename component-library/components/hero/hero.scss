@@ -7,10 +7,15 @@
     z-index: -1;
 }
 
-.background-container {
+// Positioning context for the backdrop image. Set whenever a section defines a backdrop,
+// as the overlay is optional and the image needs an anchor regardless.
+.backdrop-container {
     position: relative;
     width: 100%;
     height: auto;
+}
+
+.background-container {
     background-color: rgba($dark, 0.8);
 }
 

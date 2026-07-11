@@ -50,6 +50,7 @@
     <section {{ with $args.id }}id="{{ . }}" {{ end }}class="{{ $args.componentName }}
         container-fluid {{ $args.sectionClass }} p-0
         {{ with $wrapper }}{{ . }}{{ end -}}
+        {{- if $backdrop }} backdrop-container{{ end -}}
         {{- if and $backdrop $overlayMode }} background-container{{ end -}}
         {{- if $args.cover }} section-cover d-flex align-items-center{{ end }}"
         {{ with $overlayMode -}}
