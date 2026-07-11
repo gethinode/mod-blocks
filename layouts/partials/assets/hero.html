@@ -133,24 +133,26 @@
         {{ $title | safeHTML }}
     {{ else }}
         {{/* Render horizontal component */}}
-        <div class="row row-cols-1 {{ if eq $args.orientation "stacked" }}row-cols-md-2 {{ end }} flex-grow-1">
-            {{ $order1 := "order-1 order-md-0" }}
-            {{ $order2 := "order-0 order-md-1" }}
-            {{ if eq $args.order "first" }}
-                {{ $order1 = "order-1" }}
-                {{ $order2 = "order-0" }}
-            {{ end }}
+        <div class="container p-0">
+            <div class="row row-cols-1 {{ if eq $args.orientation "stacked" }}row-cols-md-2 {{ end }} flex-grow-1">
+                {{ $order1 := "order-1 order-md-0" }}
+                {{ $order2 := "order-0 order-md-1" }}
+                {{ if eq $args.order "first" }}
+                    {{ $order1 = "order-1" }}
+                    {{ $order2 = "order-0" }}
+                {{ end }}
 
-            <div class="col col-12 {{ if $illustration }} col-md-{{ sub 12 $imgColWidth }}{{ end }} {{ $order1 }} my-md-auto pt-{{ $padding.y }} pt-md-0 hero-content">
-                {{ $title | safeHTML }}
-                {{ $args.raw | safeHTML }}
+                <div class="col col-12 {{ if $illustration }} col-md-{{ sub 12 $imgColWidth }}{{ end }} {{ $order1 }} my-md-auto pt-{{ $padding.y }} pt-md-0 hero-content">
+                    {{ $title | safeHTML }}
+                    {{ $args.raw | safeHTML }}
+                </div>
+                {{ if $illustration }}
+                <div class="col col-8 col-md-{{ $imgColWidth }} {{ $order2 }} m-auto {{ if not $args.cover }}my-md-auto align-self-end{{ else }}hero-image-full-height{{ end }}">
+                    {{ $illustration | safeHTML }}
+                    {{ $caption | safeHTML }}
+                </div>
+                {{ end }}
             </div>
-            {{ if $illustration }}
-            <div class="col col-8 col-md-{{ $imgColWidth }} {{ $order2 }} m-auto {{ if not $args.cover }}my-md-auto align-self-end{{ else }}hero-image-full-height{{ end }}">
-                {{ $illustration | safeHTML }}
-                {{ $caption | safeHTML }}
-            </div>
-            {{ end }}
         </div>
     {{ end }}
 {{ end }}
