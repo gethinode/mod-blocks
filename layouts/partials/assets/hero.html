@@ -73,7 +73,7 @@
         </div>
     {{ end }}
 
-    {{ $imageWrapper := printf "%s text-%s mx-auto" $class (or $args.illustration.align "start") }}
+    {{ $imageWrapper := printf "%s text-%s mx-auto" $class (or $args.illustration.align "center") }}
     {{ $imageJustify := "" }}
     {{ if eq $args.orientation "stacked" }}
         {{ $imageWrapper = printf "%s pb-%d" $imageWrapper $padding.y }}
