@@ -22,10 +22,12 @@
 
 {{/* Main code */}}
 {{ if not $args.err }}
-    {{- $containerPadding := printf "px-%d %s%s-%d" $padding.x (cond $args.fluid "px-xxl-0 " "") (cond $paddingTop "pb" "py") $padding.y -}}
-    {{- $paddingOuter := printf "px-xxl-0 px-%d py-0" $padding.x -}}
+    {{- $pxClasses := partial "utilities/PaddingClasses.html" (dict "padding" $padding "axis" "x") -}}
+    {{- $pyClasses := partial "utilities/PaddingClasses.html" (dict "padding" $padding "axis" "y" "prefix" (cond $paddingTop "pb" "py")) -}}
+    {{- $containerPadding := printf "%s %s%s" $pxClasses (cond $args.fluid "px-xxl-0 " "") $pyClasses -}}
+    {{- $paddingOuter := printf "px-xxl-0 %s py-0" $pxClasses -}}
     {{ if $embed }}
-        {{- $containerPadding = printf "px-0 %s-%d" (cond $paddingTop "pb" "py") $padding.y -}}
+        {{- $containerPadding = printf "px-0 %s" $pyClasses -}}
     {{ end }}
     {{ $wrapper := "" }}
 
