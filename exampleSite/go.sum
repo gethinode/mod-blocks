@@ -92,6 +92,8 @@ github.com/gethinode/mod-blocks v1.23.1 h1:pgFL5eepVqgHdsSQ8AcDTw4w35FcvwWP3iQCr
 github.com/gethinode/mod-blocks v1.23.1/go.mod h1:JbyOXhbdGPKaIvzu44XKWgivoFSpdG8xB7tXrFfFIrw=
 github.com/gethinode/mod-blocks v1.23.4 h1:6JGzFnKIf9muMTSKN0UGc99D0SahAk9VZCMEN4G9iFs=
 github.com/gethinode/mod-blocks v1.23.4/go.mod h1:ye9nqj3ZwBFogULac71EzH7bP0nPm0pFBGm7++YxCbA=
+github.com/gethinode/mod-blocks v1.23.6 h1:Kg0RAlMhz2j1W60sERvHQyAa8H6UbNfMl9ZJajh/vKU=
+github.com/gethinode/mod-blocks v1.23.6/go.mod h1:zSbs/OyzCDt4Kvn/9e1Zi8K1tweJANfibHUr/jcOrt4=
 github.com/gethinode/mod-utils/v5 v5.10.0 h1:NlofAfa1YILV9pwS8vMkEwVUdrnKCoIlVwJPm3+UVGs=
 github.com/gethinode/mod-utils/v5 v5.10.0/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
 github.com/gethinode/mod-utils/v5 v5.11.0 h1:1BO9uK0zecHF6dNJcqX8NFNHSIdizlyj88n9ylLUsDc=
