@@ -54,7 +54,7 @@ Add mod-blocks to your Hinode site's `hugo.toml`:
 
 ```toml
 [[module.imports]]
-  path = "github.com/gethinode/mod-blocks"
+  path = "github.com/gethinode/mod-blocks/v2"
 ```
 
 Then run:
@@ -67,7 +67,7 @@ hugo mod get -u
 
 - **Hugo Extended** v0.147.6 or higher
 - **Hinode v2** for:
-  - mod-utils utilities (GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.)
+  - mod-utils utilities (GetPadding, GetBreakpoint, LogWarn, Args, etc.)
   - Shared asset partials (card-group, video, table, timeline, etc.)
 
 ## Architecture
@@ -96,7 +96,7 @@ Located in `component-library/components/`:
 ### Dependencies on Hinode
 
 mod-blocks depends on Hinode v2 for:
-- **mod-utils utilities**: GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.
+- **mod-utils utilities**: GetPadding, GetBreakpoint, LogWarn, Args, etc.
 - **Shared asset partials**: card-group, video, table, timeline, live-image, section-title, etc.
 - **Bootstrap styling** and theming system
 

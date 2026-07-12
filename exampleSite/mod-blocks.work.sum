@@ -22,6 +22,8 @@ github.com/gethinode/mod-mermaid/v4 v4.10.1 h1:wXAvq48rMp7p4HXg03rI18cxPfmov4LWu
 github.com/gethinode/mod-mermaid/v4 v4.10.1/go.mod h1:oZoG4GfNy3pjj7dvevrjXYjeJe86RHFaNN74z86e3V0=
 github.com/gethinode/mod-simple-datatables/v3 v3.1.2 h1:EiZFezmLDKBsbUkhrZqTJlFWJ6vFV+HfdWNM8h/uY6s=
 github.com/gethinode/mod-simple-datatables/v3 v3.1.2/go.mod h1:pUU1gcVUmNXgivo1SOFpcB3KYJhljQyfSnArROeIaZo=
+github.com/gethinode/mod-utils/v5 v5.24.0 h1:dqqRn6qaEehEHZjo74pxbzvVdCn++XuZk18jxeUvwwA=
+github.com/gethinode/mod-utils/v5 v5.24.0/go.mod h1:PwQN4oOjA6k/vet11JueJ9asZMgL0DBa3jyS9tPkBWU=
 github.com/nextapps-de/flexsearch v0.0.0-20260529083235-f7ed963096a0 h1:QDKcU3q39lFGzdVwM6kgCGnW3ibbMfYIi0Rwl62iJpo=
 github.com/nextapps-de/flexsearch v0.0.0-20260529083235-f7ed963096a0/go.mod h1:5GdMfPAXzbA2gXBqTjC6l27kioSYzHlqDMh0+wyx7sU=
 github.com/twbs/bootstrap v5.3.8+incompatible h1:eK1fsXP7R/FWFt+sSNmmvUH9usPocf240nWVw7Dh02o=

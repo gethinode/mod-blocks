@@ -49,7 +49,7 @@ timeout = '180s'
   # Build and serve using local mod-blocks clone declared in the named Hugo workspace:
   workspace = "mod-blocks.work"
   [[module.imports]]
-    path = "github.com/gethinode/mod-blocks"
+    path = "github.com/gethinode/mod-blocks/v2"
   # Hinode provides the shared partials (section-title, card-group, video, table,
   # timeline, live-pages, ...) that the mod-blocks components call at site build time.
   [[module.imports]]
