@@ -1,0 +1,21 @@
+{{/*
+    Demo form hook for the contact-form component. The component requires a site-provided
+    render hook that emits the actual form markup; this minimal hook exercises that path.
+*/}}
+{{- $action := .action -}}
+{{- $formID := index . "form-id" | default "demo-form" -}}
+<form id="{{ $formID }}" class="demo-contact-form" method="post" {{ with $action }}action="{{ . }}"{{ end }}>
+    <div class="mb-3">
+        <label for="{{ $formID }}-name" class="form-label">Name</label>
+        <input type="text" class="form-control" id="{{ $formID }}-name" name="name">
+    </div>
+    <div class="mb-3">
+        <label for="{{ $formID }}-email" class="form-label">Email address</label>
+        <input type="email" class="form-control" id="{{ $formID }}-email" name="email">
+    </div>
+    <div class="mb-3">
+        <label for="{{ $formID }}-message" class="form-label">Message</label>
+        <textarea class="form-control" id="{{ $formID }}-message" name="message" rows="3"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
