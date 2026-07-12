@@ -74,7 +74,7 @@ All components follow the same structure:
    - `blueprint`: Component schema with default values
 
 2. **Hugo Template** (`.hugo.html`):
-   - Cannot use InitArgs partial (Bookshop live editing requirement)
+   - Cannot use the Args partial (Bookshop live editing requirement)
    - Access arguments directly from dot notation (`.breadcrumb`, `.heading`, etc.)
    - Call mod-blocks partials like `assets/hero.html` (now owned by mod-blocks)
    - Call Hinode shared partials like `assets/card-group.html`, `assets/video.html` (still in Hinode)
@@ -95,14 +95,14 @@ All components follow the same structure:
 - Page template: page/contact.html
 
 **Hinode provides (accessed via module inheritance):**
-- mod-utils utilities: GetPadding, GetBreakpoint, LogWarn, InitArgs, etc.
+- mod-utils utilities: GetPadding, GetBreakpoint, LogWarn, Args, etc.
 - Shared asset partials: card-group.html, video.html, table.html, timeline.html, live-image.html, section-title.html, etc.
 - Bootstrap styling and theming system
 
 **Dependency Flow:**
 ```
 Hinode v2 (core theme)
-  ├── mod-utils (GetPadding, LogWarn, InitArgs, etc.)
+  ├── mod-utils (GetPadding, LogWarn, Args, etc.)
   ├── Shared partials (card-group, video, table, timeline, section-title)
   └── Bootstrap theming
 
@@ -143,7 +143,7 @@ blueprint:
 
 ### 2. Hugo Partial Structures (`data/structures/*.yml`) — kebab-case
 
-Structure files define the argument interface for **Hugo partials** (e.g., `assets/menu.html`, `assets/hero.html`). These are processed by `InitArgs` (mod-utils), which stores keys as-is and then camelizes any key containing `-`. **Always use kebab-case here** so that `$args.menuStyle`, `$args.linkType` etc. work correctly.
+Structure files define the argument interface for **Hugo partials** (e.g., `assets/menu.html`, `assets/hero.html`). These are processed by `Args` (mod-utils v6), which returns a separated envelope with camelCase keys under `args`. **Always use kebab-case here** so that `$args.menuStyle`, `$args.linkType` etc. work correctly.
 
 ```yaml
 # data/structures/menu.yml
@@ -153,7 +153,7 @@ arguments:
   icon-style:      # → $args.iconStyle
 ```
 
-**Critical**: `InitArgs` does exact key matching against the structure. If the structure uses snake_case (`menu_style`) but the caller passes kebab-case (`"menu-style"`), `InitArgs` reports an unknown argument, sets `$error = true`, and breaks out of the range loop — potentially leaving required args (like `menu`) as nil, causing a runtime panic.
+**Critical**: `Args` does exact key matching against the structure. If the structure uses snake_case (`menu_style`) but the caller passes kebab-case (`"menu-style"`), `Args` reports an unknown argument as an error — potentially leaving required args (like `menu`) as nil.
 
 ### 3. Hugo Template Dict Keys (`.hugo.html` → partials) — kebab-case
 
@@ -171,7 +171,7 @@ When `.hugo.html` components call Hugo partials, they pass a dict with kebab-cas
 | Context | Key format | Example | Reason |
 |---|---|---|---|
 | `.bookshop.yml` blueprint | snake_case | `link_type` | CloudCannon CMS requirement |
-| `data/structures/*.yml` | kebab-case | `link-type` | `InitArgs` camelizes `-` keys; `_` keys are NOT camelized |
+| `data/structures/*.yml` | kebab-case | `link-type` | `Args` camelizes both `-` and `_` keys to camelCase |
 | Dict key passed to Hugo partial | kebab-case | `"link-type"` | Must match structure definition exactly |
 | Value read from bookshop context | `(or .snake (index . "kebab"))` | `(or .link_type (index . "link-type"))` | Backwards compatibility |
 

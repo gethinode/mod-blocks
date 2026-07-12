@@ -1,0 +1,16 @@
+- title: v2.0.0
+  date: 2026-07-12
+  content: Adopts the mod-utils v6 validation engine.
+  color: primary
+  icon: fas rocket
+  badge: latest
+- title: v1.23.0
+  date: 2026-06-01
+  content: Adds mobile-aware section and hero padding.
+  color: secondary
+  icon: fas mobile-screen
+- title: v1.0.0
+  date: 2025-01-15
+  content: First stable release of the Bookshop component library.
+  color: success
+  icon: fas flag-checkered

@@ -4,7 +4,7 @@
     Visit gethinode.com/license for more details.
 
 	Note: To support live editing, bookshop components should use a clear path to the provided arguments.
-	Therefore, we cannot use the InitArgs partial at this point, and we need to access each argument
+	Therefore, we cannot use the validated arguments (Args partial) at this point, and we need to access each argument
 	directly. See the docs for more background:
 	https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
 */}}
@@ -13,19 +13,19 @@
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
     {{ $bookshop := "list" }}
-	{{ $args := partial "utilities/InitArgs.html" (dict "bookshop" $bookshop "args" .) }}
-    {{ $err := $args.err }}
-    {{ $msg := ($args.errmsg | append $args.warnmsg) }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" . "strict" false) }}
+    {{ $err := $result.err }}
+    {{ $msg := ($result.errmsg | append $result.warnmsg) }}
 
-    {{ if and (not $err) $args.hook }}
-		{{ $hook := cond (path.Ext $args.hook) $args.hook (printf "%s.html" $args.hook)  }}
+    {{ if and (not $err) $result.args.hook }}
+		{{ $hook := cond (path.Ext $result.args.hook) $result.args.hook (printf "%s.html" $result.args.hook)  }}
 		{{ if (not (templates.Exists (printf "_partials/%s" $hook))) }}
-			{{ $msg = $msg | append (printf "[%s] cannot find render hook '%s'" $bookshop $args.hook) }}
+			{{ $msg = $msg | append (printf "[%s] cannot find render hook '%s'" $bookshop $result.args.hook) }}
 			{{ $err = true }}
 		{{ end }}
     {{ end }}
 
-	{{ if or $err $args.warnmsg }}
+	{{ if or $err $result.warnmsg }}
 		{{ partial (cond $err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/list/list.hugo.html" 
 			"warnid"  "warn-invalid-arguments"

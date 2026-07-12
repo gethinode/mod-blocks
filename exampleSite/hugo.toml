@@ -1,9 +1,56 @@
 baseURL = 'http://example.org/'
-languageCode = 'en-us'
 title = 'Test site for mod-blocks'
+
+defaultContentLanguage = 'en'
+enableEmoji = true
+timeout = '180s'
+
+[languages.en]
+  label = "English"
+  weight = 1
+  [languages.en.params]
+    locale = 'en-US'
+
+[menus]
+  [[menus.main]]
+    name = 'Components'
+    pageRef = '/components'
+    weight = 10
+    [menus.main.params]
+      icon = 'fas cubes'
+      description = 'One demo page per Bookshop component.'
+  [[menus.main]]
+    name = 'Blog'
+    pageRef = '/blog'
+    weight = 20
+    [menus.main.params]
+      icon = 'fas newspaper'
+      description = 'Demo posts used by the articles and list components.'
+  [[menus.main]]
+    name = 'Team'
+    pageRef = '/team'
+    weight = 30
+    [menus.main.params]
+      icon = 'fas users'
+      description = 'Demo team members used by the team component.'
+  [[menus.main]]
+    name = 'About'
+    pageRef = '/components/about'
+    weight = 40
+    [menus.main.params]
+      icon = 'fas circle-info'
+      description = 'About the mod-blocks test site.'
+
+[params]
+  [params.style]
+    purge = false
 
 [module]
   # Build and serve using local mod-blocks clone declared in the named Hugo workspace:
   workspace = "mod-blocks.work"
   [[module.imports]]
-    path = "github.com/gethinode/mod-blocks"
+    path = "github.com/gethinode/mod-blocks/v2"
+  # Hinode provides the shared partials (section-title, card-group, video, table,
+  # timeline, live-pages, ...) that the mod-blocks components call at site build time.
+  [[module.imports]]
+    path = "github.com/gethinode/hinode/v2"
