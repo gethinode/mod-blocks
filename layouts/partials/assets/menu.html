@@ -57,7 +57,7 @@
             (int (math.Ceil (div (float $args.cols) 2))) $breakpoint.current $args.cols }}
     {{ end }}
 
-    <div class="container p-0">
+    <div class="container-fluid p-0">
         <div class="row {{ $colGrid }} g-3">
             {{- range $index, $entry := $menu -}}
                 <div class="col">
