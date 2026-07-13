@@ -43,8 +43,9 @@
      Only applies to horizontal orientation; stacked uses $scale for the image wrapper instead. */}}
 {{ $imgColWidth := 12 }}
 {{ if eq $args.orientation "horizontal" }}
-    {{/* heading.width is filled by the argument engine (default 8) at any nesting depth */}}
-    {{ $imgColWidth = sub 12 $args.heading.width }}
+    {{/* keep a local fallback: heading.width carries no engine default (suppressed
+         at the type level so section titles and images span their columns) */}}
+    {{ $imgColWidth = sub 12 (or $args.heading.width 8) }}
     {{ if lt $imgColWidth 1 }}{{ $imgColWidth = 1 }}{{ end }}
 {{ end }}
 
