@@ -110,6 +110,45 @@
     {{- return $match -}}
 {{- end -}}
 
+{{/* Inline partial — reports whether this site's own Content-Security-Policy permits the target
+     URL to be framed. Even a perfectly embeddable target renders as an empty box when our own
+     frame-src leaves it out, and no response header can rescue that.
+
+     The published frame-src is the union of what every module contributes through
+     [params.modules.<name>.csp], since the mod-csp baseline declares no frame-src of its own.
+     A site that contributes nothing is not using this CSP system, so nothing can be concluded
+     and the preview is rendered unchanged. */}}
+{{- define "_partials/inline/preview-permitted-by-site.html" -}}
+    {{- $origin := .origin -}}
+    {{- $target := partial "inline/preview-origin.html" .url -}}
+
+    {{- $sources := slice -}}
+    {{- range $module, $config := site.Params.modules -}}
+        {{- if reflect.IsMap $config -}}
+            {{- with index $config "csp" -}}
+                {{- if reflect.IsMap . -}}
+                    {{- with index . "frame-src" -}}
+                        {{- $sources = union $sources . -}}
+                    {{- end -}}
+                {{- end -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+
+    {{- $permitted := true -}}
+    {{- if $sources -}}
+        {{- $permitted = false -}}
+        {{- range $source := $sources -}}
+            {{/* The roles are mirrored here: a frame-src source constrains the URL being framed,
+                 and 'self' means that URL shares this site's origin. */}}
+            {{- if partial "inline/preview-source-match.html" (dict "source" $source "origin" $target "target" $origin) -}}
+                {{- $permitted = true -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+    {{- return $permitted -}}
+{{- end -}}
+
 {{/* Inline partial — reports whether the target URL lets this site frame it, based on the
      X-Frame-Options and Content-Security-Policy headers of its response. */}}
 {{- define "_partials/inline/preview-embeddable.html" -}}
@@ -208,6 +247,7 @@
     {{/* Build-time detection of iframe embedding restrictions */}}
     {{- $showFallback := or $args.showFallback (not $args.url) -}}
     {{- $origin := partial "inline/preview-origin.html" site.BaseURL -}}
+
     {{- if and $args.url (not $showFallback) $origin.host -}}
         {{- $options := dict "responseHeaders" (slice "X-Frame-Options" "Content-Security-Policy") -}}
         {{- $response := try (resources.GetRemote $args.url (merge $options (dict "method" "HEAD"))) -}}
@@ -241,6 +281,26 @@
                     "file"    page.File
                 ) -}}
             {{- end -}}
+        {{- end -}}
+    {{- end -}}
+
+    {{/* A target that permits framing still renders as an empty box when this site's own CSP
+         leaves it out, so check that too. It runs last, and only for a target that would
+         otherwise have loaded — telling an author to allow a URL that refuses to be framed at
+         all would send them after a fix that cannot work. */}}
+    {{- if and $args.url (not $showFallback) $origin.host -}}
+        {{- if not (partial "inline/preview-permitted-by-site.html" (dict "url" $args.url "origin" $origin)) -}}
+            {{- $showFallback = true -}}
+            {{- partial "utilities/LogWarn.html" (dict
+                "partial" "assets/preview.html"
+                "warnid"  "warn-preview-csp"
+                "msg"     "iframe blocked by this site's own CSP"
+                "details" (slice
+                    (printf "URL '%s' allows being framed, but is not covered by the frame-src directive this site publishes, so the browser refuses the iframe; showing fallback." $args.url)
+                    "Add its host to a 'frame-src' entry under [modules.<name>.csp] to render it."
+                )
+                "file"    page.File
+            ) -}}
         {{- end -}}
     {{- end -}}
 
