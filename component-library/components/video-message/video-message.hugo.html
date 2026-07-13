@@ -52,9 +52,12 @@
 	{{ $iconRounded := .iconRounded }}
 	{{ $iconStyle := .iconStyle }}
 
+	{{/* gutter 0 suppresses the g-* class entirely (with-guard treats 0 as unset),
+	     preserving the v1 message rhythm: default horizontal gutters, no vertical gap */}}
 	{{- partial "assets/card-group.html" (dict
 		"page"         page
 		"list"         $list
+		"gutter"       0
 		"class"        "border-0 card-icon card-icon-secondary"
 		"cols"         $cols
 		"padding"      "0"
