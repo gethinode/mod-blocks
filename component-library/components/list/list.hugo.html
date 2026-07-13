@@ -109,14 +109,13 @@
 			{{ $sortable := and .sortable (gt (len $pages) 1) }}
 			{{ $searchable := and .searchable (gt (len $pages) 1) }}
 
-			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" (dict
+			{{ $tableArgs := dict
 				"page"                   (or .page page)
 				"input"                  $content
 				"breakpoint"             .breakpoint
 				"class"                  .class
 				"sortable"               $sortable
 				"paginate"               $paginate
-				"pagination"             (cond $paginate $pagination "")
 				"pagination-select"      (cond $paginate (or .pagination_select (index . "pagination-select")) "")
 				"searchable"             $searchable
 				"filter"                 .filter
@@ -124,7 +123,11 @@
 				"wrap"                   .wrap
 				"wrapper"                "width-100"
 				"_default"               .default
-			)) }}
+			}}
+			{{ if $paginate }}
+				{{ $tableArgs = merge $tableArgs (dict "pagination" $pagination) }}
+			{{ end }}
+			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" $tableArgs) }}
 		{{ else }}
 			{{ $raw = printf `%s<p class="pt-%d">%s.</p>` $raw $padding.y (T "emptyList") }}
 		{{ end }}

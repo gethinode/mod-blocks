@@ -52,12 +52,11 @@
 	{{ $iconRounded := .iconRounded }}
 	{{ $iconStyle := .iconStyle }}
 
-	{{- partial "assets/card-group.html" (dict 
+	{{- partial "assets/card-group.html" (dict
 		"page"         page
 		"list"         $list
 		"class"        "border-0 card-icon card-icon-secondary"
 		"cols"         $cols
-		"gutter"       ""
 		"padding"      "0"
 		"header-style" "none"
 		"footer-style" "none"
