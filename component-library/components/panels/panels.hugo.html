@@ -34,7 +34,7 @@
     {{ $list := slice }}
     {{ $titles := slice }}
     {{ $toc := slice }}
-    {{ $parentID := printf "panel-%v" (md5 (delimit (slice . now) "-")) }}
+    {{ $parentID := partial "utilities/UniqueID.html" (dict "prefix" "panel" "page" $._page) }}
     {{ $inner := "" }}
     {{ $contentStyle := .content_style | default "fs-6" }}
     {{ range $i, $element := .elements }}

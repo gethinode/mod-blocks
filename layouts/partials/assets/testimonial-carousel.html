@@ -45,7 +45,7 @@
 {{ if not $error }}
 	{{ $padding := cond (isset $args "padding") $args.padding $padding.x }}
 	{{ if and $args.carousel (gt (len $args.testimonials) 1) }}
-		{{ $id := printf "testimonial-carousel-%s" (md5 (delimit (slice . now) "-")) }}
+		{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "testimonial-carousel") }}
 		<div id="{{ $id }}" class="carousel slide">
 			<div class="carousel-indicators">
 				{{ range $index, $item := $args.testimonials }}

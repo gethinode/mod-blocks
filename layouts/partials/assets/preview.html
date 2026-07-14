@@ -240,7 +240,7 @@
 {{/* Initialize local variables */}}
 {{- $devices := slice "desktop" "tablet" "mobile" -}}
 {{- $defaultDevice := $args.device -}}
-{{- $id := printf "preview-%s" (md5 (delimit (slice . now) "-")) -}}
+{{- $id := partial "utilities/UniqueID.html" (dict "prefix" "preview") -}}
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 
 {{ if not $error }}
