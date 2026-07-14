@@ -5,12 +5,13 @@ section.menu {
 
     .menu-item {
         --bs-menu-border: var(--bs-border-color);
+        --bs-menu-border-width: var(--bs-border-width);
         --bs-menu-color-hover: var(--bs-light);
         --bs-menu-background-hover: var(--bs-primary);
         --bs-menu-item-color-hover: var(--bs-gray-300);
 
         position: relative;
-        border: solid var(--bs-menu-border);
+        border: var(--bs-menu-border-width) solid var(--bs-menu-border);
 
         &:hover,
         &:focus {
