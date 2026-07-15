@@ -39,7 +39,7 @@
 	-}}
 
 	{{ $class := "" }}
-	{{ $id := printf "faq-%s" (md5 (delimit (slice . now) "-")) }}
+	{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "faq") }}
 
 	{{ $raw = printf "%s%s" $raw (partial "assets/faq.html" (dict
 		"id"       $id
