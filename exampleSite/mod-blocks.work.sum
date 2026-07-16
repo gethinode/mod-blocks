@@ -1,9 +1,9 @@
+github.com/FortAwesome/Font-Awesome v0.0.0-20260715180930-14c65a3747d0 h1:4+bB2ojsMTsQroHtQr1FWy2gxFzpBn5hISldeRfxF+o=
+github.com/FortAwesome/Font-Awesome v0.0.0-20260715180930-14c65a3747d0/go.mod h1:IUgezN/MFpCDIlFezw3L8j83oeiIuYoj28Miwr/KUYo=
 github.com/gethinode/mod-flexsearch/v5 v5.0.0 h1:JsrsKejSRxirUyfCZheLFkQVAJKdtRDr/d0lRKjrLYw=
 github.com/gethinode/mod-flexsearch/v5 v5.0.0/go.mod h1:FGj0l97PX7OnDjvFtdFrq3g3BJPeal7FiSgrtd6Yxdo=
 github.com/gethinode/mod-fontawesome/v6 v6.0.0 h1:PrfiMfVEAM5Lpnkp+sXOtOdRSOe3l56z+ngrPcACzlA=
 github.com/gethinode/mod-fontawesome/v6 v6.0.0/go.mod h1:ayMslv2xpC5cjxUVTkIlFBbOd1LM5ezIr0OSOr6q8Gk=
-github.com/gethinode/mod-leaflet/v3 v3.1.0 h1:zscIv/q2dg0TUjosjM9hB9DchlutuWkWqOafX00fsKI=
-github.com/gethinode/mod-leaflet/v3 v3.1.0/go.mod h1:FsoyVRb3DRZBb2jWPV4yJNqbmOKmCwaJgom2hbWZXnA=
 github.com/gethinode/mod-lottie/v3 v3.0.0 h1:gTSuMNmaN72YWeeGYkIVukZDmJnu2ROF+yYQmTN4Rk4=
 github.com/gethinode/mod-lottie/v3 v3.0.0/go.mod h1:t1aH0lLklNCchd398reXJtI0kAHkf3SXjo3tqi355wg=
 github.com/gethinode/mod-mermaid/v5 v5.0.0 h1:ZKVZ5a4znJdBvzHmQdZv9dGcI3TNUdA1szB6GleBqxs=

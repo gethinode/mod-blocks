@@ -39,7 +39,7 @@
     {{ $list := slice }}
     {{ $titles := slice }}
     {{ $toc := slice }}
-    {{ $parentID := partial "utilities/UniqueID.html" (dict "prefix" "panel") }}
+    {{ $parentID := partial "utilities/UniqueID.html" (dict "prefix" "panel" "page" $page) }}
     {{ $inner := "" }}
     {{ $contentStyle := .content_style | default "fs-6" }}
     {{ range $i, $element := .elements }}

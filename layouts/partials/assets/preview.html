@@ -11,6 +11,7 @@
     {{- $deviceIcons  := .deviceIcons -}}
     {{- $defaultDevice := .defaultDevice -}}
     {{- $placement    := .placement -}}{{/* "above" or "below" */}}
+    {{- $page         := .page -}}{{/* owning page — anchors icon sprite registration */}}
     <div class="container-xxl">
         <div class="preview-controls{{ if eq $placement "below" }} controls-bottom{{ end }} d-flex justify-content-center {{ if eq $placement "below" }}mt-3{{ else }}mb-3{{ end }}">
             <div class="btn-group" role="tablist" aria-label="Device selection">
@@ -26,7 +27,7 @@
                             aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"
                             title="{{ $device | title }}"
                             aria-label="{{ $device | title }} view">
-                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false) }}
+                        {{ partial "assets/icon.html" (dict "icon" (index $deviceIcons $device) "spacing" false "page" $page) }}
                     </button>
                 {{- end -}}
             </div>
@@ -238,9 +239,10 @@
 {{- $deviceIcons := dict "desktop" $previewDesktop "tablet"  $previewTablet "mobile"  $previewMobile -}}
 
 {{/* Initialize local variables */}}
+{{- $page := or $args.page page -}}
 {{- $devices := slice "desktop" "tablet" "mobile" -}}
 {{- $defaultDevice := $args.device -}}
-{{- $id := partial "utilities/UniqueID.html" (dict "prefix" "preview") -}}
+{{- $id := partial "utilities/UniqueID.html" (dict "prefix" "preview" "page" $page) -}}
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 
 {{ if not $error }}
@@ -313,7 +315,7 @@
 
     {{/* Device selection button group — rendered above or below the preview */}}
     {{- if and (not $showFallback) (not $controlsBelow) -}}
-        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "above") -}}
+        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "above" "page" $page) -}}
     {{- end -}}
 
     {{/* Tab content with iframes */}}
@@ -346,7 +348,7 @@
                     {{- end }}
                     {{- if $args.url }}
                     <div class="alert alert-warning" role="alert">
-                        {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false) }}
+                        {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false "page" $page) }}
                         {{ T "previewError" }} <code>{{ $args.url }}</code>.
                         <a href="{{ $args.url }}" target="_blank" rel="noopener" class="alert-link">
                             {{ T "previewOpenTab" }}
@@ -359,6 +361,6 @@
     </div>
 
     {{- if and (not $showFallback) $controlsBelow -}}
-        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "below") -}}
+        {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "below" "page" $page) -}}
     {{- end -}}
 {{ end }}

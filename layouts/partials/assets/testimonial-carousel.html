@@ -46,7 +46,7 @@
 {{ if not $error }}
 	{{ $padding := cond (isset $args "padding") $args.padding $padding.x }}
 	{{ if and $args.carousel (gt (len $args.testimonials) 1) }}
-		{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "testimonial-carousel") }}
+		{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "testimonial-carousel" "page" $page) }}
 		<div id="{{ $id }}" class="carousel slide">
 			<div class="carousel-indicators">
 				{{ range $index, $item := $args.testimonials }}
@@ -84,11 +84,11 @@
 				{{ end}}
 			</div>
 			<button class="carousel-control-prev" type="button" data-bs-target="#{{ $id }}" data-bs-slide="prev">
-				{{ partial "assets/icon.html" (dict "icon" $carouselPrev "class" "fa-2xl") }}
+				{{ partial "assets/icon.html" (dict "icon" $carouselPrev "class" "fa-2xl" "page" $page) }}
 				<span class="visually-hidden">{{ T "testimonialPrevious" }}</span>
 			</button>
 			<button class="carousel-control-next" type="button" data-bs-target="#{{ $id }}" data-bs-slide="next">
-				{{ partial "assets/icon.html" (dict "icon" $carouselNext "class" "fa-2xl") }}
+				{{ partial "assets/icon.html" (dict "icon" $carouselNext "class" "fa-2xl" "page" $page) }}
 				<span class="visually-hidden">{{ T "testimonialNext" }}</span>
 			</button>
 		</div>
