@@ -25,6 +25,7 @@
 {{- $padding := partial "utilities/GetPadding.html" -}}
 {{- $carouselPrev := partial "utilities/GetThemeIcon.html" (dict "id" "carouselPrev" "default" "fas chevron-left") -}}
 {{- $carouselNext := partial "utilities/GetThemeIcon.html" (dict "id" "carouselNext" "default" "fas chevron-right") -}}
+{{- $page := or $args.page page -}}
 
 {{/* Initialize local variables */}}
 {{ $colGrid := printf "row-cols-%d" $args.cols }}
@@ -64,7 +65,7 @@
 						{{ $cardStyle = print $cardStyle " testimonial-carousel-item" }}
 
 						{{ partial "assets/testimonial.html" (dict
-							"page"          page
+							"page"          $page
 							"content"       $item.content
 							"logo"          $item.logo
 							"icon"          $item.icon
@@ -97,7 +98,7 @@
 				{{ range $args.testimonials }}
 					<div class="col">
 						{{ partial "assets/testimonial.html" (dict
-							"page"        page
+							"page"        $page
 							"content"     .content
 							"logo"        .logo
 							"icon"        .icon

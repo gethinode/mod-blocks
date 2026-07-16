@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "about" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "about" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/about/about.hugo.html" 
@@ -25,6 +28,8 @@
 	{{- end -}}
 {{- end -}}
 
+{{ $page := or ._page page }}
+
 {{ if not $error }}
 	{{/* Capture common ratio settting */}}
 	{{ $settings := dict }}
@@ -35,7 +40,7 @@
 
 	{{/* Generate the hero */}}
 	{{ $raw := partial "assets/hero.html"  (dict 
-		"page"         page
+		"page"         $page
 		"heading"      (merge (dict "arrangement" "above" "width" 8) .heading)
 		"illustration" (merge (dict "ratio" $ratio) .illustration)
 		"order"        .order
@@ -50,6 +55,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "about"
 			"id"             .id
 			"raw"            $raw

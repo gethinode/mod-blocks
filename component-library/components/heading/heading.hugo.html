@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "heading" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "heading" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/heading/heading.hugo.html" 
@@ -24,6 +27,8 @@
 		{{ $error = $result.err }}
 	{{- end -}}
 {{- end -}}
+
+{{ $page := or ._page page }}
 
 {{ if not $error }}
 	{{/* Initialize global arguments */}}
@@ -45,6 +50,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "heading"
 			"id"             .id
 			"raw"            $raw

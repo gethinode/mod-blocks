@@ -338,7 +338,7 @@
                         {{ partial "assets/image.html" (dict
                             "src"     $args.image
                             "mode"    $args.mode
-                            "page"    page
+                            "page"    (or $args.page page)
                             "class"   "preview-fallback-image"
                             "title"   (or $args.heading.title "Preview")
                             "loading" "lazy"

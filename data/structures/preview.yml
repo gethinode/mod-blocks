@@ -1,6 +1,11 @@
 comment: >-
   Renders a live URL preview with switchable device views (desktop, tablet, mobile).
 arguments:
+  page:
+    optional: true
+    comment: >-
+      Owning page of the preview, used to render the fallback image in the
+      correct page context. Falls back to the global page context when omitted.
   url:
     optional: true
   device:

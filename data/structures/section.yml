@@ -5,6 +5,18 @@ group: partial
 arguments:
   _ordinal:
   id:
+  page:
+    optional: true
+    comment: >-
+      Owning page of the section, used to resolve page-level settings such as
+      the overlay mode. Falls back to the global page context when omitted.
+  embed:
+    type: bool
+    optional: true
+    comment: >-
+      Flag to indicate the section is embedded within another element such as a
+      documentation page. Falls back to the deprecated page-level scratch value
+      "blocks_embed" when omitted.
   component-name:
     type: string
     optional: false

@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "articles" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "articles" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/articles/articles.hugo.html" 
@@ -24,6 +27,8 @@
 		{{ $error = $result.err }}
 	{{- end -}}
 {{- end -}}
+
+{{ $page := or ._page page }}
 
 {{ if not $error }}
 	{{/* Initialize global arguments */}}
@@ -46,7 +51,7 @@
 		{{ $section = .section }}
 		{{ $categories = .categories }}
 		{{ $result = partial "assets/live-pages.html" (dict 
-			"page"       $.page
+			"page"       (or $.page $page)
 			"section"    .section
 			"nested"     .nested
 			"keywords"   .keywords
@@ -86,7 +91,7 @@
 	{{ end }}
 
 	{{ $paginate := .paginate }}
-	{{ if and $paginate page.IsPage }}
+	{{ if and $paginate $page.IsPage }}
 		{{ partial "utilities/LogWarn.html" (dict 
 			"partial" "component-library/components/articles/articles.hugo.html"
 			"msg"     "Pagination not supported"
@@ -108,7 +113,7 @@
 		{{ if $useMagazine }}{{ $partial = "assets/magazine.html" }}{{ end }}
 		{{ $params := dict }}
 		{{- $params = merge $params (dict
-			"page"           page
+			"page"           $page
 			"list"           $pages
 			"cols"           .cols
 			"limit"          .limit
@@ -158,6 +163,8 @@
 		{{ if $raw }}
 			{{ partial "utilities/section.html" (dict 
 				"_ordinal"       ._ordinal
+				"page"           $page
+				"embed"          ._embed
 				"component-name" "articles"
 				"id"             .id
 				"raw"            $raw

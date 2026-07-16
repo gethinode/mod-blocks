@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "preview" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "preview" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/preview/preview.hugo.html" 
@@ -25,11 +28,13 @@
 	{{- end -}}
 {{- end -}}
 
+{{ $page := or ._page page }}
+
 {{/* Warn if the preview JS module is not loaded on this page */}}
 {{ if not site.Params.env_bookshop_live }}
 	{{ $integration := index site.Params.modules "preview" "integration" | default "optional" }}
-	{{ $pageModules := page.Params.modules | default slice }}
-	{{ if and page.IsPage (ne $integration "core") (not (in $pageModules "preview")) }}
+	{{ $pageModules := $page.Params.modules | default slice }}
+	{{ if and $page.IsPage (ne $integration "core") (not (in $pageModules "preview")) }}
 		{{ partial "utilities/LogWarn.html" (dict
 			"partial" "component-library/components/preview/preview.hugo.html"
 			"warnid"  "warn-missing-module"
@@ -43,6 +48,7 @@
 {{ if not $error }}
 	{{/* Main code */}}
 	{{ $raw := partial "assets/preview.html" (dict
+		"page"               $page
 		"url"                .url
 		"device"             .device
 		"controls-placement" (or .controls_placement (index . "controls-placement"))
@@ -56,6 +62,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "preview"
 			"id"             .id
 			"raw"            $raw

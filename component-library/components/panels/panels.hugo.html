@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "panels" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "panels" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/panels/panels.hugo.html" 
@@ -24,6 +27,8 @@
 		{{ $error = $result.err }}
 	{{- end -}}
 {{- end -}}
+
+{{ $page := or ._page page }}
 
 {{ if not $error }}
     {{/* Initialize global arguments */}}
@@ -41,7 +46,7 @@
         {{ $toc = $toc | append (dict "href" "panel-0-1" "level" 2 "title" .title) }}
 
         {{ $hero := partial "assets/hero.html"  (dict 
-            "page"          page
+            "page"          $page
             "heading"       (dict "content" .content "width" 8)
             "background"    .background
             "illustration"  (dict "ratio" (or .ratio "1x1") "icon" .icon "image" .image "mode" .mode "justify" "end")
@@ -58,7 +63,7 @@
         {{ $hero = replace $hero `<div class="container">` `<div class="container-xxl p-0">`}}
 
         {{- $output := partial "assets/nav-item.html" (dict 
-            "page"      page
+            "page"      $page
             "id"        $i
             "parent-id" $parentID
             "fade"      false
@@ -81,7 +86,7 @@
 
     {{- $raw = printf "%s%s" $raw (partial "assets/nav.html" (dict 
         "id"           (or .id $parentID)
-        "page"         page
+        "page"         $page
         "nav-items"    $inner
         "nav-titles"   $titles
         "tab-type"     (or .tab_type (index . "tab-type"))
@@ -97,6 +102,8 @@
     {{ if $raw }}
         {{ partial "utilities/section.html" (dict 
             "_ordinal"       ._ordinal
+            "page"           $page
+            "embed"          ._embed
             "component-name" "panels"
             "id"             .id
             "raw"            $raw

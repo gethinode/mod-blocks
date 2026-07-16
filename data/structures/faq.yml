@@ -2,6 +2,11 @@ comment: >-
   Renders an accordion of frequently asked questions. Clicking on a question
   reveals the answer interactively.
 arguments:
+  page:
+    optional: true
+    comment: >-
+      Owning page of the FAQ, used to render the answers in the correct page
+      context. Falls back to the global page context when omitted.
   id:
   contrast:
   class:

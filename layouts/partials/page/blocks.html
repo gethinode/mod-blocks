@@ -1,8 +1,24 @@
-{{ with .Params.content_blocks }}
-    {{/* Inject an ordinal number for each block */}}
+{{/*
+    Renders the content blocks of a page. Callers either pass the page itself (legacy) or a dict
+    with the arguments "page" (owning page) and "embed" (optional flag to indicate the blocks are
+    embedded within another element).
+*/}}
+
+{{/* Initialize arguments */}}
+{{ $none := dict }}
+{{ $page := . }}
+{{ $embed := $none.missing }}
+{{ if reflect.IsMap . }}
+    {{ $page = .page }}
+    {{ $embed = .embed }}
+{{ end }}
+
+{{ with $page.Params.content_blocks }}
+    {{/* Inject an ordinal number and the owning page for each block */}}
     {{ $blocks := slice }}
     {{ range $k, $v := .  }}
-        {{ $b := merge $v (dict "_ordinal" $k) }}
+        {{ $b := merge $v (dict "_ordinal" $k "_page" $page) }}
+        {{ if ne $embed nil }}{{ $b = merge $b (dict "_embed" $embed) }}{{ end }}
         {{ $blocks = $blocks | append $b }}
     {{ end }}
 

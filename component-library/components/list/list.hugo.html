@@ -13,7 +13,10 @@
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
     {{ $bookshop := "list" }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" $props "strict" false) }}
     {{ $err := $result.err }}
     {{ $msg := ($result.errmsg | append $result.warnmsg) }}
 
@@ -37,20 +40,21 @@
 	{{- end -}}
 {{- end -}}
 
+{{ $page := or ._page page }}
+
 {{ if not $error }}
 	{{/* Initialize global arguments */}}
 	{{- $padding := partial "utilities/GetPadding.html" -}}
 
 	{{/* Ensure to include the simple-datatables module */}}
-	{{/* TODO: fix add module handling, requires propagating scratch variables to correct page */}}
-	{{ partial "utilities/AddModule.html" (dict "page" ._page "module" "simple-datatables" ) }}
+	{{ partial "utilities/AddModule.html" (dict "page" $page "module" "simple-datatables" ) }}
 
 	{{/* Initialize local variables */}}
 	{{ $pages := slice }}
 	{{ $result := dict "total" 0 }}
 	{{ with .input }}
 		{{ $result = partial "assets/live-pages.html" (dict 
-			"page"       $._page
+			"page"       $page
 			"section"    .section
 			"nested"     .nested
 			"keywords"   .keywords
@@ -101,16 +105,13 @@
 				{{ end }}
 			{{ end }}
 
-			{{- /* Define main breakpoint */ -}}
-			{{- .page.Scratch.Set "breakpoint" (partialCached "utilities/GetBreakpoint.html" .) }}
-
 			{{ $pagination := .pagination | default 10 }}
 			{{ $paginate := and .paginate (gt (len $pages) $pagination) }}
 			{{ $sortable := and .sortable (gt (len $pages) 1) }}
 			{{ $searchable := and .searchable (gt (len $pages) 1) }}
 
 			{{ $tableArgs := dict
-				"page"                   (or .page page)
+				"page"                   (or .page $page)
 				"input"                  $content
 				"breakpoint"             .breakpoint
 				"class"                  .class
@@ -135,6 +136,8 @@
 		{{ if $raw }}
 			{{ partial "utilities/section.html" (dict 
 				"_ordinal"       ._ordinal
+				"page"           $page
+				"embed"          ._embed
 				"component-name" "list"
 				"id"             .id
 				"raw"            $raw
