@@ -44,7 +44,7 @@
 	-}}
 
 	{{ $class := "" }}
-	{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "faq") }}
+	{{ $id := partial "utilities/UniqueID.html" (dict "prefix" "faq" "page" $page) }}
 
 	{{ $raw = printf "%s%s" $raw (partial "assets/faq.html" (dict
 		"page"     $page
