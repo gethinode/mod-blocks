@@ -214,7 +214,7 @@
         "warnid"  "warn-invalid-arguments"
         "msg"     "Invalid arguments"
         "details" ($result.errmsg | append $result.warnmsg)
-        "file"    page.File
+        "file"    (or $args.page page).File
     )}}
     {{ $error = $result.err }}
 {{ end }}
@@ -224,7 +224,7 @@
         "partial" "assets/preview.html"
         "msg"     "Missing required argument"
         "details" (slice "Either 'url' or 'image' must be provided")
-        "file"    page.File
+        "file"    (or $args.page page).File
     ) -}}
     {{- $error = true -}}
 {{- end -}}
@@ -263,7 +263,7 @@
                 "warnid"  "warn-preview-unverified"
                 "msg"     "Could not verify embedding restrictions"
                 "details" (slice (printf "Request to '%s' failed: %v. Rendering the preview anyway." $args.url $response.Err))
-                "file"    page.File
+                "file"    (or $args.page page).File
             ) -}}
         {{- else -}}
             {{- $verdict := partial "inline/preview-embeddable.html" (dict
@@ -278,7 +278,7 @@
                     "warnid"  "warn-preview-restricted"
                     "msg"     "iframe embedding blocked"
                     "details" (slice (printf "URL '%s' cannot be embedded because %s; showing fallback" $args.url $verdict.reason))
-                    "file"    page.File
+                    "file"    (or $args.page page).File
                 ) -}}
             {{- end -}}
         {{- end -}}
@@ -299,7 +299,7 @@
                     (printf "URL '%s' allows being framed, but is not covered by the frame-src directive this site publishes, so the browser refuses the iframe; showing fallback." $args.url)
                     "Add its host to a 'frame-src' entry under [modules.<name>.csp] to render it."
                 )
-                "file"    page.File
+                "file"    (or $args.page page).File
             ) -}}
         {{- end -}}
     {{- end -}}

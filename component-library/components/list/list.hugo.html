@@ -34,7 +34,7 @@
 			"warnid"  "warn-invalid-arguments"
 			"msg"     "Invalid arguments"
 			"details" $msg
-			"file"    page.File
+			"file"    (or ._page page).File
 		)}}
 		{{ $error = $err }}
 	{{- end -}}
@@ -70,7 +70,7 @@
 		{{ partial "utilities/LogWarn.html" (dict 
 			"partial" "component-library/components/list/list.hugo.html"
 			"msg"     "Limit is ignored when paginate is set"
-			"file"    page.File
+			"file"    $page.File
 		)}}
 	{{ end }}
 

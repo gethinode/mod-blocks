@@ -22,7 +22,7 @@
 			"warnid"  "warn-invalid-arguments"
 			"msg"     "Invalid arguments"
 			"details" ($result.errmsg | append $result.warnmsg)
-			"file"    page.File
+			"file"    (or ._page page).File
 		)}}
 		{{ $error = $result.err }}
 	{{- end -}}
@@ -74,7 +74,7 @@
 		{{ partial "utilities/LogWarn.html" (dict 
 			"partial" "component-library/components/team/team.hugo.html"
 			"msg"     "Pagination not supported"
-			"file"    page.File
+			"file"    $page.File
 		)}}
 		{{ $paginate = false }}
 	{{ end }}
