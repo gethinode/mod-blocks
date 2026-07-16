@@ -23,6 +23,7 @@
 	{{ if site.Params.env_bookshop_live }}
 		{{/* Define dummy content as we cannot retrieve video data in live mode */}}
 		{{- partial "assets/live-image.html" (dict
+			"page"    $page
 			"src"     "/img/placeholder-video.svg"
 			"ratio"   "21x9"
 			"wrapper" (printf "text-center mb-%d" $padding.y)) -}}
@@ -154,6 +155,7 @@
 	{{ end}}
 
 	{{- $raw := partial "assets/section-title.html" (dict
+		"page"    $page
 		"heading" .heading
 		"justify" .justify
 		"class"   (printf "pb-%d" $padding.y))

@@ -38,6 +38,7 @@
 	{{ $color := "" }}
 	{{ if .contrast }}{{ $color = "white" }}{{ end }}
 	{{- $raw := partial "assets/section-title.html" (dict
+		"page"    $page
 		"heading" .heading
 		"justify" .justify
 		"class"   (printf "pb-%d" $padding.y))

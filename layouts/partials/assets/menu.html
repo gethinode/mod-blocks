@@ -22,6 +22,7 @@
 
 {{/*  Initialize global arguments */}}
 {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
+{{- $page := or $args.page page -}}
 
 {{/*  Initialize local arguments */}}
 {{- $menu := index site.Menus $args.menu -}}
@@ -40,7 +41,7 @@
                 {{ if eq (mod $index $split) 0 }}<div class="m-col m-col-1 m-col-{{ $breakpoint.current }}-{{ $args.cols }}">{{ end }}
 
                 {{ partial "assets/menu-item.html" (dict
-                    "page"         $args.page
+                    "page"         $page
                     "menu-entry"   $entry
                     "padding"      $args.padding
                     "icon-rounded" $args.iconRounded
@@ -63,7 +64,7 @@
             {{- range $index, $entry := $menu -}}
                 <div class="col">
                     {{ partial "assets/menu-item.html" (dict
-                        "page"         $args.page
+                        "page"         $page
                         "menu-entry"   $entry
                         "padding"      $args.padding
                         "icon-rounded" $args.iconRounded

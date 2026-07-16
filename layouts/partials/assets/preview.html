@@ -309,6 +309,7 @@
     {{/* Optional section heading */}}
     {{ if $args.heading.title }}
         {{ partial "assets/section-title.html" (dict
+            "page"    $page
             "heading" $args.heading
         ) }}
     {{ end }}
@@ -340,7 +341,7 @@
                         {{ partial "assets/image.html" (dict
                             "src"     $args.image
                             "mode"    $args.mode
-                            "page"    (or $args.page page)
+                            "page"    $page
                             "class"   "preview-fallback-image"
                             "title"   (or $args.heading.title "Preview")
                             "loading" "lazy"
