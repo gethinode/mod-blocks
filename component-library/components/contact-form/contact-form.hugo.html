@@ -57,7 +57,7 @@
     {{ $raw := "" }}
 	{{ if .contrast }}{{ $color = "white" }}{{ end }}
 
-    {{ $form := (partial .hook (dict "action" .action "form-id" .form_id)) }}
+    {{ $form := (partial .hook (dict "action" .action "form-id" .form_id "page" $page)) }}
     {{ if .illustration }}
         {{/* Embed the form in a horizontal hero with an illustration */}}
         {{ $width := sub 12 (.illustration.width | default 6) }}
