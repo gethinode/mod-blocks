@@ -10,6 +10,7 @@
 */}}
 
 {{- define "_partials/inline/video.html" -}}
+	{{ $page := or .page page }}
 	{{ $provider := .provider }}
 	{{ $account := .account }}
 	{{ $mediaID := (index . "media-id") }}
@@ -28,7 +29,7 @@
 	{{ else }}
         <div class="video-container{{ if $border }} video-container-border{{ end}} {{ with $color }}bg-{{ . }}{{ end }}">
 			{{ partial "assets/video.html" (dict
-				"page"       page
+				"page"       $page
 				"provider"   $provider
 				"account"    $account
 				"media-id"   $mediaID
@@ -46,6 +47,7 @@
 {{ end }}
 
 {{- define "_partials/inline/messages.html" -}}
+	{{ $page := or .page page }}
 	{{ $list := .list }}
 	{{ $cols := .cols }}
 	{{ $linkType := .linkType }}
@@ -55,7 +57,7 @@
 	{{/* gutter 0 suppresses the g-* class entirely (with-guard treats 0 as unset),
 	     preserving the v1 message rhythm: default horizontal gutters, no vertical gap */}}
 	{{- partial "assets/card-group.html" (dict
-		"page"         page
+		"page"         $page
 		"list"         $list
 		"gutter"       0
 		"class"        "border-0 card-icon card-icon-secondary"
@@ -110,7 +112,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "video-message" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "video-message" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/video-message/video-message.hugo.html" 
@@ -122,6 +127,8 @@
 		{{ $error = $result.err }}
 	{{- end -}}
 {{- end -}}
+
+{{ $page := or ._page page }}
 
 {{ if not $error }}
 	{{/* Initialize global variables */}}
@@ -138,7 +145,7 @@
 
 		{{ $list = $list | append (dict 
 			"title"        .title
-			"description"  (.content | page.RenderString) 
+			"description"  (.content | $page.RenderString) 
 			"icon"         .icon
 			"href"         $href
 			"path"         $path
@@ -155,6 +162,7 @@
 	{{ $video := "" }}
 	{{ with .video }}
 		{{ $video = partial "inline/video.html" (dict
+			"page"       $page
 			"provider"   .provider
 			"account"    .account
 			"media-id"   (or .media_id (index . "media-id"))
@@ -167,6 +175,7 @@
 	{{ end }}
 
 	{{- $messages := partial "inline/messages.html" (dict
+		"page"        $page
 		"list"        $list
 		"cols"        (cond (eq .orientation "stacked") .cols 1)
 		"type"        .type
@@ -188,6 +197,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "video-message"
 			"id"             .id
 			"raw"            $raw

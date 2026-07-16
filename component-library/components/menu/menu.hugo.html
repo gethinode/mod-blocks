@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "menu" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "menu" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/menu/menu.hugo.html" 
@@ -24,6 +27,8 @@
 		{{ $error = $result.err }}
 	{{- end -}}
 {{- end -}}
+
+{{ $page := or ._page page }}
 
 {{ if not $error }}
 	{{/* Initialize global arguments */}}
@@ -37,7 +42,7 @@
 	-}}
 
 	{{- $raw = printf "%s%s" $raw (partial "assets/menu.html" (dict 
-		"page"         page
+		"page"         $page
 		"menu"         .menu
 		"menu-style"   (or .menu_style (index . "menu-style"))
 		"cols"         .cols
@@ -48,6 +53,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "menu"
 			"id"             .id
 			"raw"            $raw

@@ -12,7 +12,10 @@
 {{/* Validate arguments */}}
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
-	{{ $result := partial "utilities/Args.html" (dict "bookshop" "featured" "args" . "strict" false) }}
+	{{/* Exclude the injected block-dispatcher props from validation */}}
+	{{ $props := dict }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ $result := partial "utilities/Args.html" (dict "bookshop" "featured" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
 			"partial" "component-library/components/featured/featured.hugo.html" 
@@ -25,9 +28,11 @@
 	{{- end -}}
 {{- end -}}
 
+{{ $page := or ._page page }}
+
 {{ if not $error }}
 	{{ $raw := partial "assets/hero.html"  (dict 
-		"page"         page
+		"page"         $page
 		"heading"      (merge (dict "width" 8) (or .heading dict))
 		"illustration" (merge (dict "ratio" "auto") (or .illustration dict))
 		"order"        .order
@@ -40,6 +45,8 @@
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
+			"page"           $page
+			"embed"          ._embed
 			"component-name" "featured"
 			"id"             .id
 			"raw"            $raw

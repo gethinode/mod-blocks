@@ -21,6 +21,7 @@
 {{ end }}
 
 {{ if not $error }}
+    {{- $page := or $args.page page -}}
     <div id="{{ $args.id }}" class="accordion accordion-faq {{ if $args.contrast }}accordion-faq-contrast text-white {{ end -}}
         accordion-flush{{ with $args.class }} {{ . }}{{ end }} col-12 col-md-6 mx-auto">
         {{ range $index, $item := $args.items }}
@@ -43,7 +44,7 @@
                     aria-labelledby="{{ $args.id }}-heading-{{ $index }}"
                     data-bs-parent="#{{ $args.id }}"
                 >
-                    <div class="accordion-body">{{ $item.description | page.RenderString | safeHTML }}</div>
+                    <div class="accordion-body">{{ $item.description | $page.RenderString | safeHTML }}</div>
                 </div>
             </div>
         {{ end }}

@@ -18,7 +18,10 @@
 {{ end }}
 
 {{- $padding := partial "utilities/GetPadding.html" -}}
-{{- $embed := page.Scratch.Get "blocks_embed" | default false }}
+{{- $page := or $args.page page -}}
+{{- $embed := $args.embed }}
+{{/* Deprecated: fall back to the page-level scratch value when no embed argument is provided */}}
+{{- if eq $embed nil }}{{ $embed = page.Scratch.Get "blocks_embed" | default false }}{{ end }}
 {{- $paddingTop := and $embed (eq $args._ordinal 0) }}
 
 {{/* Main code */}}
@@ -45,8 +48,8 @@
         {{ end }}
     {{ end }}
 
-    {{- $overlayMode := (or $args.overlayMode page.Params.overlayMode) | default "dark" -}}
-    {{ if not $backdrop }}{{ $overlayMode = page.Params.overlayMode }}{{ end }}
+    {{- $overlayMode := (or $args.overlayMode $page.Params.overlayMode) | default "dark" -}}
+    {{ if not $backdrop }}{{ $overlayMode = $page.Params.overlayMode }}{{ end }}
     {{ if eq $overlayMode "none" }}{{ $overlayMode = "" }}{{ end }}
 
     {{ if not $args.fluid }}<div class="container-xxl section-xxl {{ $paddingOuter }}">{{ end }}

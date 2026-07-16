@@ -22,6 +22,7 @@
 
 {{/* Initialize global variables */}}
 {{- $padding := partial "utilities/GetPadding.html" -}}
+{{- $page := or $args.page page -}}
 
 {{/* Initialize local variables */}}
 {{ $arrangement := $args.heading.arrangement }}
@@ -66,12 +67,12 @@
 {{ end }}
 
 {{ if not $error }}
-    {{ if and $args.breadcrumb (not page.IsHome) }}
+    {{ if and $args.breadcrumb (not $page.IsHome) }}
         <div class="d-flex flex-column align-items-{{ $align}} mb-{{ $padding.y }} pe-3">
             {{ if site.Params.env_bookshop_live }}
                 <i class="text-white">Breadcrumb preview not supported</i>
             {{ else }}
-                {{ partial "assets/breadcrumb.html" (dict "page" page) }}
+                {{ partial "assets/breadcrumb.html" (dict "page" $page) }}
             {{ end }}
         </div>
     {{ end }}

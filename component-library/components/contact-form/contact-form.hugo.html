@@ -13,7 +13,10 @@
 {{ $error := false }}
 {{ if not site.Params.env_bookshop_live }}
     {{ $bookshop := "contact-form" }}
-    {{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" . "strict" false) }}
+    {{/* Exclude the injected block-dispatcher props from validation */}}
+    {{ $props := dict }}
+    {{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+    {{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" $props "strict" false) }}
     {{ $err := $result.err }}
     {{ $msg := ($result.errmsg | append $result.warnmsg) }}
 
@@ -42,6 +45,8 @@
     {{- end -}}
 {{- end -}}
 
+{{ $page := or ._page page }}
+
 {{ if not $error }}
     {{/* Initialize global arguments */}}
     {{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
@@ -57,7 +62,7 @@
         {{/* Embed the form in a horizontal hero with an illustration */}}
         {{ $width := sub 12 (.illustration.width | default 6) }}
         {{ $raw = partial "assets/hero.html"  (dict 
-            "page"         page
+            "page"         $page
             "raw"          (printf `<div class="p-0 pt-%d"></div>%s` $padding.y $form)
             "heading"      (merge .heading (dict "width" $width))
             "illustration" (merge .illustration (dict "width" 12))
@@ -80,6 +85,8 @@
     {{ if $raw }}
         {{ partial "utilities/section.html" (dict
             "_ordinal"       ._ordinal
+            "page"           $page
+            "embed"          ._embed
             "component-name" "contact-form"
             "id"             .id
             "raw"            $raw

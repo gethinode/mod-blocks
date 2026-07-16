@@ -2,6 +2,11 @@ comment: >-
   Renders one or more client testimonials as a carousel or as columns.
 group: partial
 arguments:
+  page:
+    optional: true
+    comment: >-
+      Owning page of the testimonials, used to render each testimonial in the
+      correct page context. Falls back to the global page context when omitted.
   card:
   icon-style:
   testimonials:
