@@ -19,6 +19,7 @@
 
 {{/* Main code */}}
 {{ if not $result.err }}
+    {{- $page := or $args.page page -}}
     {{ $illustration := dict }}
     {{ if site.Params.env_bookshop_live }}
         {{ $illustration = dict
@@ -64,7 +65,7 @@
     {{ end }}
 
     {{ partial "assets/hero.html"  (dict
-        "page"          $args.page
+        "page"          $page
         "heading"       (merge $heading (dict "size" 4 "width" 10))
         "background"    $args.background
         "illustration"  $illustration

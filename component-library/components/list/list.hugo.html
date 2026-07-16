@@ -86,6 +86,7 @@
 	{{ $hideEmpty := or .hide_empty (index . "hide-empty") }}
 	{{ if or (gt (len $pages) 0) (not $hideEmpty) }}
 		{{- $raw := partial "assets/section-title.html" (dict
+			"page"    $page
 			"heading" .heading
 			"justify" .justify
 			"class"   (printf "pb-%d" $padding.y))

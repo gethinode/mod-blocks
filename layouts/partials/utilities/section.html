@@ -68,6 +68,7 @@
         >
         {{- if $backdrop -}}
             {{ partial "assets/live-image.html" (dict
+                "page"  $page
                 "src"   $backdrop
                 "class" (printf "background-img-fluid %s" (or $args.bgClass ""))
                 "title" (T "backgroundImage")
