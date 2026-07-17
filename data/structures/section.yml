@@ -15,8 +15,7 @@ arguments:
     optional: true
     comment: >-
       Flag to indicate the section is embedded within another element such as a
-      documentation page. Falls back to the deprecated page-level scratch value
-      "blocks_embed" when omitted.
+      documentation page. Defaults to false when omitted.
   component-name:
     type: string
     optional: false
