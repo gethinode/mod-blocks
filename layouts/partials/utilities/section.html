@@ -19,9 +19,7 @@
 
 {{- $padding := partial "utilities/GetPadding.html" -}}
 {{- $page := or $args.page page -}}
-{{- $embed := $args.embed }}
-{{/* Deprecated: fall back to the page-level scratch value when no embed argument is provided */}}
-{{- if eq $embed nil }}{{ $embed = page.Scratch.Get "blocks_embed" | default false }}{{ end }}
+{{- $embed := $args.embed | default false }}
 {{- $paddingTop := and $embed (eq $args._ordinal 0) }}
 
 {{/* Main code */}}
