@@ -58,3 +58,11 @@
     left: 100%;
     bottom: 0;
 }
+
+// The message cards use the muted "card-icon-secondary" treatment, so the title inherits
+// --bs-secondary; on the section's bg-body-tertiary background that grey fails WCAG contrast
+// for the title text (measured 4.44:1). Keep the accent on the icon, but render the message
+// title in the body colour so it stays readable.
+.video-message .card-title {
+    color: var(--bs-body-color);
+}
