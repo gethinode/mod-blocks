@@ -22,6 +22,8 @@ github.com/gethinode/hinode/v3 v3.11.0 h1:R8Rax3FQ3E/WyAW25Qqi0vcx3fB5+EPICRh2Cm
 github.com/gethinode/hinode/v3 v3.11.0/go.mod h1:rr8EHGVTf32vo4tOknnwYi2lw7/hzk2UQ0Z6bQnDXcM=
 github.com/gethinode/hinode/v3 v3.11.3 h1:QI8GzIikArwMUR8rwe5hDDX9YfM0HTAqMyGgDazTdGs=
 github.com/gethinode/hinode/v3 v3.11.3/go.mod h1:6lfxOJ3rsfpfVgpK2IThUqOb6LgL8zjj0tobWv6Szzc=
+github.com/gethinode/hinode/v3 v3.11.5 h1:S6r1Ef1Bpamu752t+55Kr3ZJ519jTq7kWaLXJwde4mA=
+github.com/gethinode/hinode/v3 v3.11.5/go.mod h1:6lfxOJ3rsfpfVgpK2IThUqOb6LgL8zjj0tobWv6Szzc=
 github.com/gethinode/mod-blocks/v2 v2.2.5 h1:8glKSX7OENSgbRAp+Bc1JL68Ix3DSWcHWh5dlsNrNsk=
 github.com/gethinode/mod-blocks/v2 v2.2.5/go.mod h1:1a4A2RrNSEoqgUjJoNPc2T+JtfPe0GvjHNrxjXauWCA=
 github.com/gethinode/mod-blocks/v2 v2.2.6 h1:gTrTTyUcFLjcjuqvr5Ex923F2E777vOzkbFJDzNaSz0=
@@ -34,6 +36,8 @@ github.com/gethinode/mod-bootstrap v1.5.0 h1:vpcbnNA315kClDeWviL/4yWKt1k1oaxI7Z8
 github.com/gethinode/mod-bootstrap v1.5.0/go.mod h1:CxrYCFzKtBMz3YWG5i/d5jHKCgvUo60NFcCmz2mxCjQ=
 github.com/gethinode/mod-csp v1.0.12 h1:6CaIH3IBn92lcwMFdYPmmWsPKq+VZ6n9Po8FI26jLJc=
 github.com/gethinode/mod-csp v1.0.12/go.mod h1:Nb22QMicoUHgZQUKP5TCgVrSI8K3KU7jLuLBShmotjg=
+github.com/gethinode/mod-csp v1.0.13 h1:d1lJTl6/ooPYYQEa/Trn3O4cWx70yV1GYBi9ctGNYrU=
+github.com/gethinode/mod-csp v1.0.13/go.mod h1:Nb22QMicoUHgZQUKP5TCgVrSI8K3KU7jLuLBShmotjg=
 github.com/gethinode/mod-flexsearch/v5 v5.0.2 h1:VAHzYLJECrVBvzn5xvM+FoHSP2VwDDPlUrfJDL8G/gg=
 github.com/gethinode/mod-flexsearch/v5 v5.0.2/go.mod h1:0kRR1xaAhSYVyVICV5+x5bF8OSpfre1DwLdrK3a5uAA=
 github.com/gethinode/mod-flexsearch/v5 v5.1.0 h1:sNi3UJkRupYRzPIdG7oAkHZ+bm/rMuBfjNBHECBsyWg=
