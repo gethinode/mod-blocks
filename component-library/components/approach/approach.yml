@@ -1,8 +1,10 @@
 comment: >-
   Renders an Approach section with heading and a list of elements with icons.
   Set 'layout: split' for a heading-left, stacked-list-right layout, and
-  'numbered: true' to auto-number elements with tinted Flaticon digit badges
-  (ignores per-element icon/image). Both default to the existing card grid.
+  'numbered: true' to auto-number elements with tinted digit badges (ignores
+  per-element icon/image). The digit resolves through the site's configured
+  fontawesome.defaultFamily (Font Awesome Solid by default). Both arguments
+  default to the existing card grid.
 arguments:
   numbered:
     type: bool
