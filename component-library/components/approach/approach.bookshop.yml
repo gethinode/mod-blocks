@@ -40,6 +40,8 @@ blueprint:
       mode:
       content:
       link:
+  numbered: false
+  layout:
   orientation:
   class:
   width:
