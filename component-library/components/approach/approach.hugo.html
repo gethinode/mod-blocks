@@ -14,13 +14,19 @@
 	the section title and the card group.
 
 	Two opt-in, backward-compatible arguments extend the default card grid:
-	- numbered: auto-number each element with a digit glyph (bare "1"…"9") in a
-	  tinted circle, ignoring any per-element icon/image. Independent of layout.
-	  The glyph is passed to assets/icon.html as a bare, family-less name, so it
-	  resolves through site.Params.modules.fontawesome.defaultFamily like any
-	  other bare icon reference — mod-fontawesome defaults that to "fas" (Font
-	  Awesome Solid), and a theme that prefers another family (e.g. Flaticon)
-	  gets it automatically by overriding defaultFamily, no extra argument here.
+	- numbered: render each element's marker in a tinted circle instead of the
+	  plain card/list icon treatment. Independent of layout, and consistent with
+	  the cards convention of per-element named icons:
+	    - if the element sets icon, that icon renders in the circle (resolved
+	      exactly like any element icon — family prefix optional, bare names
+	      resolve through site.Params.modules.fontawesome.defaultFamily).
+	    - otherwise, it falls back to a bare digit glyph ("1"…"9" via the same
+	      defaultFamily resolution). The fallback only renders something visible
+	      when the resolved family ships plain digit icon names (e.g. "fas",
+	      "fi-*" do; Bootstrap Icons' "bi" does not — set an explicit icon such
+	      as "1-circle" per element on sites defaulting to "bi").
+	  Per-element image is always ignored when numbered (a photographic
+	  thumbnail doesn't fit the compact circle badge).
 	- layout: "split" renders the heading in a left column and the elements as a
 	  vertically stacked list in a right column (50-50 on md+, stacked below),
 	  instead of the card grid. Ported from the site-local "steps" component;
@@ -76,13 +82,18 @@
 			{{ $marker := "" }}
 			{{ if $numbered }}
 				{{/*
-					Bare digit, no family prefix: assets/icon.html treats a single-token
-					icon as family-less and resolves it through the site's configured
-					default family (mod-fontawesome ships "fas" as that default).
+					Element icon takes precedence over the digit fallback (cards
+					convention: per-element named icons). $e.icon resolves exactly
+					like any element icon — family prefix optional, bare names go
+					through the site's configured default family. The bare-digit
+					fallback (no family prefix) resolves through the same mechanism,
+					so it only renders a visible glyph when that family ships plain
+					digit names (see the component comment above).
 					spacing false: the trailing nbsp becomes a second grid item and
 					skews centering.
 				*/}}
-				{{ $marker = partial "assets/icon.html" (dict "page" $page "icon" (printf "%d" (add $i 1)) "class" "fa-lg" "spacing" false) }}
+				{{ $glyph := $e.icon | default (printf "%d" (add $i 1)) }}
+				{{ $marker = partial "assets/icon.html" (dict "page" $page "icon" $glyph "class" "fa-lg" "spacing" false) }}
 			{{ else if $e.icon }}
 				{{ $marker = partial "assets/icon.html" (dict "page" $page "icon" $e.icon "class" "fa-lg" "spacing" false) }}
 			{{ end }}
@@ -113,8 +124,8 @@
 			{{ $icon := $e.icon }}
 			{{ $thumbnail := $e.image }}
 			{{ if $numbered }}
-				{{/* Bare digit: see the split-layout branch above for why. */}}
-				{{ $icon = printf "%d" (add $i 1) }}
+				{{/* Element icon takes precedence over the bare-digit fallback: see the split-layout branch above for why. */}}
+				{{ $icon = $e.icon | default (printf "%d" (add $i 1)) }}
 				{{ $thumbnail = "" }}
 			{{ end }}
 			{{ $list = $list | append (dict
