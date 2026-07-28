@@ -1,0 +1,32 @@
+// Split layout (approach component, layout: split): heading left, stacked
+// elements right. Ported from the site-local "steps" component; classes are
+// namespaced under approach (steps is not this component's name).
+section.approach {
+  .approach-steps {
+    display: flex;
+    flex-direction: column;
+    gap: map-get($spacers, 4);
+  }
+
+  .approach-step {
+    gap: map-get($spacers, 3);
+  }
+
+  // Tinted circle badge for a numbered digit glyph or a per-element icon.
+  .approach-number {
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background-color: rgba(var(--#{$prefix}primary-rgb), 0.1);
+  }
+
+  @if $enable-dark-mode {
+    @include color-mode(dark) {
+      .approach-number {
+        background-color: rgba(var(--#{$prefix}primary-rgb), 0.25);
+      }
+    }
+  }
+}

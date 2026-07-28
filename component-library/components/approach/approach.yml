@@ -1,15 +1,23 @@
 comment: >-
   Renders an Approach section with heading and a list of elements with icons.
+  Set 'layout: split' for a heading-left, stacked-list-right layout, and
+  'numbered: true' to auto-number elements with tinted digit badges (ignores
+  per-element icon/image). The digit resolves through the site's configured
+  fontawesome.defaultFamily (Font Awesome Solid by default). Both arguments
+  default to the existing card grid.
+arguments:
+  numbered:
+    type: bool
+    optional: true
 example: |
   heading:
     title: Our Approach
+  layout: split
+  numbered: true
   elements:
     - title: Research
-      icon: search
       content: We start with thorough research and discovery.
     - title: Design
-      icon: draw
       content: We create clean, modern designs tailored to your needs.
     - title: Deliver
-      icon: rocket_launch
       content: We ship high-quality results on time.

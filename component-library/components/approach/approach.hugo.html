@@ -9,9 +9,24 @@
 	https://github.com/CloudCannon/bookshop/blob/main/guides/hugo.adoc#passing-data-to-bookshop-components
 */}}
 
-{{/* 
+{{/*
 	This component is derived from the cards component. It inserts a featured illustration in between
 	the section title and the card group.
+
+	Two opt-in, backward-compatible arguments extend the default card grid:
+	- numbered: auto-number each element with a digit glyph (bare "1"…"9") in a
+	  tinted circle, ignoring any per-element icon/image. Independent of layout.
+	  The glyph is passed to assets/icon.html as a bare, family-less name, so it
+	  resolves through site.Params.modules.fontawesome.defaultFamily like any
+	  other bare icon reference — mod-fontawesome defaults that to "fas" (Font
+	  Awesome Solid), and a theme that prefers another family (e.g. Flaticon)
+	  gets it automatically by overriding defaultFamily, no extra argument here.
+	- layout: "split" renders the heading in a left column and the elements as a
+	  vertically stacked list in a right column (50-50 on md+, stacked below),
+	  instead of the card grid. Ported from the site-local "steps" component;
+	  classes are namespaced under approach (approach-steps/approach-step/
+	  approach-number) since "steps" is not this component's name. Any other
+	  value (including unset) keeps the card-grid behavior byte-identical.
 */}}
 
 {{/* Validate arguments */}}
@@ -40,70 +55,128 @@
 	{{- $breakpoint := partial "utilities/GetBreakpoint.html" -}}
 	{{- $padding := partial "utilities/GetPadding.html" -}}
 
+	{{/* Opt-in arguments (both default to the pre-existing card-grid behavior) */}}
+	{{- $numbered := .numbered -}}
+	{{- $split := eq .layout "split" -}}
+
 	{{/* Initialize local variables */}}
 	{{ $raw := "" }}
-	{{ $list := slice }}
-	{{ range .elements }}
-		<!-- TODO: check mode -->
-		{{ $list = $list | append (dict 
-			"title"        .title
-			"description"  (.content | $page.RenderString)
-			"icon"         .icon
-			"thumbnail"    .image
-			"href"         .link
-			"button"       (isset . "link")
-			"button-label" .label
-		) }}
-	{{ end}}
 
-	{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
-		"page"    $page
-		"heading" .heading
-		"justify" .justify
-		"class"   (printf "pb-%d" $padding.y)))
-	-}}
-
-	{{/* Add featured illustration */}}
-	{{ with .illustration }}
-		{{ $raw = printf "%s%s" $raw (partial "assets/featured-illustration.html" (dict 
+	{{ if $split }}
+		{{/* Split layout: heading left, elements stacked right (50-50 on md+). */}}
+		{{ $title := partial "assets/section-title.html" (dict
 			"page"    $page
-			"image"   .image
-			"ratio"   (or .ratio "21x9")
-			"anchor"  .anchor
-			"title"   $page.Title
-			"wrapper" "mb-5 col-12 col-md-8 mx-auto"
-			"mode"    .mode
-		)) }}
+			"heading" (merge (dict "size" 5) (or .heading dict))
+			"justify" .justify
+			"class"   "text-start mb-0"
+		) }}
+
+		{{ $items := "" }}
+		{{ range $i, $e := (.elements | default slice) }}
+			{{ $marker := "" }}
+			{{ if $numbered }}
+				{{/*
+					Bare digit, no family prefix: assets/icon.html treats a single-token
+					icon as family-less and resolves it through the site's configured
+					default family (mod-fontawesome ships "fas" as that default).
+					spacing false: the trailing nbsp becomes a second grid item and
+					skews centering.
+				*/}}
+				{{ $marker = partial "assets/icon.html" (dict "page" $page "icon" (printf "%d" (add $i 1)) "class" "fa-lg" "spacing" false) }}
+			{{ else if $e.icon }}
+				{{ $marker = partial "assets/icon.html" (dict "page" $page "icon" $e.icon "class" "fa-lg" "spacing" false) }}
+			{{ end }}
+
+			{{ $body := printf `<div class="fs-5 fw-bold">%s</div><div class="text-muted pt-1">%s</div>` $e.title ($e.content | $page.RenderString) }}
+
+			{{ if $marker }}
+				{{ $items = printf `%s<div class="approach-step d-flex align-items-start">
+					<span class="approach-number flex-shrink-0 text-primary">%s</span>
+					<div class="approach-body">%s</div>
+				</div>` $items $marker $body }}
+			{{ else }}
+				{{ $items = printf `%s<div class="approach-step">
+					<div class="approach-body">%s</div>
+				</div>` $items $body }}
+			{{ end }}
+		{{ end }}
+
+		{{ $raw = printf `<div class="row gy-5 align-items-center">
+			<div class="col-12 col-md-6">%s</div>
+			<div class="col-12 col-md-6"><div class="approach-steps">%s</div></div>
+		</div>` $title $items }}
+	{{ else }}
+		{{/* Card-grid layout (default, unchanged) */}}
+		{{ $list := slice }}
+		{{ range $i, $e := .elements }}
+			<!-- TODO: check mode -->
+			{{ $icon := $e.icon }}
+			{{ $thumbnail := $e.image }}
+			{{ if $numbered }}
+				{{/* Bare digit: see the split-layout branch above for why. */}}
+				{{ $icon = printf "%d" (add $i 1) }}
+				{{ $thumbnail = "" }}
+			{{ end }}
+			{{ $list = $list | append (dict
+				"title"        $e.title
+				"description"  ($e.content | $page.RenderString)
+				"icon"         $icon
+				"thumbnail"    $thumbnail
+				"href"         $e.link
+				"button"       (isset $e "link")
+				"button-label" $e.label
+			) }}
+		{{ end}}
+
+		{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
+			"page"    $page
+			"heading" .heading
+			"justify" .justify
+			"class"   (printf "pb-%d" $padding.y)))
+		-}}
+
+		{{/* Add featured illustration */}}
+		{{ with .illustration }}
+			{{ $raw = printf "%s%s" $raw (partial "assets/featured-illustration.html" (dict
+				"page"    $page
+				"image"   .image
+				"ratio"   (or .ratio "21x9")
+				"anchor"  .anchor
+				"title"   $page.Title
+				"wrapper" "mb-5 col-12 col-md-8 mx-auto"
+				"mode"    .mode
+			)) }}
+		{{ end }}
+
+		{{/* Init base arguments for card group */}}
+		{{ $params := dict
+			"page"         $page
+			"list"         $list
+			"class"        (printf "border-0 card-icon-primary %s" (or .class ""))
+			"cols"         .cols
+			"gutter"       "4"
+			"padding"      .padding
+			"header-style" "none"
+			"footer-style" "none"
+			"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
+			"icon-style"   (or .icon_style (index . "icon-style") "fa-2x")
+			"link-type"    (or .link_type (index . "link-type"))
+			"align"        .align
+			"hook"         "assets/live-card.html"
+		}}
+
+		{{/* Layout for small screens */}}
+		{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict
+			"orientation"  (.orientation | default "horizontal-sm")
+			"wrapper"      (printf "d-%s-none" $breakpoint.prev)
+		))) -}}
+
+		{{/* Layout for regular screens */}}
+		{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict
+			"orientation"  (.orientation | default "stacked")
+			"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
+		))) -}}
 	{{ end }}
-
-	{{/* Init base arguments for card group */}}
-	{{ $params := dict 
-		"page"         $page
-		"list"         $list
-		"class"        (printf "border-0 card-icon-primary %s" (or .class ""))
-		"cols"         .cols
-		"gutter"       "4"
-		"padding"      .padding
-		"header-style" "none"
-		"footer-style" "none"
-		"icon-rounded" (or .icon_rounded (index . "icon-rounded"))
-		"icon-style"   (or .icon_style (index . "icon-style") "fa-2x")
-		"link-type"    (or .link_type (index . "link-type"))
-		"align"        .align
-		"hook"         "assets/live-card.html"
-	}}
-
-	{{/* Layout for small screens */}}
-	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
-		"orientation"  (.orientation | default "horizontal-sm")
-		"wrapper"      (printf "d-%s-none" $breakpoint.prev)
-	))) -}}
-
-	{{/* Layout for regular screens */}}
-	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
-		"orientation"  (.orientation | default "stacked")
-		"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
-	))) -}}
 
 	{{ if $raw }}
 		{{ partial "utilities/section.html" (dict 
