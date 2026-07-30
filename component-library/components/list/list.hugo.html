@@ -107,6 +107,26 @@
 			{{ end }}
 
 			{{ $pagination := .pagination | default 10 }}
+
+			{{/* Warn when `pagination` is not one of the per-page options the
+			     datatable will offer. The control renders its own first option
+			     while the table pages at the requested size, so the two silently
+			     disagree — visible only in a browser. Skipped when the author
+			     supplies their own option list via `pagination-select`. */}}
+			{{ $paginationSelect := or .pagination_select (index . "pagination-select") }}
+			{{ if and .paginate (not $paginationSelect) }}
+				{{ $permitted := slice 5 10 20 50 }}
+				{{ if not (in $permitted $pagination) }}
+					{{ partial "utilities/LogWarn.html" (dict
+						"partial" "component-library/components/list/list.hugo.html"
+						"warnid"  "warn-invalid-pagination"
+						"msg"     "Invalid pagination"
+						"details" (printf "pagination is %v, which is not one of %v; the per-page control will show its first option instead. Pick a permitted value or set 'pagination-select'." $pagination (delimit $permitted ", "))
+						"file"    $page.File
+					)}}
+				{{ end }}
+			{{ end }}
+
 			{{ $paginate := and .paginate (gt (len $pages) $pagination) }}
 			{{ $sortable := and .sortable (gt (len $pages) 1) }}
 			{{ $searchable := and .searchable (gt (len $pages) 1) }}
