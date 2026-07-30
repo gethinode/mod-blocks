@@ -18,6 +18,33 @@
 {{ end }}
 
 {{- $padding := partial "utilities/GetPadding.html" -}}
+
+{{/* Optional per-section vertical padding override.
+
+     The `padding` argument inherits the shared definition in mod-utils
+     `data/structures/_arguments.yml`, which carries `default: 3`. That default
+     would arrive whenever a caller omits the argument, making "not supplied"
+     indistinguishable from "supplied" and silently repadding every section.
+     `data/structures/section.yml` therefore redeclares `padding` with an empty
+     `default:`, which overrides the inherited one and restores a real nil. The
+     inherited `options` (0-5) still apply, so validation is unchanged.
+
+     Compared against nil rather than tested for truthiness: 0 is a legitimate
+     value that `with` or `| default` would silently discard.
+
+     The override replaces the y axis only. x is the page gutter — letting one
+     block change it would misalign that section against every other section on
+     the page, and it also feeds the outer container. Any mobile y override is
+     dropped along with it, since that value was derived from the site setting
+     the author is replacing; the override then applies at every width. */}}
+{{- if ne $args.padding nil -}}
+    {{- $revised := dict "x" $padding.x "y" (int $args.padding) -}}
+    {{- if isset $padding "mobileX" -}}
+        {{- $revised = merge $revised (dict "mobileX" (index $padding "mobileX")) -}}
+    {{- end -}}
+    {{- $padding = $revised -}}
+{{- end -}}
+
 {{- $page := or $args.page page -}}
 {{- $embed := $args.embed | default false }}
 {{- $paddingTop := and $embed (eq $args._ordinal 0) }}

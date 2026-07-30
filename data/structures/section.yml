@@ -24,6 +24,19 @@ arguments:
       bookshop folder.
   raw:
   passthrough:
+  padding:
+    type: int
+    optional: true
+    default:
+    comment: >-
+      Overrides the section's vertical padding, replacing the site-wide `y`
+      value from the `padding` configuration. Accepts 0 through 5. Horizontal
+      padding is unaffected: it is the page gutter, shared by every section.
+      Falls back to the site setting when omitted. The empty `default:` above is
+      load-bearing: it overrides the `default: 3` this argument would otherwise
+      inherit from the shared definition in mod-utils, which would make an
+      omitted value indistinguishable from a supplied one and repad every
+      section. The inherited 0-5 range still applies.
   background:
   width:
     default: 12
