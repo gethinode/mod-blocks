@@ -29,9 +29,12 @@ arguments:
     optional: true
     default:
     comment: >-
-      Overrides the section's vertical padding, replacing the site-wide `y`
-      value from the `padding` configuration. Accepts 0 through 5. Horizontal
-      padding is unaffected: it is the page gutter, shared by every section.
+      Overrides the section's padding on both axes, replacing the site-wide
+      `x` and `y` values from the `padding` configuration. Accepts 0 through 5.
+      Applies at every breakpoint: the site-level mobile overrides are dropped
+      along with the values they refine. Scoped to the inner content container;
+      the outer container keeps the site padding, so an overridden section still
+      aligns with its neighbours.
       Falls back to the site setting when omitted. The empty `default:` above is
       load-bearing: it overrides the `default: 3` this argument would otherwise
       inherit from the shared definition in mod-utils, which would make an
