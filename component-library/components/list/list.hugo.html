@@ -149,6 +149,21 @@
 			{{ if $paginate }}
 				{{ $tableArgs = merge $tableArgs (dict "pagination" $pagination) }}
 			{{ end }}
+
+			{{/* `justify` already reaches the section wrapper and the heading, but the section
+			     applies it to the column as a whole - with a `width` set, that centers the column
+			     and leaves its contents flush left. Forward it to the table as well, so the filter
+			     controls line up with the heading above them rather than with the column's edge.
+			     The table itself is unaffected; it spans the full width either way.
+
+			     Merged only when the author set it, rather than passed unconditionally. Hinode is
+			     a separate module that a site resolves on its own, and `justify` reached the table
+			     structure in hinode v3.18.0; an older copy rejects an unknown argument whatever its
+			     value, which would break every list block rather than only the ones that ask to be
+			     aligned. This way the newer hinode is required only by the authors who use it. */}}
+			{{ with .justify }}
+				{{ $tableArgs = merge $tableArgs (dict "justify" .) }}
+			{{ end }}
 			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" $tableArgs) }}
 		{{ else }}
 			{{ $raw = printf `%s<p class="pt-%d">%s.</p>` $raw $padding.y (T "emptyList") }}
