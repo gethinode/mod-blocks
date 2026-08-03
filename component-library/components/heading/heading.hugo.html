@@ -43,9 +43,10 @@
 
 	{{/* Main code */}}
 	{{- $raw := partial "assets/section-title.html" (dict
-		"page"    $page
-		"heading" .heading
-		"justify" .justify)
+		"page"          $page
+		"heading-level" (or .heading_level (index . "heading-level"))
+		"heading"       .heading
+		"justify"       .justify)
 	-}}
 
 	{{ if $raw }}

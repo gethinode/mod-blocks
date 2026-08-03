@@ -309,8 +309,9 @@
     {{/* Optional section heading */}}
     {{ if $args.heading.title }}
         {{ partial "assets/section-title.html" (dict
-            "page"    $page
-            "heading" $args.heading
+            "page"          $page
+            "heading"       $args.heading
+            "heading-level" $args.headingLevel
         ) }}
     {{ end }}
 

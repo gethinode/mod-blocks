@@ -32,17 +32,18 @@
 
 {{ if not $error }}
 	{{ $raw := partial "assets/hero.html"  (dict
-		"page"         $page
-		"breadcrumb"   .breadcrumb
-		"heading"      .heading
-		"illustration" .illustration
-		"align"        .align
-		"order"        .order
-		"link-type"    (or .link_type (index . "link-type"))
-		"links"        .links
-		"orientation"  .orientation
-		"width"        .width
-		"cover"        .cover
+		"page"          $page
+		"heading-level" (or .heading_level (index . "heading-level"))
+		"breadcrumb"    .breadcrumb
+		"heading"       .heading
+		"illustration"  .illustration
+		"align"         .align
+		"order"         .order
+		"link-type"     (or .link_type (index . "link-type"))
+		"links"         .links
+		"orientation"   .orientation
+		"width"         .width
+		"cover"         .cover
 		)
 	}}
 

@@ -79,10 +79,11 @@
 
     {{/* Main code */}}
     {{- $raw := partial "assets/section-title.html" (dict
-        "page"    $page
-        "heading" .heading
-        "justify" .justify
-        "class"   (printf "pb-%d" $padding.y))
+        "page"          $page
+        "heading-level" (or .heading_level (index . "heading-level"))
+        "heading"       .heading
+        "justify"       .justify
+        "class"         (printf "pb-%d" $padding.y))
     -}}
 
     {{- $raw = printf "%s%s" $raw (partial "assets/nav.html" (dict 
