@@ -49,7 +49,7 @@
 	{{/* Main code */}}
 	{{ $raw := partial "assets/preview.html" (dict
 		"page"               $page
-		"heading-level"      (or .heading_level (index . "heading-level"))
+		"heading-level"      (cond (isset . "heading_level") .heading_level (index . "heading-level"))
 		"url"                .url
 		"device"             .device
 		"controls-placement" (or .controls_placement (index . "controls-placement"))

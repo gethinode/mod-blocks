@@ -33,7 +33,7 @@
 {{ if not $error }}
 	{{ $raw := partial "assets/hero.html"  (dict
 		"page"          $page
-		"heading-level" (or .heading_level (index . "heading-level"))
+		"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
 		"breadcrumb"    .breadcrumb
 		"heading"       .heading
 		"illustration"  .illustration

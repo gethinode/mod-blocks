@@ -21,13 +21,28 @@
          renders none, so the first one carrying a title takes the level the caller asked for and
          every block after it becomes a subsection. Deriving this from the block list rather than
          from the order in which blocks render keeps the outline stable, because Hugo decides for
-         itself when a page's content is rendered. */}}
+         itself when a page's content is rendered. A block that hides itself when its section is
+         empty (hide_empty), that suppresses its own heading (an explicit level of 0), or whose
+         component does not declare a heading-level argument in its schema is passed over. */}}
     {{ $lead := -1 }}
     {{ if gt $headingLevel 0 }}
         {{ range $k, $v := . }}
-            {{ if and (lt $lead 0) (index (index $v "heading" | default dict) "title") }}
-                {{ $lead = $k }}
-            {{ end }}
+            {{ if lt $lead 0 }}
+                {{- $name := index $v "_bookshop_name" | default "" }}
+                {{- $sidecar := index (index (site.Data.structures.components | default dict) $name | default dict) $name | default dict }}
+                {{- $leveled := isset ($sidecar.arguments | default dict) "heading-level" }}
+                {{- $titled := index (index $v "heading" | default dict) "title" }}
+                {{- $hidden := or (index $v "hide_empty") (index $v "hide-empty") }}
+                {{- $suppressed := false }}
+                {{- if isset $v "heading_level" }}
+                    {{- $suppressed = eq (index $v "heading_level") 0 }}
+                {{- else if isset $v "heading-level" }}
+                    {{- $suppressed = eq (index $v "heading-level") 0 }}
+                {{- end }}
+                {{- if and $leveled $titled (not $hidden) (not $suppressed) }}
+                    {{- $lead = $k }}
+                {{- end }}
+            {{- end }}
         {{ end }}
     {{ end }}
 
@@ -37,7 +52,11 @@
         {{ $b := merge $v (dict "_ordinal" $k "_page" $page) }}
         {{ if ne $embed nil }}{{ $b = merge $b (dict "_embed" $embed) }}{{ end }}
         {{ if and (gt $headingLevel 0) (not (or (isset $v "heading_level") (isset $v "heading-level"))) }}
-            {{ $b = merge $b (dict "heading_level" (cond (eq $k $lead) $headingLevel (cond (lt $headingLevel 2) 2 $headingLevel))) }}
+            {{- $name := index $v "_bookshop_name" | default "" }}
+            {{- $sidecar := index (index (site.Data.structures.components | default dict) $name | default dict) $name | default dict }}
+            {{- if isset ($sidecar.arguments | default dict) "heading-level" }}
+                {{- $b = merge $b (dict "heading_level" (cond (eq $k $lead) $headingLevel (cond (lt $headingLevel 2) 2 $headingLevel))) }}
+            {{- end }}
         {{ end }}
         {{ $blocks = $blocks | append $b }}
     {{ end }}

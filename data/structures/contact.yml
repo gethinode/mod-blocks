@@ -2,6 +2,13 @@ comment: >-
   Displays a contact banner, typically placed at the bottom or right-hand side of the page.
 group: partial
 arguments:
+  heading-level:
+    type: int
+    optional: true
+    release: v2.4.0
+    comment: >-
+      Heading level of the contact title, from 1 (h1) to 6 (h6). Set 0 to render
+      a div instead of a heading.
   page:
   data:
     optional: true

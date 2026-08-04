@@ -61,9 +61,10 @@
     {{ if .illustration }}
         {{/* Embed the form in a horizontal hero with an illustration */}}
         {{ $width := sub 12 (.illustration.width | default 6) }}
-        {{ $raw = partial "assets/hero.html"  (dict 
+        {{ $raw = partial "assets/hero.html"  (dict
             "page"         $page
             "raw"          (printf `<div class="p-0 pt-%d"></div>%s` $padding.y $form)
+            "heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
             "heading"      (merge .heading (dict "width" $width))
             "illustration" (merge .illustration (dict "width" 12))
             "order"        .order
@@ -76,7 +77,7 @@
     {{ else }}
         {{- $raw = partial "assets/section-title.html" (dict
             "page"          $page
-            "heading-level" (or .heading_level (index . "heading-level"))
+            "heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
             "heading"       .heading
             "justify"       .justify
             "class"         (printf "pb-%d" $padding.y))

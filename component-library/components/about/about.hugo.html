@@ -39,8 +39,9 @@
 	{{ $ratio := index $settings "ratio" | default "auto" }}
 
 	{{/* Generate the hero */}}
-	{{ $raw := partial "assets/hero.html"  (dict 
+	{{ $raw := partial "assets/hero.html"  (dict
 		"page"         $page
+		"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
 		"heading"      (merge (dict "arrangement" "above" "width" 8) .heading)
 		"illustration" (merge (dict "ratio" $ratio) .illustration)
 		"order"        .order
