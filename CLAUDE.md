@@ -178,7 +178,8 @@ When `.hugo.html` components call Hugo partials, they pass a dict with kebab-cas
 ## Key Constraints
 
 - **Bookshop live editing**: Components must access arguments directly (not through helper partials)
-- **Dual parameter names**: Support both snake_case (CloudCannon) and kebab-case (Hugo) using `(or .snake_case (index . "kebab-case"))`
+- **Dual parameter names**: Support both snake_case (CloudCannon) and kebab-case (Hugo) using `(or .snake_case (index . "kebab-case"))`. For arguments where `0` or `false` is a meaningful value (such as `heading_level`), test key presence instead: `(cond (isset . "snake_case") .snake_case (index . "kebab-case"))`
+- **Heading injection contract**: `page/blocks.html` injects a heading level only into blocks whose component sidecar (`component-library/components/<name>/<name>.yml`) declares a `heading-level` argument. A component that renders a section title but omits that entry silently keeps rendering `<div>` titles instead of failing validation
 - **Hugo version**: Requires Hugo Extended 0.147.6+
 - **Conventional Commits**: All commits must follow the specification (enforced by commitlint + husky)
 - **Semantic versioning**: Releases are automated via semantic-release on the `main` branch
