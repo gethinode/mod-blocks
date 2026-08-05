@@ -18,6 +18,7 @@ blueprint:
     arrangement:
     width: 8
     size:
+  heading_level:
   background:
     backdrop:
     color:

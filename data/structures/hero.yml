@@ -4,12 +4,7 @@ comment: >-
   also add a background image with an overlay to improve contrast.
 arguments:
   heading-level:
-    type: int
-    optional: true
     release: v2.4.0
-    comment: >-
-      Heading level of the hero title, from 1 (h1) to 6 (h6). Set 0 to render a
-      div instead of a heading.
   page:
   breadcrumb:
   heading:

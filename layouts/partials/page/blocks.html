@@ -22,8 +22,8 @@
          every block after it becomes a subsection. Deriving this from the block list rather than
          from the order in which blocks render keeps the outline stable, because Hugo decides for
          itself when a page's content is rendered. A block that suppresses its own heading (an
-         explicit level of 0) or whose component does not declare a heading-level argument in its
-         schema is passed over. A block that hides itself when its section is empty (hide_empty)
+         explicit level of 0) or whose component does not declare heading_level in its blueprint
+         is passed over. A block that hides itself when its section is empty (hide_empty)
          ranks last: a later titled block wins over it, and the first such block leads only when
          no other candidate exists. Whether such a block will render is unknown here; when every
          candidate hides itself and the first turns out empty while a later one renders, the
@@ -35,8 +35,8 @@
         {{ range $k, $v := . }}
             {{ if lt $lead 0 }}
                 {{- $name := index $v "_bookshop_name" | default "" }}
-                {{- $sidecar := index (index $components $name | default dict) $name | default dict }}
-                {{- $leveled := isset ($sidecar.arguments | default dict) "heading-level" }}
+                {{- $blueprint := (index (index $components $name | default dict) (printf "%s.bookshop" $name) | default dict).blueprint | default dict }}
+                {{- $leveled := isset $blueprint "heading_level" }}
                 {{- $titled := index (index $v "heading" | default dict) "title" }}
                 {{- $hidden := or (index $v "hide_empty") (index $v "hide-empty") }}
                 {{- $suppressed := false }}
@@ -66,8 +66,8 @@
         {{ if ne $embed nil }}{{ $b = merge $b (dict "_embed" $embed) }}{{ end }}
         {{ if and (gt $headingLevel 0) (not (or (isset $v "heading_level") (isset $v "heading-level"))) }}
             {{- $name := index $v "_bookshop_name" | default "" }}
-            {{- $sidecar := index (index $components $name | default dict) $name | default dict }}
-            {{- if isset ($sidecar.arguments | default dict) "heading-level" }}
+            {{- $blueprint := (index (index $components $name | default dict) (printf "%s.bookshop" $name) | default dict).blueprint | default dict }}
+            {{- if isset $blueprint "heading_level" }}
                 {{- $b = merge $b (dict "heading_level" (cond (eq $k $lead) $headingLevel (cond (lt $headingLevel 2) 2 $headingLevel))) }}
             {{- end }}
         {{ end }}

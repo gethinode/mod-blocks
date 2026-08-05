@@ -1,15 +1,5 @@
 comment: >-
   Renders a call-to-action section with heading and optional action links.
-arguments:
-  heading-level:
-    type: int
-    optional: true
-    release: v2.4.0
-    comment: >-
-      Heading level of the section title, from 1 (h1) to 6 (h6). Set 0 to render a
-      div instead of a heading. Defaults to the level the page assigns: the first
-      titled block of a page without a page header becomes its h1, the rest become
-      h2.
 example: |
   heading:
     title: Ready to get started?
