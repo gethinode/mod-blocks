@@ -71,10 +71,11 @@
 	{{ if $split }}
 		{{/* Split layout: heading left, elements stacked right (50-50 on md+). */}}
 		{{ $title := partial "assets/section-title.html" (dict
-			"page"    $page
-			"heading" (merge (dict "size" 5) (or .heading dict))
-			"justify" .justify
-			"class"   "text-start mb-0"
+			"page"          $page
+			"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+			"heading"       (merge (dict "size" 5) (or .heading dict))
+			"justify"       .justify
+			"class"         "text-start mb-0"
 		) }}
 
 		{{ $items := "" }}
@@ -140,10 +141,11 @@
 		{{ end}}
 
 		{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
-			"page"    $page
-			"heading" .heading
-			"justify" .justify
-			"class"   (printf "pb-%d" $padding.y)))
+			"page"          $page
+			"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+			"heading"       .heading
+			"justify"       .justify
+			"class"         (printf "pb-%d" $padding.y)))
 		-}}
 
 		{{/* Add featured illustration */}}

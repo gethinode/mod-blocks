@@ -103,10 +103,11 @@
 	{{/* Main code */}}
 	{{ if or (gt (len $pages) 0) (not .hide_empty) }}
 		{{- $raw = printf "%s%s" $raw (partial "assets/section-title.html" (dict
-			"page"    $page
-			"heading" .heading
-			"justify" .justify
-			"class"   (printf "pb-%d" $padding.y)))
+			"page"          $page
+			"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+			"heading"       .heading
+			"justify"       .justify
+			"class"         (printf "pb-%d" $padding.y)))
 		-}}
 
 		{{ $partial := "assets/card-group.html" }}

@@ -2,6 +2,8 @@ comment: >-
   Displays a contact banner, typically placed at the bottom or right-hand side of the page.
 group: partial
 arguments:
+  heading-level:
+    release: v2.4.0
   page:
   data:
     optional: true

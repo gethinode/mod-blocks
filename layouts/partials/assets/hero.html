@@ -123,6 +123,7 @@
     {{ $title := partial "assets/section-title.html" (dict
         "page"          $page
         "heading"       $heading
+        "heading-level" $args.headingLevel
         "use-title"     $args.useTitle
         "links"         $args.links
         "link-type"     $args.linkType

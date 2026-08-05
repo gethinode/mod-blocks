@@ -36,10 +36,11 @@
 
 	{{/* Main code */}}
 	{{- $raw := partial "assets/section-title.html" (dict
-		"page"    $page
-		"heading" .heading
-		"justify" .justify
-		"class"   (printf "pb-%d" $padding.y))
+		"page"          $page
+		"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+		"heading"       .heading
+		"justify"       .justify
+		"class"         (printf "pb-%d" $padding.y))
 	-}}
 
 	{{ $partial := partial "assets/testimonial-carousel.html" (dict 

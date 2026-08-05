@@ -1,6 +1,8 @@
 comment: >-
   Renders a live URL preview with switchable device views (desktop, tablet, mobile).
 arguments:
+  heading-level:
+    release: v2.4.0
   page:
     optional: true
     comment: >-

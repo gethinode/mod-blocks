@@ -3,6 +3,8 @@ comment: >-
   supports a heading, featured illustration, and navigation links. You can
   also add a background image with an overlay to improve contrast.
 arguments:
+  heading-level:
+    release: v2.4.0
   page:
   breadcrumb:
   heading:
