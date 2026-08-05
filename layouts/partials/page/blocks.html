@@ -25,7 +25,9 @@
          explicit level of 0) or whose component does not declare a heading-level argument in its
          schema is passed over. A block that hides itself when its section is empty (hide_empty)
          ranks last: a later titled block wins over it, and the first such block leads only when
-         no other candidate exists. */}}
+         no other candidate exists. Whether such a block will render is unknown here; when every
+         candidate hides itself and the first turns out empty while a later one renders, the
+         page has no h1. */}}
     {{ $components := site.Data.structures.components | default dict }}
     {{ $lead := -1 }}
     {{ if gt $headingLevel 0 }}
