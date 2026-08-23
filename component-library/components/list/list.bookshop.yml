@@ -43,6 +43,7 @@ blueprint:
   searchable:
   filter:
   filter_col:
+  filter_responsive:
   wrap:
   wrapper:
   fluid:

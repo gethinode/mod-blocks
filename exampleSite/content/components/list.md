@@ -29,4 +29,19 @@ content_blocks:
     filter_col: 0
     width: 8
     justify: center
+
+  - _bookshop_name: list
+    heading:
+      preheading: Blog
+      title: A filtered page list with responsive controls
+      align: start
+    hide_empty: false
+    input:
+      section: blog
+    filter:
+      - post 1
+      - post 2
+      - post 3
+    filter_col: 0
+    filter_responsive: true
 ---
