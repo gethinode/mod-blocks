@@ -44,4 +44,17 @@ content_blocks:
       - post 3
     filter_col: 0
     filter_responsive: true
+
+  - _bookshop_name: list
+    heading:
+      preheading: Blog
+      title: A page list folded into column groups
+      align: start
+    hide_empty: false
+    input:
+      section: blog
+    hook: blocks/demo-table
+    sortable: true
+    wrap: true
+    wrap_cols: "1,2,1"
 ---

@@ -45,6 +45,7 @@ blueprint:
   filter_col:
   filter_responsive:
   wrap:
+  wrap_cols:
   wrapper:
   fluid:
   theme:
