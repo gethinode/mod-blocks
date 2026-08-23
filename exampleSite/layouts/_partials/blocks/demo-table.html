@@ -1,0 +1,19 @@
+{{/* Renders a four-column table for the list component's demos. The default list table has two
+     columns, which is one more than `wrap` folds - too few for `wrap-cols` to say anything - so the
+     column-groups demo needs a wider table to fold. */}}
+{{ $pages := .pages | default dict }}
+
+{{ $content := printf "| %s | %s | %s | %s |\n|-|-|-|-|\n" (T "article") (T "category") (T "published") (T "description") }}
+{{ range $pages }}
+    {{ $cat := .Params.category | default "general" }}
+    {{ $content = printf "%s[%s](%s) | %s | %s | %s |\n"
+        $content
+        .LinkTitle
+        .RelPermalink
+        $cat
+        (.PublishDate | time.Format "2006-01-02")
+        (.Description | default "")
+    }}
+{{ end }}
+
+{{ return $content }}

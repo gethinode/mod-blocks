@@ -143,7 +143,6 @@
 				"searchable"             $searchable
 				"filter"                 .filter
 				"filter-col"             (or .filter_col (index . "filter-col"))
-				"filter-responsive"      (or .filter_responsive (index . "filter-responsive"))
 				"wrap"                   .wrap
 				"wrapper"                "width-100"
 				"_default"               .default
@@ -165,6 +164,18 @@
 			     aligned. This way the newer hinode is required only by the authors who use it. */}}
 			{{ with .justify }}
 				{{ $tableArgs = merge $tableArgs (dict "justify" .) }}
+			{{ end }}
+
+			{{/* Same treatment as `justify` above, and for the same reason: an older hinode rejects
+			     an unknown argument whatever its value, so passing one unconditionally breaks every
+			     list block rather than only the ones that ask for the feature. `filter-responsive`
+			     reached the table structure in hinode v3.22.0 and `wrap-cols` in v3.23.0, so each is
+			     merged only when the author set it. */}}
+			{{ with (or .filter_responsive (index . "filter-responsive")) }}
+				{{ $tableArgs = merge $tableArgs (dict "filter-responsive" .) }}
+			{{ end }}
+			{{ with (or .wrap_cols (index . "wrap-cols")) }}
+				{{ $tableArgs = merge $tableArgs (dict "wrap-cols" .) }}
 			{{ end }}
 			{{ $raw = printf "%s%s" $raw (partial "assets/table.html" $tableArgs) }}
 		{{ else }}
