@@ -2,6 +2,8 @@ github.com/cloudcannon/bookshop/hugo/v3 v3.18.5 h1:AKWzUQpWcBSbJgHQ/5cfPQtGX40bn
 github.com/cloudcannon/bookshop/hugo/v3 v3.18.5/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
 github.com/cloudcannon/bookshop/hugo/v3 v3.19.0 h1:khb65FKbLXMWvm34OULEpKReCwNzE5rY1/bnC+rpMwI=
 github.com/cloudcannon/bookshop/hugo/v3 v3.19.0/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
+github.com/cloudcannon/bookshop/hugo/v3 v3.20.0 h1:cplbvPKQhmRv+1gyaP61+mu5MEVoOGUEVvdoi4hmuYA=
+github.com/cloudcannon/bookshop/hugo/v3 v3.20.0/go.mod h1:s7mIonDhtsLcn10ZKuVXyqd6BDHI8vT1WQhZw8rPfY8=
 github.com/gethinode/mod-fontawesome/v6 v6.1.1 h1:k5Jy7nA+YfLZ9YqXH8hyaiw9wjAeOxNEUcnu6fynnJo=
 github.com/gethinode/mod-fontawesome/v6 v6.1.1/go.mod h1:875OBk5te+KBJmr0PdSkFcduYnsKCuHWfcaqChh9NGo=
 github.com/gethinode/mod-utils/v6 v6.0.1 h1:EnmMHjqnI/xyHPXFj1SdRLfVxNunJcKLGVtSAAFTQ8w=
