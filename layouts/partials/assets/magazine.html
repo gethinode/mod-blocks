@@ -63,9 +63,12 @@
             </div>
 
             {{/* Remaining articles — compact, thumbnail-less list. Every row after
-                 the first gets a top border to act as a separator. */}}
+                 the first gets a top border to act as a separator. When the columns
+                 stack below the site breakpoint, a separator row also precedes the
+                 first list item to divide it from the featured card. */}}
             {{ if gt (len $rest) 0 }}
-                <div class="{{ $listCols }} card-magazine-list">
+                <div class="{{ $listCols }} mt-0 mt-{{ $bp.current }}-4 card-magazine-list">
+                    <div class="border-top pt-3 mt-3 d-{{ $bp.current }}-none" aria-hidden="true"></div>
                     {{ range $i, $article := $rest }}
                         <div class="{{ if $i }}border-top pt-3 mt-3{{ end }}">
                             {{ partial $hook (dict
