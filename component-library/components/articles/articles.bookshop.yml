@@ -36,6 +36,11 @@ blueprint:
     link:
     link_type: button
     icon:
+  more_force:
+    type: bool
+    optional: true
+    default: false
+    comment: Show the More button even when the list does not exceed its limit.
   icon_rounded:
   icon_style:
   link_icon:

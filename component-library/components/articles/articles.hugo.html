@@ -121,6 +121,7 @@
 			"limit"          .limit
 			"padding"        .padding
 			"href"           (cond $moreButton $moreLink "")
+			"href-force"     (or .more_force (index . "more-force"))
 		)}}
 
 		{{ if and .scroll (not $useMagazine) }}
