@@ -69,7 +69,7 @@
 
     {{ $backdrop := index $settings "backdrop" }}
     {{ with $args.background }}
-        {{ $wrapper = partial "utilities/GetBackgroundStyle.html" (dict "background" . "class" $wrapper) }}
+        {{ $wrapper = partial "utilities/GetBackgroundStyle.html" (dict "background" . "class" $wrapper "fill-context" true) }}
         {{ if reflect.IsMap $args.background }}
             {{ with $args.background.backdrop }}{{ $wrapper = "" }}{{ $backdrop = . }}{{ end }}
         {{ end }}
