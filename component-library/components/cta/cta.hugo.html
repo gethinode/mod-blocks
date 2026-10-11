@@ -32,6 +32,17 @@
 
 {{ if not $error }}
 	{{/* Main code */}}
+	{{/* Default background: the primary color's subtle fill. A map counts as unset when
+	     it names neither a color nor a backdrop, which is how a visual editor saves
+	     the blueprint's empty keys. */}}
+	{{- $background := .background -}}
+	{{- if reflect.IsMap $background -}}
+		{{- if not (or $background.color $background.backdrop) -}}
+			{{- $background = merge $background (dict "color" "primary" "subtle" true) -}}
+		{{- end -}}
+	{{- else if not $background -}}
+		{{- $background = dict "color" "primary" "subtle" true -}}
+	{{- end -}}
 	{{- $ctaAction := partial "utilities/GetThemeIcon.html" (dict "id" "ctaAction" "default" "fas chevron-right") -}}
 	{{ $links := slice }}
 	{{ if and (reflect.IsSlice .links) (gt (len .links) 0) }}
@@ -66,7 +77,7 @@
 			"id"             .id
 			"raw"            $raw
 			"padding"        .padding
-			"background"     .background
+			"background"     $background
 			"width"          .width
 			"justify"        .justify
 			"wrapper"        .wrapper

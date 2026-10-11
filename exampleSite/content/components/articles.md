@@ -16,6 +16,9 @@ content_blocks:
       sort: date
     more:
       title: More blog posts
+      link: /blog/
+    more_force: true
+    layout: magazine
     cols: 3
     padding: 0
     limit: 3

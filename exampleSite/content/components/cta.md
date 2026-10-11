@@ -18,4 +18,24 @@ content_blocks:
     background:
       color: secondary
       subtle: true
+  - _bookshop_name: cta
+    id: cta-default
+    heading:
+      title: The default background
+      content: Without a background argument, a call to action takes the primary color's subtle fill.
+    links:
+      - title: Browse components
+        url: /components/
+  - _bookshop_name: cta
+    id: cta-empty-keys
+    heading:
+      title: Empty background keys
+      content: A call to action saved by a visual editor with every background key empty takes the same default.
+    background:
+      backdrop:
+      color:
+      subtle:
+    links:
+      - title: Browse components
+        url: /components/
 ---
