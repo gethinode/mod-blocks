@@ -65,6 +65,7 @@
             "page"         $page
             "raw"          (printf `<div class="p-0 pt-%d"></div>%s` $padding.y $form)
             "heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+    		"breadcrumb"    .breadcrumb
             "heading"      (merge .heading (dict "width" $width))
             "illustration" (merge .illustration (dict "width" 12))
             "order"        .order

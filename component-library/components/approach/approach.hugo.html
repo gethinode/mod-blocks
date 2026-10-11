@@ -68,6 +68,16 @@
 	{{/* Initialize local variables */}}
 	{{ $raw := "" }}
 
+	{{/* Optional breadcrumb, rendered above the section content (mirrors assets/hero.html) */}}
+	{{ $breadcrumb := "" }}
+	{{ if and .breadcrumb (not $page.IsHome) }}
+		{{ $crumbs := partial "assets/breadcrumb.html" (dict "page" $page) }}
+		{{ if site.Params.env_bookshop_live }}
+			{{ $crumbs = `<i class="text-white">Breadcrumb preview not supported</i>` }}
+		{{ end }}
+		{{ $breadcrumb = printf `<div class="d-flex flex-column align-items-%s mb-%d pe-3">%s</div>` (or .align "start") $padding.y $crumbs }}
+	{{ end }}
+
 	{{ if $split }}
 		{{/* Split layout: heading left, elements stacked right (50-50 on md+). */}}
 		{{ $title := partial "assets/section-title.html" (dict
@@ -192,6 +202,7 @@
 	{{ end }}
 
 	{{ if $raw }}
+		{{ $raw = printf "%s%s" $breadcrumb $raw }}
 		{{ partial "utilities/section.html" (dict 
 			"_ordinal"       ._ordinal
 			"page"           $page

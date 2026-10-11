@@ -42,6 +42,7 @@
 	{{ $raw := partial "assets/hero.html"  (dict
 		"page"         $page
 		"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
+		"breadcrumb"    .breadcrumb
 		"heading"      (merge (dict "arrangement" "above" "width" 8) .heading)
 		"illustration" (merge (dict "ratio" $ratio) .illustration)
 		"order"        .order

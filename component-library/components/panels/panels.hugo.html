@@ -47,6 +47,7 @@
 
         {{ $hero := partial "assets/hero.html"  (dict 
             "page"          $page
+    		"breadcrumb"    .breadcrumb
             "heading"       (dict "content" .content "width" 8)
             "background"    .background
             "illustration"  (dict "ratio" (or .ratio "1x1") "icon" .icon "image" .image "mode" .mode "justify" "end")

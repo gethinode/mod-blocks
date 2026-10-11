@@ -67,6 +67,7 @@
     {{ partial "assets/hero.html"  (dict
         "page"          $page
         "heading-level" $args.headingLevel
+		"breadcrumb"    $args.breadcrumb
         "heading"       (merge $heading (dict "size" 4 "width" 10))
         "background"    $args.background
         "illustration"  $illustration

@@ -16,6 +16,13 @@
 {{ $bp := partial "utilities/GetBreakpoint.html" }}
 {{ $padding := .padding }}
 {{ $href := .href }}
+{{/* Normalize the "more" link to a pretty URL, mirroring assets/card-group.html.
+     Callers pass a bare section name (e.g. "blog"), which would otherwise render
+     without a trailing slash and resolve relative to the current page. */}}
+{{ $pretty := site.Params.main.internalLinks.pretty | default false }}
+{{ if and $href $pretty (not (hasSuffix $href "/")) (not (strings.Contains $href "#")) }}
+    {{ $href = printf "%s/" $href }}
+{{ end }}
 {{ $hrefTitle := index . "href-title" }}
 {{ $hrefForce := index . "href-force" }}
 {{ $moreLinkType := index . "more-link-type" }}

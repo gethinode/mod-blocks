@@ -4,6 +4,7 @@ description: Demo of the approach component.
 date: 2026-07-12
 content_blocks:
   - _bookshop_name: approach
+    breadcrumb: true
     heading:
       preheading: How we work
       title: Our approach
