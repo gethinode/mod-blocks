@@ -78,11 +78,15 @@
     {{ partial "bookshop_bindings" `.Params.content_blocks` | safeHTML }}
     {{ partial "bookshop_partial" (slice "page" $blocks) | safeHTML }}
 
-    {{/* Apply padding between last item and footer when appropriate*/}}
+    {{/* Apply padding between last item and footer when the last block is not fluid. A fluid
+         block spans the full viewport width and may run into the footer; any other block is
+         inset from the page edge and needs the separation. The block's background is not a
+         reliable signal: components may default their own background (e.g. cta renders a
+         primary subtle fill when the block sets none). */}}
     {{ $last := $blocks | last 1 }}
     {{ with index $last 0 }}
         {{ $fluid := index . "fluid" | default true }}
-        {{ if and (index (index . "background") "color") (not $fluid) }}
+        {{ if not $fluid }}
             {{- $padding := partial "utilities/GetPadding.html" -}}
             <div class="pb-{{ $padding.y }}"></div>
         {{ end }}
