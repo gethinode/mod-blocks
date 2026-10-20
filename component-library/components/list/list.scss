@@ -30,7 +30,6 @@ section.list {
 
     .table-filter-controls .btn-group {
         flex-wrap: wrap;
-        gap: 0.25rem;
     }
 
     @include media-breakpoint-down(#{$main-breakpoint}) {
