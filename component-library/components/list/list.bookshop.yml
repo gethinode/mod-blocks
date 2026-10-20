@@ -41,6 +41,9 @@ blueprint:
   pagination:
   pagination_select:
   searchable:
+  search_label:
+  search_placeholder:
+  controls_layout: list
   filter:
   filter_col:
   filter_responsive:

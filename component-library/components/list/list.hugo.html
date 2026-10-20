@@ -147,6 +147,19 @@
 				"wrapper"                "width-100"
 				"_default"               .default
 			}}
+            {{/* Hinode resolves independently. An older table rejects unknown arguments, so
+                 use the new list default only when its schema supports it. Explicit settings
+                 still require updated Hinode, like the other opt-in table features below. */}}
+            {{ $controlsLayout := or .controls_layout (index . "controls-layout") }}
+            {{ if or $controlsLayout (isset site.Data.structures.table.arguments "controls-layout") }}
+                {{ $tableArgs = merge $tableArgs (dict "controls-layout" ($controlsLayout | default "list")) }}
+            {{ end }}
+            {{ with (or .search_label (index . "search-label")) }}
+                {{ $tableArgs = merge $tableArgs (dict "search-label" .) }}
+            {{ end }}
+            {{ with (or .search_placeholder (index . "search-placeholder")) }}
+                {{ $tableArgs = merge $tableArgs (dict "search-placeholder" .) }}
+            {{ end }}
 			{{ if $paginate }}
 				{{ $tableArgs = merge $tableArgs (dict "pagination" $pagination) }}
 			{{ end }}
