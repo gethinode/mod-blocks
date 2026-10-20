@@ -118,12 +118,12 @@ This module uses [semantic-release][semantic-release] to automate the release of
 
 ## List controls
 
-With a Hinode version supporting `controls-layout`, lists use full-width search above
+With Hinode v3.39.0 or later, lists use full-width search above
 results and page size, result count, and navigation below. Older Hinode versions keep
 the compact toolbar. Set `controls_layout: compact` to request the compact layout explicitly.
 
-Search text can be customized for each list. These overrides require Hinode's
-`search-label` and `search-placeholder` table arguments:
+Search text can be customized for each list. These overrides require Hinode v3.39.0
+or later:
 
 ```yaml
 _bookshop_name: list
