@@ -187,6 +187,9 @@
 			{{ with (or .filter_responsive (index . "filter-responsive")) }}
 				{{ $tableArgs = merge $tableArgs (dict "filter-responsive" .) }}
 			{{ end }}
+			{{ with (or .filter_breakpoint (index . "filter-breakpoint")) }}
+				{{ $tableArgs = merge $tableArgs (dict "filter-breakpoint" .) }}
+			{{ end }}
 			{{ with (or .wrap_cols (index . "wrap-cols")) }}
 				{{ $tableArgs = merge $tableArgs (dict "wrap-cols" .) }}
 			{{ end }}

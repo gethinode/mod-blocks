@@ -23,3 +23,9 @@ arguments:
     options:
       values: [compact, list]
     comment: Full-width search and bottom paging by default; compact restores the table toolbar.
+  filter-breakpoint:
+    type: select
+    optional: true
+    options:
+      values: [xs, sm, md, lg, xl, xxl]
+    comment: Viewport threshold for responsive filter dropdowns. Defaults to the site's main breakpoint.
