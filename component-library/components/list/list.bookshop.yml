@@ -47,6 +47,7 @@ blueprint:
   filter:
   filter_col:
   filter_responsive:
+  filter_breakpoint:
   wrap:
   wrap_cols:
   wrapper:
