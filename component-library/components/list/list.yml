@@ -7,3 +7,19 @@ example: |
     section: blog
   sortable: true
   searchable: true
+arguments:
+  search-label:
+    type: string
+    optional: true
+    comment: Accessible label for the list search input.
+  search-placeholder:
+    type: string
+    optional: true
+    comment: Placeholder for the list search input.
+  controls-layout:
+    type: select
+    optional: true
+    default: list
+    options:
+      values: [compact, list]
+    comment: Full-width search and bottom paging by default; compact restores the table toolbar.

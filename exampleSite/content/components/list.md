@@ -44,6 +44,9 @@ content_blocks:
       - post 3
     filter_col: 0
     filter_responsive: true
+    searchable: true
+    search_label: Search articles
+    search_placeholder: Search articles…
 
   - _bookshop_name: list
     heading:

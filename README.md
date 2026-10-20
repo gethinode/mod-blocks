@@ -115,3 +115,26 @@ This module uses [semantic-release][semantic-release] to automate the release of
 [conventionalcommits]: https://www.conventionalcommits.org
 [husky]: https://typicode.github.io/husky/
 [semantic-release]: https://semantic-release.gitbook.io/
+
+## List controls
+
+With Hinode v3.39.0 or later, lists use full-width search above
+results and page size, result count, and navigation below. Older Hinode versions keep
+the compact toolbar. Set `controls_layout: compact` to request the compact layout explicitly.
+
+Search text can be customized for each list. These overrides require Hinode v3.39.0
+or later:
+
+```yaml
+_bookshop_name: list
+input:
+  section: articles
+searchable: true
+search_label: Search articles
+search_placeholder: Search articles…
+filter_responsive: true
+```
+
+`search_label` provides the accessible name independently of the placeholder. Omitted
+text uses the active language's translations. The filter dropdown is enabled by
+`filter_responsive` when a filter group is present.

@@ -22,8 +22,19 @@ section.list {
     }
 
     .datatable-top, .datatable-bottom {
-        padding-left: 0;
-        padding-right: 0;
-        padding-bottom: 2rem;
+        padding-inline: 0;
+    }
+
+    .datatable-top { padding-bottom: 1rem; }
+    .datatable-bottom { padding-bottom: 0; }
+
+    .table-filter-controls .btn-group {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+
+    @include media-breakpoint-down(#{$main-breakpoint}) {
+        .table-wrap-group-cell { padding-top: 0; }
+        .table-wrap > tbody > tr > td { padding-bottom: 0.75rem; }
     }
 }
