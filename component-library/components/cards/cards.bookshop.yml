@@ -27,8 +27,11 @@ blueprint:
   icon_style:
   link_type: button
   padding:
+  align_rows:
   elements:
     - title:
+      subtitle:
+      highlight:
       icon:
       image:
       mode:

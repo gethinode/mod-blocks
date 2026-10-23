@@ -40,7 +40,7 @@
 	{{ $list := slice }}
 	{{ range .elements }}
 		<!-- TODO: check mode -->
-		{{ $list = $list | append (dict 
+		{{ $element := dict 
 			"title"        .title
 			"description"  (.content | $page.RenderString)
 			"icon"         .icon
@@ -48,7 +48,11 @@
 			"href"         .link
 			"button"       (isset . "link")
 			"button-label" .label
-		) }}
+		}}
+		{{- /* The Hinode card renders subtitle and highlight through RenderString, so pass the raw markdown */ -}}
+		{{- with .subtitle }}{{ $element = merge $element (dict "subtitle" .) }}{{ end -}}
+		{{- with .highlight }}{{ $element = merge $element (dict "highlight" .) }}{{ end -}}
+		{{- $list = $list | append $element }}
 	{{ end}}
 
 	{{/* Main code */}}
@@ -76,6 +80,7 @@
 		"align"        .align
 		"hook"         "assets/live-card.html"
 	}}
+	{{- with or .align_rows (index . "align-rows") }}{{ $params = merge $params (dict "align-rows" .) }}{{ end }}
 
 	{{/* Layout for small screens */}}
 	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
