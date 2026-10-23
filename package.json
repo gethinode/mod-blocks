@@ -23,7 +23,8 @@
     "mod:tidy": "hugo mod tidy",
     "mod:vendor": "rimraf _vendor && hugo mod vendor",
     "postinstall": "echo TODO: add postinstall instructions",
-    "test": "pnpm build",
+    "test": "pnpm test:bookshop && pnpm build",
+    "test:bookshop": "node scripts/check-bookshop-templates.mjs",
     "upgrade": "pnpm dlx npm-check-updates -u && pnpm mod:update",
     "prepare": "node .husky/install.mjs"
   },
@@ -38,6 +39,7 @@
   },
   "homepage": "https://gethinode.com",
   "devDependencies": {
+    "@bookshop/hugo-engine": "3.20.0",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@semantic-release/exec": "^7.1.0",
