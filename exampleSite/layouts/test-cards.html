@@ -1,0 +1,97 @@
+{{- /*
+    Assertions for the cards block (component-library/components/cards/cards.hugo.html).
+
+    Hugo has no template test framework; this page is one. Each fixture in the front matter
+    of content/test-cards.md is rendered through the `bookshop` partial with `_ordinal` and
+    `_page` injected, as layouts/partials/page/blocks.html does for a page's content_blocks,
+    and compared with its `want`. `errorf` is the failure signal: it logs an ERROR and makes
+    `hugo` exit non-zero, which fails `pnpm test`. The PASS/FAIL lines are kept for a human
+    reading the built page.
+
+    The page sets `build.list: never`, which keeps it out of the sitemap, the RSS feed and
+    the search index; no menu entry points to it.
+
+    `want` keys (each optional):
+      aligned_groups  exact count of `card-group-align-rows`. The block renders two card
+                      groups, one for small screens and one for regular screens, so an
+                      aligned block expects 2.
+      align_classes   exact count of `align-rows` anywhere in the output.
+      bands           exact count of `card-band`.
+      subtitles       rendered subtitles. Each must sit in a `card-text-subtitle` paragraph
+                      once per card group, so twice. When none are listed, the class must be
+                      absent.
+      highlights      as subtitles, for `card-text-highlight`.
+      same_as         another case whose rendered output this one must equal.
+*/ -}}
+{{- $fixtures := .Params.fixtures | default slice -}}
+{{- $rendered := dict -}}
+{{- range $i, $f := $fixtures -}}
+    {{- $html := partial "bookshop" (merge $f.block (dict "_ordinal" $i "_page" $)) -}}
+    {{- $rendered = merge $rendered (dict $f.case (replaceRE `>\s+<` "><" (replaceRE `\s+` " " $html))) -}}
+{{- end -}}
+{{- $counts := dict "aligned_groups" "card-group-align-rows" "align_classes" "align-rows" "bands" "card-band" -}}
+{{- $fail := 0 -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>{{ .Title }}</title>
+</head>
+<body>
+<pre>
+{{- if not $fixtures }}
+FAIL no fixtures
+{{- $fail = add $fail 1 -}}
+{{- errorf "cards block test: no fixtures in %s" .File.Path -}}
+{{- end -}}
+{{- range $fixtures -}}
+    {{- $case := .case -}}
+    {{- $html := index $rendered $case -}}
+    {{- $want := .want | default dict -}}
+    {{- $errs := slice -}}
+    {{- /* A block that renders nothing would pass every absence check. */ -}}
+    {{- if not (strings.Contains $html `class="card `) -}}
+        {{- $errs = $errs | append "no card rendered" -}}
+    {{- end -}}
+    {{- range $key, $needle := $counts -}}
+        {{- if isset $want $key -}}
+            {{- $got := sub (len (split $html $needle)) 1 -}}
+            {{- if ne $got (int (index $want $key)) -}}
+                {{- $errs = $errs | append (printf "%s: want %v got %d" $needle (index $want $key) $got) -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+    {{- range $field := slice "subtitle" "highlight" -}}
+        {{- $class := printf "card-text-%s" $field -}}
+        {{- with index $want (printf "%ss" $field) -}}
+            {{- range . -}}
+                {{- $got := sub (len (split $html (printf `<p class="%s">%s</p>` $class .))) 1 -}}
+                {{- if ne $got 2 -}}
+                    {{- $errs = $errs | append (printf "%s %q: want 2 got %d" $class . $got) -}}
+                {{- end -}}
+            {{- end -}}
+        {{- else -}}
+            {{- if strings.Contains $html $class -}}
+                {{- $errs = $errs | append (printf "%s: want absent" $class) -}}
+            {{- end -}}
+        {{- end -}}
+    {{- end -}}
+    {{- with $want.same_as -}}
+        {{- if ne $html (index $rendered .) -}}
+            {{- $errs = $errs | append (printf "output differs from case %q" .) -}}
+        {{- end -}}
+    {{- end -}}
+    {{- if $errs }}
+FAIL {{ $case }}: {{ delimit $errs "; " }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "cards block mismatch: case=%q %s" $case (delimit $errs "; ") -}}
+    {{- else }}
+PASS {{ $case }}
+    {{- end -}}
+{{- end }}
+
+CARDS BLOCK FAILURES: {{ $fail }}
+</pre>
+</body>
+</html>
