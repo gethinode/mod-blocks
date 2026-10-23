@@ -49,7 +49,7 @@
 			"button"       (isset . "link")
 			"button-label" .label
 		}}
-		{{/* Hinode's card renders subtitle and highlight through RenderString, so pass the raw markdown */}}
+		{{/* The Hinode card renders subtitle and highlight through RenderString, so pass the raw markdown */}}
 		{{ with .subtitle }}{{ $element = merge $element (dict "subtitle" .) }}{{ end }}
 		{{ with .highlight }}{{ $element = merge $element (dict "highlight" .) }}{{ end }}
 		{{ $list = $list | append $element }}
