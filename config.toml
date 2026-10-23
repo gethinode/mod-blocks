@@ -4,16 +4,13 @@
 [module]
   [module.hugoVersion]
     extended = true
-    min = "0.147.6"
+    min = "0.153.0"
 
   # Expose bookshop partials to Hugo
   [[module.mounts]]
     source = "component-library"
     target = "layouts/partials/bookshop"
-    includeFiles = [
-      "**/*.hugo.html",
-      "**/*.hugo.md",
-    ]
+    files = ["**/*.hugo.html", "**/*.hugo.md"]
 
   # Expose bookshop config for Bookshop integrations using cloudcannon-hugo
   [[module.mounts]]
@@ -24,13 +21,13 @@
   [[module.mounts]]
     source = "component-library"
     target = "data/structures"
-    includeFiles = ["**/*.bookshop.yml", "**/*.yml"]
+    files = ["**/*.bookshop.yml", "**/*.yml"]
 
   # Expose bookshop specifications with module namespace for llms-components
   [[module.mounts]]
     source = "component-library"
     target = "data/structures/blocks"
-    includeFiles = ["**/*.bookshop.yml", "**/*.yml"]
+    files = ["**/*.bookshop.yml", "**/*.yml"]
 
   # Integrate main bookshop style with Hinode styles pipeline
   [[module.mounts]]
@@ -41,8 +38,7 @@
   [[module.mounts]]
     source = "component-library"
     target = "assets/scss/modules/bookshop"
-    includeFiles = ["**/*.scss"]
-    excludeFiles = ["bookshop.scss"]
+    files = ["! bookshop.scss", "**/*.scss"]
 
   # Expose block-specific structure files
   [[module.mounts]]
