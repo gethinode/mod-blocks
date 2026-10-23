@@ -1,5 +1,11 @@
 comment: >-
   Renders a grid of articles from a Hugo section with optional filtering and pagination.
+arguments:
+  more_force:
+    type: bool
+    optional: true
+    default: false
+    comment: Show the More button even when the list does not exceed its limit.
 example: |
   heading:
     title: Latest Articles
