@@ -8,6 +8,12 @@
     `hugo` exit non-zero, which fails `pnpm test`. The PASS/FAIL lines are kept for a human
     reading the built page.
 
+    Each fixture block is also validated with `utilities/Args.html`, with the bookshop name
+    and strict setting the block uses, and any error or warning counts as a failure. The
+    block itself only logs a warning for an element member that mod-utils does not declare,
+    and the build passes. This check fails it instead, so it pins the `elements` members the
+    block relies on (`subtitle`, `highlight`) to mod-utils data/structures/_types.yml.
+
     The page sets `build.list: never`, which keeps it out of the sitemap, the RSS feed and
     the search index; no menu entry points to it.
 
@@ -50,6 +56,13 @@ FAIL no fixtures
     {{- $html := index $rendered $case -}}
     {{- $want := .want | default dict -}}
     {{- $errs := slice -}}
+    {{- $result := partial "utilities/Args.html" (dict "bookshop" "cards" "args" .block "strict" false) -}}
+    {{- with $result.errmsg -}}
+        {{- $errs = $errs | append (printf "validation error: %s" (delimit . ", ")) -}}
+    {{- end -}}
+    {{- with $result.warnmsg -}}
+        {{- $errs = $errs | append (printf "validation warning: %s" (delimit . ", ")) -}}
+    {{- end -}}
     {{- /* A block that renders nothing would pass every absence check. */ -}}
     {{- if not (strings.Contains $html `class="card `) -}}
         {{- $errs = $errs | append "no card rendered" -}}

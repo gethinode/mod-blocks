@@ -27,6 +27,19 @@ fixtures:
       aligned_groups: 2
       subtitles: ["Sub <em>one</em>", "Sub <em>two</em>"]
       highlights: ["<strong>€1</strong> high one", "<strong>€2</strong> high two"]
+  - case: align_rows true without subtitle or highlight
+    block:
+      _bookshop_name: cards
+      cols: 2
+      orientation: stacked
+      align_rows: true
+      elements:
+        - title: Alpha
+          content: Body one
+        - title: Beta
+          content: Body two
+    want:
+      aligned_groups: 2
   - case: align_rows unset
     block:
       _bookshop_name: cards
