@@ -3,9 +3,9 @@
 // partial's error, and `warn-preview-device` must fire for exactly the blocks that
 // earn it. An error fails the whole Hugo build, and the fixtures in
 // exampleSite/content/test-preview.md only see the rendered output, so these
-// cases cannot live among them. Two more checks vary what the fixtures cannot: one
-// renders with the site parameter that Bookshop live editing sets, and one renders
-// with a language other than English.
+// cases cannot live among them. The last checks render with the site parameter
+// that Bookshop live editing sets, and with a site language other than English,
+// which the fixtures cannot vary per block.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -16,7 +16,7 @@ import test from 'node:test'
 // pages maps a page name to the extra YAML lines of its one preview block. env adds
 // environment variables to the build, config adds TOML that overrides the site
 // config, and html holds each built page. A build that runs longer than two
-// minutes is stopped and fails.
+// minutes is stopped.
 function build (pages, env = {}, config = '') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-errors-'))
   const content = path.join(dir, 'content')

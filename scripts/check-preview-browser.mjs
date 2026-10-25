@@ -605,7 +605,8 @@ test('click posters follow the color mode', { skip }, async () => {
 })
 
 // Presses the shown poster button, pauses the transitions it starts on the poster
-// and samples the poster at points of the opacity fade, so no timing is involved.
+// and samples the poster at points of the opacity fade, so the samples do not
+// depend on how fast the page runs.
 const FADE_SAMPLES = `(() => {
   const poster = [...document.querySelectorAll('section.preview .preview-poster')].find(el => el.offsetParent)
   poster.querySelector('.preview-activate').click()
