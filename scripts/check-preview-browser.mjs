@@ -1509,6 +1509,19 @@ test('components/preview-ready: the Ready tab shows its view, the Silent tab fai
       setTimeout(() => resolve(got), 500)
     })`)
     assert.deepEqual(replies, ['example:ready'], 'one reply, to the matching request')
+    // Reloaded, it announces itself, then answers the request the preview sends
+    // on load; a message it posts to itself gets no answer.
+    const reloaded = await page.evaluate(`new Promise(resolve => {
+      const win = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent).querySelector('iframe').contentWindow
+      const got = []
+      window.addEventListener('message', event => { if (event.source === win) got.push(event.data) })
+      win.location.reload()
+      setTimeout(() => {
+        win.eval("window.seen = 0; addEventListener('message', () => { window.seen++ }); postMessage('example:ready', '*')")
+        setTimeout(() => resolve({ got, seen: win.seen }), 500)
+      }, 1000)
+    })`)
+    assert.deepEqual(reloaded, { got: ['example:ready', 'example:ready'], seen: 1 })
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/ready/`])
     await clickItem(page, 1)
     await assertWaiting(page, 'Silent')

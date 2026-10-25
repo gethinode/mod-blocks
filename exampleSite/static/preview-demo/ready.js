@@ -1,24 +1,17 @@
-// The ready side of the preview readiness demo. Once the DOM of the page is
-// ready, it posts example:ready to the parent page, and from then on it answers
-// a matching request from the parent page with the same string. The page posts
-// nothing else.
+// The ready side of the preview readiness demo. The page loads it with defer,
+// so it runs once the document is parsed: it posts example:ready to the parent
+// page, and answers each matching request from the parent page with the same
+// string. The page posts nothing else.
 ;(function () {
   'use strict'
 
   const message = 'example:ready'
-  let ready = false
 
   window.addEventListener('message', event => {
-    if (ready && event.source === window.parent && event.data === message) {
+    if (event.source === window.parent && event.data === message) {
       event.source.postMessage(message, event.origin === 'null' ? '*' : event.origin)
     }
   })
 
-  function announce () {
-    ready = true
-    if (window.parent !== window) window.parent.postMessage(message, '*')
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', announce)
-  else announce()
+  if (window.parent !== window) window.parent.postMessage(message, '*')
 }())
