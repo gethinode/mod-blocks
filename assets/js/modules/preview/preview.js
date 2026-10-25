@@ -49,7 +49,10 @@
  * pane carries data-preview-state: waiting, ready or failed. When the deadline
  * passes first, the pane fails: its poster, if any, shows, the iframe is hidden
  * and inert, and the pane shows its alert, whose link opens the shown item.
- * Showing an item resets every pane.
+ * Showing an item resets every pane. A block that shows its build-time fallback
+ * has no live view to wait for: none of this applies to it, so its panes take
+ * no state, deadline or busy state, also with data-ready-message, and no
+ * message changes them.
  *
  * Without data-ready-message, the load event of the iframe makes the pane
  * ready. Chrome fires load for an error status and a refused connection too,
