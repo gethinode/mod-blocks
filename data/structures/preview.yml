@@ -41,10 +41,10 @@ arguments:
     optional: true
     default: load
     comment: >-
-      When the live view loads. With load, the default view loads with the
+      When the live view loads. With load, the shown view loads with the
       page. With click, every view shows its poster with a button over it, and
       no view loads until the button is pressed; after that, a view loads when
-      it is first shown.
+      it is first shown. A block that shows its fallback shows no poster.
     options:
       values:
         - load
@@ -54,9 +54,10 @@ arguments:
     optional: true
     comment: >-
       Poster image per device view, shown until the preview is activated when
-      activation is click. The keys are desktop, tablet and mobile. A view
-      without a poster of its own uses the desktop poster, or a plain
-      background when there is none. The mode argument applies to posters too.
+      activation is click, except on a block that shows its fallback. The keys
+      are desktop, tablet and mobile. A view without a poster of its own uses
+      the desktop poster, or a plain background when there is none. The mode
+      argument applies to posters too.
   controls-placement:
     optional: true
   desktop-responsive:

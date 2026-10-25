@@ -22,9 +22,10 @@
  * and again whenever the viewport crosses a device breakpoint.
  *
  * With click activation (data-activation="click") no iframe carries src and
- * every view shows a poster. Views still switch, but none loads until the
- * poster button is pressed: that loads the shown view, sets data-active="true"
- * on the content, which hides the posters, and dispatches a bubbling
+ * every view shows a poster, unless the block shows its fallback, which has no
+ * poster. Views still switch, but none loads until the poster button is
+ * pressed: that loads the shown view, sets data-active="true" on the content,
+ * which hides the posters, and dispatches a bubbling
  * preview:activate event on the section. After that, views load as above.
  */
 
