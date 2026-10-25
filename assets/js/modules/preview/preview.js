@@ -39,17 +39,17 @@
  * iframe takes the label of the item tab as its title. When the content is the
  * tab panel of the item tabs, which it is when no item has a heading, the shown
  * tab labels it. The script also shows the poster image of the item in every
- * poster, points every .preview-open link at the open URL of the item, and
- * dispatches a bubbling preview:item event on the section, with the index of
- * the item in its detail.
+ * poster, points every .preview-open link and the link of every failure alert
+ * at the open URL of the item, and dispatches a bubbling preview:item event on
+ * the section, with the index of the item in its detail.
  *
  * Each navigation the script starts gets a deadline of data-load-timeout
  * seconds, 15 when that is not a positive number, which starts when the iframe
  * first intersects the viewport, or at once without IntersectionObserver. The
  * pane carries data-preview-state: waiting, ready or failed. When the deadline
  * passes first, the pane fails: its poster shows again, the iframe is hidden
- * and inert, and the pane shows its alert, whose link points at the open URL of
- * the shown item. Showing an item resets every pane.
+ * and inert, and the pane shows its alert, whose link opens the shown item.
+ * Showing an item resets every pane.
  *
  * Without data-ready-message, the load event of the iframe makes the pane
  * ready. Chrome fires load for an error status and a refused connection too,
@@ -130,8 +130,7 @@
 
   /**
    * Sets the state of the pane of a navigation, with the busy state and inert
-   * iframe that go with it, and points a failed pane's link at the open URL of
-   * the shown item.
+   * iframe that go with it.
    */
   function setState (record, state) {
     const { iframe, pane, container } = record
@@ -140,12 +139,6 @@
     const waiting = state === 'waiting' && readyMessage(container) !== ''
     if (waiting) pane.setAttribute('aria-busy', 'true'); else pane.removeAttribute('aria-busy')
     if (waiting || state === 'failed') iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
-    if (state === 'failed') {
-      const section = container.closest('section.preview')
-      const tab = Array.from(section.querySelectorAll('.preview-items [data-bs-toggle="tab"]')).find(el => el.classList.contains('active'))
-      const link = pane.querySelector('.preview-unavailable-link')
-      if (tab && link) link.href = tab.dataset.previewOpenUrl
-    }
   }
 
   function stopDeadline (record) {
@@ -303,7 +296,7 @@
         image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
       })
     })
-    section.querySelectorAll('.preview-open').forEach(link => { link.href = tab.dataset.previewOpenUrl })
+    section.querySelectorAll('.preview-open, .preview-unavailable-link').forEach(link => { link.href = tab.dataset.previewOpenUrl })
     section.dispatchEvent(new CustomEvent('preview:item', { bubbles: true, detail: { index } }))
   }
 

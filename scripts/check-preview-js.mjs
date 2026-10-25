@@ -108,7 +108,7 @@ const rules = {
   '.preview-controls [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-items [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab' && !!el.parent.closest('.preview-items'),
-  '.preview-unavailable-link': el => el.classList.contains('preview-unavailable-link'),
+  '.preview-open, .preview-unavailable-link': el => el.classList.contains('preview-open') || el.classList.contains('preview-unavailable-link'),
   'section.preview .preview-content .preview-iframe': el => el.classList.contains('preview-iframe') && !!el.closest('.preview-content'),
   'section.preview .preview-content[data-ready-message] .preview-iframe': el => el.classList.contains('preview-iframe') &&
     'readyMessage' in ((el.closest('.preview-content') || {}).dataset || {})
