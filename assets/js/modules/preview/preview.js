@@ -57,8 +57,9 @@
   }
 
   /**
-   * Calls back whenever the viewport crosses a device breakpoint. The media
-   * query change fires as the stylesheet's rules flip, with no debounce gap.
+   * Calls back whenever the viewport crosses a device breakpoint, on a change
+   * event of the same media queries the stylesheet hides views with, without a
+   * debounce.
    */
   function onBreakpointChange (callback) {
     Object.values(PREVIEW_DEVICE_TOO_NARROW).forEach(query => {
@@ -182,7 +183,7 @@
     init()
   }
 
-  // Images and fonts that finish after DOMContentLoaded can still move the layout
+  // Scale again once the page has loaded, and on every resize
   window.addEventListener('load', () => { updatePreviewScale() })
   window.addEventListener('resize', () => { updatePreviewScale() })
 }())

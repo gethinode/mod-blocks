@@ -142,7 +142,7 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
   const document = new FakeElement().append(preview.section)
   document.readyState = readyState
   const window = {
-    // innerWidth is a whole number; the CSS viewport width need not be.
+    // innerWidth rounds down to a whole number; the media queries see the exact width.
     get innerWidth () { return Math.floor(viewport) },
     addEventListener (type, fn) { (windowListeners[type] ||= []).push(fn) },
     getComputedStyle: el => ({ display: el.device && cssHides(el.device, preview.devices, viewport) ? 'none' : 'block' }),

@@ -58,7 +58,7 @@ function within (promise, ms) {
   return Promise.race([promise, new Promise(resolve => { timer = setTimeout(resolve, ms) })]).finally(() => clearTimeout(timer))
 }
 
-// Chrome must be gone before its profile directory can be removed.
+// Stop Chrome before removing its profile directory, which it writes to while it runs.
 after(async () => {
   if (browser) {
     const exited = new Promise(resolve => browser.proc.once('exit', resolve))
