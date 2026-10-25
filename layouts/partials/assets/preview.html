@@ -366,7 +366,7 @@
             {{- partial "utilities/LogErr.html" (dict
                 "partial" "assets/preview.html"
                 "msg"     "Invalid argument 'items'"
-                "details" (slice (printf "Item %d needs both a title and a url, got %v" $n $item))
+                "details" (slice (printf "Item %d needs both a title and a url, got %v" (add $n 1) $item))
                 "file"    $page.File
             ) -}}
             {{- $error = true -}}
@@ -393,18 +393,17 @@
     {{- $showFallback := or $args.showFallback (not $url) -}}
     {{- $origin := partial "inline/preview-origin.html" site.BaseURL -}}
 
-    {{/* Items share one check per origin, against the first item URL on that origin; the
-         first origin that cannot be framed shows the fallback and ends the checks. The fallback
-         alert names the URL of that check. */}}
+    {{/* Each distinct item URL is checked once, without its fragment, since the response
+         headers of one path or query say nothing about another. The first URL that cannot be
+         framed shows the fallback and ends the checks, and the fallback alert names it. */}}
     {{- $fallbackUrl := $url -}}
     {{- if and $url (not $showFallback) $origin.host -}}
         {{- $checked := slice -}}
         {{- range $target := (cond (gt (len $items) 0) (apply $items "index" "." "url") (slice $url)) -}}
-            {{- $o := partial "inline/preview-origin.html" $target -}}
-            {{- $key := printf "%s://%s:%s" $o.scheme $o.host $o.port -}}
-            {{- if and (not $showFallback) (not (in $checked $key)) -}}
-                {{- $checked = $checked | append $key -}}
-                {{- if partial "inline/preview-framing.html" (dict "url" $target "origin" $origin "file" $page.File) -}}
+            {{- $request := index (split $target "#") 0 -}}
+            {{- if and (not $showFallback) (not (in $checked $request)) -}}
+                {{- $checked = $checked | append $request -}}
+                {{- if partial "inline/preview-framing.html" (dict "url" $request "origin" $origin "file" $page.File) -}}
                     {{- $showFallback = true -}}
                     {{- $fallbackUrl = $target -}}
                 {{- end -}}
@@ -413,13 +412,22 @@
     {{- end -}}
 
     {{/* Optional section heading. When an item has a heading, each item shows its own heading,
-         or the block heading when it has none, in a pane its tab shows. */}}
+         or the block heading when it has none, in a pane its tab shows. Without item tabs, as
+         when the block shows its fallback, that heading of the first item shows as a plain
+         heading, with no tab semantics. */}}
     {{- $headed := false -}}
     {{- range $items -}}
         {{- if index (.heading | default dict) "title" -}}{{- $headed = true -}}{{- end -}}
     {{- end -}}
-    {{- $hasHeading := or $headed $args.heading.title -}}
-    {{ if $headed }}
+    {{- $itemTabs := and $items (not $showFallback) -}}
+    {{- $plainHeading := $args.heading -}}
+    {{- with $items -}}
+        {{- with index (index . 0) "heading" -}}
+            {{- if index . "title" -}}{{- $plainHeading = . -}}{{- end -}}
+        {{- end -}}
+    {{- end -}}
+    {{- $hasHeading := or (and $headed $itemTabs) (index ($plainHeading | default dict) "title") -}}
+    {{ if and $headed $itemTabs }}
         <div class="tab-content preview-headings">
             {{- range $n, $item := $items }}
                 {{- $heading := cond (not (index ($item.heading | default dict) "title")) $args.heading $item.heading }}
@@ -434,10 +442,10 @@
                 </div>
             {{- end }}
         </div>
-    {{ else if $args.heading.title }}
+    {{ else if index ($plainHeading | default dict) "title" }}
         {{ partial "assets/section-title.html" (dict
             "page"          $page
-            "heading"       $args.heading
+            "heading"       $plainHeading
             "heading-level" $args.headingLevel
         ) }}
     {{ end }}
@@ -446,7 +454,6 @@
          bottom margin spaces the content from the heading when the controls are below it. A tab
          controls the heading pane of its item; without item headings, every tab controls the
          content, which the script labels with the shown tab. */}}
-    {{- $itemTabs := and $items (not $showFallback) -}}
     {{- $sharedPanel := and $itemTabs (not $headed) -}}
     {{- if $itemTabs }}
         <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="View selection">

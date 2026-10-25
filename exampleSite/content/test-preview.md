@@ -247,7 +247,6 @@ fixtures:
       - 'data-preview-open-url="https://example.org/b-open"'
       - 'role="tablist"'
     reject:
-      - 'Block heading </h'
       - 'title="Block heading"'
       - '-items-panel'
     order:
@@ -276,6 +275,7 @@ fixtures:
       'data-bs-toggle="tab"': 5
       'title="View A"': 3
       'title="View B"': 0
+      'Block heading': 0
   - case: items-heading-fallback
     block:
       _bookshop_name: preview
@@ -339,15 +339,24 @@ fixtures:
             title: Heading A
         - title: View B
           url: https://example.org/b
+          heading:
+            title: Heading B
     want:
       - 'class="preview-error"'
-      - 'Heading A'
       - 'Unable to load preview for <code>https://example.org/a</code>'
     reject:
       - 'preview-items'
       - 'data-preview-url'
       - '-items-panel'
       - 'role="tab"'
+      - 'role="tabpanel"'
+      - 'aria-labelledby'
+      - 'aria-controls'
+      - 'preview-headings'
+      - '-item-'
+    count:
+      'Heading A': 1
+      'Heading B': 0
   - case: items-override-url
     block:
       _bookshop_name: preview
@@ -449,4 +458,44 @@ fixtures:
       - 'width-100 mt-3'
     reject:
       - 'nav nav-pills'
+  - case: items-fallback-first-without-heading
+    block:
+      _bookshop_name: preview
+      show_fallback: true
+      heading:
+        title: Block heading
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+          heading:
+            title: Heading B
+    want:
+      - 'class="preview-error"'
+    reject:
+      - 'role="tabpanel"'
+      - 'aria-labelledby'
+    count:
+      'Block heading': 1
+      'Heading B': 0
+  - case: items-fallback-no-heading-controls-bottom
+    block:
+      _bookshop_name: preview
+      show_fallback: true
+      controls_placement: bottom
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+          heading:
+            title: Heading B
+    want:
+      - 'class="preview-error"'
+    reject:
+      - 'width-100 mt-3'
+      - 'section-title'
+    count:
+      'Heading B': 0
 ---

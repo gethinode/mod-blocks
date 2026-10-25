@@ -63,11 +63,12 @@ arguments:
       defaults to url. An item poster falls back from the view to the desktop
       poster of the item, then to the block poster. When an item has a
       heading, each tab shows the heading of its item, or the block heading
-      when its item has none, in place of the block heading. The embedding
-      checks run once per origin of the items, and the first origin that
-      cannot be framed shows the fallback, whose alert names the item url
-      checked on that origin. The views take the title of the shown item as
-      their title.
+      when its item has none, in place of the block heading. A block that
+      shows its fallback has no tabs and shows that heading of the first item
+      only. The embedding checks run once per distinct item url, without its
+      fragment, and the first url that cannot be framed shows the fallback,
+      whose alert names that url. The views take the title of the shown item
+      as their title.
 example: |
   heading:
     title: Live Preview

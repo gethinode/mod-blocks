@@ -741,6 +741,19 @@ const ARIA_STATE = `(() => {
     titles: [...document.querySelectorAll('section.preview .preview-content .preview-iframe')].map(el => el.title)
   }
 })()`
+// Every id that an aria-labelledby or aria-controls in the preview names, with
+// the ids no element in the page carries.
+const ARIA_REFS = `(() => {
+  const ids = [...document.querySelectorAll('section.preview [aria-labelledby], section.preview [aria-controls]')]
+    .flatMap(el => [el.getAttribute('aria-labelledby'), el.getAttribute('aria-controls')])
+    .filter(Boolean).flatMap(value => value.split(/\\s+/))
+  return { count: ids.length, missing: ids.filter(id => !document.getElementById(id)) }
+})()`
+async function assertRefs (page, label) {
+  const { count, missing } = await page.evaluate(ARIA_REFS)
+  assert.deepEqual(missing, [], `${label}: every aria reference names an element`)
+  return count
+}
 const aria = (label, n = 3) => ({ controlled: ['tabpanel', 'tabpanel'], label, panelVisible: true, titles: Array(n).fill(label) })
 const clickItem = (page, n) => page.evaluate(`document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')[${n}].click()`)
 const itemsState = async page => { await sleep(SETTLE_MS); return page.evaluate(ITEMS_STATE) }
@@ -773,6 +786,7 @@ test('items-click at 1280px: item tabs before activation swap heading and poster
     state = await page.settle(['desktop', 'tablet'])
     assert.deepEqual(page.urls, [`desktop ${TARGET}b`, `desktop ${TARGET}a`, `tablet ${TARGET}a`])
     assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View a'), 'a view shown later carries the item title')
+    assert.ok(await assertRefs(page, 'items-click') > 0)
     console.log(`# items-click @1280: requests [${page.urls}]`)
   } finally {
     await page.close()
@@ -805,11 +819,15 @@ test('items at 1280px: arrow keys move between the item tabs, and each switch lo
   }
 })
 
-test('items-fallback at 1280px shows the first item heading as a block, with no item tabs', { skip }, async () => {
+test('items-fallback at 1280px shows the first item heading as a plain block, with no item tabs or tab panels', { skip }, async () => {
   const page = await openPage(browser.cdp, base, 'items-fallback', 1280)
   try {
     await page.settle([])
-    assert.deepEqual(await page.evaluate(ITEMS_STATE), { selected: [], focused: null, headings: ['Heading A'], display: ['block'] })
+    assert.deepEqual(await page.evaluate(ITEMS_STATE), { selected: [], focused: null, headings: [], display: [] })
+    const shown = await page.evaluate(`[...document.querySelectorAll('section.preview .section-title')].filter(el => el.getBoundingClientRect().height > 0).map(el => ({ text: el.textContent.trim(), display: getComputedStyle(el.parentElement).display }))`)
+    assert.deepEqual(shown.map(({ text }) => text), ['Heading A'], 'only the first item heading shows')
+    assert.equal(await page.evaluate(`document.querySelectorAll('section.preview [role="tabpanel"], section.preview [role="tab"], section.preview .preview-headings').length`), 0, 'no tab semantics without item tabs')
+    assert.equal(await assertRefs(page, 'items-fallback'), 0, 'no aria references at all')
     assert.deepEqual(page.urls, [])
   } finally {
     await page.close()
@@ -834,6 +852,7 @@ test('items-plain at 1280px: every item tab controls the content panel, whose la
     assertView(page, state, 'mobile', ['desktop', 'desktop', 'mobile'], 'mobile after item b')
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `mobile ${TARGET}b`])
     assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View b'))
+    assert.ok(await assertRefs(page, 'items-plain') > 0)
     console.log(`# items-plain @1280: requests [${page.urls}]`)
   } finally {
     await page.close()

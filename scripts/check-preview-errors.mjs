@@ -7,11 +7,11 @@
 // that Bookshop live editing sets, and with a site language other than English,
 // which the fixtures cannot vary per block.
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import test from 'node:test'
+import test, { after, before } from 'node:test'
 
 // pages maps a page name to the extra YAML lines of its one preview block, which
 // also gets url: https://example.org/, or to { url, lines } to give it another url,
@@ -134,7 +134,7 @@ test('items replace url with a warn-preview-items warning', () => {
   assert.doesNotMatch(result.html.both, / data-src="https:\/\/example\.org\/"/)
 })
 
-test('items check embedding once per distinct origin, until one shows the fallback', () => {
+test('items check embedding once per distinct URL, until one shows the fallback', () => {
   // A host under .invalid never resolves, so each check of it logs a warning that
   // names the URL it requested. The site CSP covers the first two hosts only.
   const result = build({
@@ -147,7 +147,8 @@ test('items check embedding once per distinct origin, until one shows the fallba
   }, {}, '[params.modules.items.csp]\n  frame-src = ["https://preview-one.invalid", "https://preview-two.invalid"]\n')
   assert.equal(result.status, 0, result.log)
   const requested = [...result.log.matchAll(/Request to '([^']+)' failed/g)].map(([, url]) => url).sort()
-  assert.deepEqual(requested, ['https://preview-one.invalid/a', 'https://preview-three.invalid/e', 'https://preview-two.invalid/c'])
+  assert.deepEqual(requested, ['https://preview-one.invalid/a', 'https://preview-one.invalid/b', 'https://preview-three.invalid/e',
+    'https://preview-two.invalid/c', 'https://preview-two.invalid/d'])
   const csp = [...result.log.matchAll(/URL '([^']+)' allows being framed, but is not covered/g)].map(([, url]) => url)
   assert.deepEqual(csp, ['https://preview-three.invalid/e'])
   assert.match(result.html.origins, /class="preview-error"/)
@@ -166,6 +167,7 @@ for (const [label, lines] of [['a title', ['  - url: https://example.org/a']], [
     const result = build({ _index: { url: null, lines: ['items:', ...lines] } })
     assert.notEqual(result.status, 0, 'build succeeded')
     assert.match(result.log, /Invalid argument 'items'/)
+    assert.match(result.log, /Item 1 needs both a title and a url/, 'items count from 1')
   })
 }
 
@@ -185,4 +187,91 @@ test('the fallback alert names the item URL whose origin shows the fallback', ()
   assert.match(result.html.later, /class="preview-error"/)
   const first = 'https://example.org/a'
   assert.deepEqual(alerts(result.html.explicit), [[first, first], [first, first], [first, first]], 'an explicit fallback names the first item')
+})
+
+// Two servers on 127.0.0.1 that this check owns, in a child process, so they answer
+// while the build blocks this one. The first permits framing, except for a path
+// ending in /b or a query with v=deny, which get X-Frame-Options: DENY; the second
+// denies every path. Each server logs the requests it answers to a file.
+const SERVER = `
+const http = require('node:http')
+const fs = require('node:fs')
+const listen = (name, deny) => new Promise(resolve => {
+  const server = http.createServer((req, res) => {
+    fs.appendFileSync(process.env.PREVIEW_LOG, JSON.stringify({ server: name, path: req.url }) + '\\n')
+    res.writeHead(200, { 'Content-Type': 'text/html', ...(deny(new URL(req.url, 'http://x')) ? { 'X-Frame-Options': 'DENY' } : {}) })
+    res.end('<p>stub</p>')
+  })
+  server.listen(0, '127.0.0.1', () => resolve(server.address().port))
+})
+Promise.all([
+  listen('allow', url => url.pathname.endsWith('/b') || url.searchParams.get('v') === 'deny'),
+  listen('deny', () => true)
+]).then(ports => console.log(ports.join(' ')))
+`
+const serverLog = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'preview-servers-')), 'requests.jsonl')
+let servers, allowPort, ALLOW, DENY, LOCAL_CSP
+before(async () => {
+  servers = spawn(process.execPath, ['-e', SERVER], { env: { ...process.env, PREVIEW_LOG: serverLog }, stdio: ['ignore', 'pipe', 'inherit'] })
+  const ports = await new Promise((resolve, reject) => {
+    servers.stdout.once('data', data => resolve(String(data).trim().split(' ').map(Number)))
+    servers.once('error', reject)
+  })
+  allowPort = ports[0]
+  ALLOW = `http://127.0.0.1:${ports[0]}`
+  DENY = `http://127.0.0.1:${ports[1]}`
+  // Hugo refuses remote requests to an IP address by default, so this config permits
+  // the loopback servers of this check only, and the site CSP covers their http origins.
+  LOCAL_CSP = `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n` +
+    `[params.modules.items.csp]\n  frame-src = ["${ALLOW}", "${DENY}"]\n`
+})
+after(() => {
+  if (servers) servers.kill()
+  fs.rmSync(path.dirname(serverLog), { recursive: true, force: true })
+})
+// The requests each server answered whose path starts with prefix, in order.
+const answered = (server, prefix) => (fs.existsSync(serverLog) ? fs.readFileSync(serverLog, 'utf8').trim().split('\n') : [])
+  .filter(Boolean).map(line => JSON.parse(line)).filter(r => r.server === server && r.path.startsWith(prefix)).map(r => r.path)
+
+test('embedding headers are checked for each distinct item URL, with its path and query and without its fragment', () => {
+  const result = build({
+    paths: { url: null, lines: ['items:', ...item('A', `${ALLOW}/p/a`), ...item('B', `${ALLOW}/p/b`)] },
+    queries: {
+      url: null,
+      lines: ['items:', ...item('A', `${ALLOW}/q/a`), ...item('A2', `${ALLOW}/q/a#second`), ...item('X', `${ALLOW}/q/x?v=allow`),
+        ...item('Y', `${ALLOW}/q/x?v=deny#part`), ...item('Z', `${ALLOW}/q/z`)]
+    },
+    allowed: { url: null, lines: ['items:', ...item('A', `${ALLOW}/r/a`), ...item('A2', `${ALLOW}/r/a#second`), ...item('C', `${ALLOW}/r/c`)] }
+  }, {}, LOCAL_CSP)
+  assert.equal(result.status, 0, result.log)
+  // The /b path on the origin whose /a permits framing shows the fallback.
+  assert.deepEqual(answered('allow', '/p/'), ['/p/a', '/p/b'])
+  assert.deepEqual(alerts(result.html.paths), Array(3).fill([`${ALLOW}/p/b`, `${ALLOW}/p/b`]))
+  assert.match(result.log, new RegExp(`URL '${ALLOW}/p/b' cannot be embedded because it sets 'X-Frame-Options: DENY'`))
+  // A query of its own is another check; a fragment is not, and the first refusal ends
+  // them. The alert names the item URL as the author wrote it.
+  assert.deepEqual(answered('allow', '/q/'), ['/q/a', '/q/x?v=allow', '/q/x?v=deny'])
+  assert.deepEqual(alerts(result.html.queries), Array(3).fill([`${ALLOW}/q/x?v=deny#part`, `${ALLOW}/q/x?v=deny#part`]))
+  assert.match(result.log, new RegExp(`URL '${ALLOW}/q/x\\?v=deny' cannot be embedded`))
+  // Paths that all permit framing render the views, each checked once.
+  assert.deepEqual(answered('allow', '/r/'), ['/r/a', '/r/c'])
+  assert.equal(result.html.allowed.match(/class="preview-error d-none"/g)?.length, 3)
+  assert.match(result.html.allowed, /data-preview-url="http:\/\/127\.0\.0\.1:\d+\/r\/a#second"/)
+})
+
+test('a URL on the same host with another port or scheme is checked again', () => {
+  const HTTPS = `https://127.0.0.1:${allowPort}`
+  const result = build({
+    port: { url: null, lines: ['items:', ...item('A', `${ALLOW}/o/a`), ...item('B', `${DENY}/o/a`)] },
+    // The https URL reaches a server that does not speak TLS, so its request fails, and
+    // the site CSP covers the http origin only.
+    scheme: { url: null, lines: ['items:', ...item('A', `${ALLOW}/s/a`), ...item('B', `${HTTPS}/s/a`)] }
+  }, {}, LOCAL_CSP)
+  assert.equal(result.status, 0, result.log)
+  assert.deepEqual(answered('allow', '/o/'), ['/o/a'])
+  assert.deepEqual(answered('deny', '/o/'), ['/o/a'])
+  assert.deepEqual(alerts(result.html.port), Array(3).fill([`${DENY}/o/a`, `${DENY}/o/a`]))
+  assert.deepEqual(answered('allow', '/s/'), ['/s/a'])
+  assert.match(result.log, new RegExp(`Request to '${HTTPS}/s/a' failed`))
+  assert.deepEqual(alerts(result.html.scheme), Array(3).fill([`${HTTPS}/s/a`, `${HTTPS}/s/a`]))
 })
