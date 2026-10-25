@@ -3,8 +3,9 @@
 // partial's error, and `warn-preview-device` must fire for exactly the blocks that
 // earn it. An error fails the whole Hugo build, and the fixtures in
 // exampleSite/content/test-preview.md only see the rendered output, so these
-// cases cannot live among them. The last check renders with the site parameter
-// that Bookshop live editing sets, which the fixtures cannot vary per block.
+// cases cannot live among them. Two more checks vary what the fixtures cannot: one
+// renders with the site parameter that Bookshop live editing sets, and one renders
+// with a language other than English.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -13,8 +14,10 @@ import path from 'node:path'
 import test from 'node:test'
 
 // pages maps a page name to the extra YAML lines of its one preview block. env adds
-// environment variables to the build, and html holds each built page.
-function build (pages, env = {}) {
+// environment variables to the build, config adds TOML that overrides the site
+// config, and html holds each built page. A build that runs longer than two
+// minutes is stopped and fails.
+function build (pages, env = {}, config = '') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-errors-'))
   const content = path.join(dir, 'content')
   fs.mkdirSync(content)
@@ -36,7 +39,13 @@ function build (pages, env = {}) {
     const shell = process.platform === 'win32'
     const quote = arg => shell ? `"${arg}"` : arg
     const publish = path.join(dir, 'public')
-    const result = spawnSync('hugo', ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish)], { encoding: 'utf8', shell, env: { ...process.env, ...env } })
+    const args = ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish)]
+    if (config) {
+      const file = path.join(dir, 'config.toml')
+      fs.writeFileSync(file, config)
+      args.push('--config', quote(`hugo.toml,${file}`))
+    }
+    const result = spawnSync('hugo', args, { encoding: 'utf8', shell, env: { ...process.env, ...env }, timeout: 120000 })
     const read = name => { try { return fs.readFileSync(path.join(publish, name, 'index.html'), 'utf8') } catch { return '' } }
     const html = Object.fromEntries(Object.keys(pages).map(name => [name, read(name)]))
     return { ...result, log: result.stderr + result.stdout, html }
@@ -92,3 +101,14 @@ test('in Bookshop live editing, only a block without controls carries src', () =
   assert.equal((result.html.click.match(/ src="https:\/\/example\.org\//g) || []).length, 0)
   assert.match(result.html.click, /class="btn btn-primary preview-activate"/)
 })
+
+// The button label comes from the i18n strings of the module, so a site in another
+// language gets its own label.
+for (const [lang, label] of [['de', 'Vorschau laden'], ['fr', 'Charger l\'aperçu'], ['nl', 'Voorbeeld laden'], ['pl', 'Załaduj podgląd']]) {
+  test(`with ${lang} as the site language, the poster button reads ${label}`, () => {
+    const result = build({ click: ['activation: click'] }, {}, `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
+    assert.equal(result.status, 0, result.log)
+    const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, text]) => text.trim().replaceAll('&#39;', "'"))
+    assert.deepEqual(labels, [label, label, label])
+  })
+}
