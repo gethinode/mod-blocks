@@ -3,6 +3,28 @@ comment: >-
 arguments:
   url:
     optional: false
+  devices:
+    type: slice
+    optional: true
+    default: [desktop, tablet, mobile]
+    comment: >-
+      Device views to offer, in the order the views and their buttons render.
+      Each entry is one of desktop, tablet or mobile, and the list must not be
+      empty. When device names a view that is not offered, the first offered
+      view is shown instead.
+    options:
+      values:
+        - desktop
+        - tablet
+        - mobile
+  controls:
+    type: bool
+    optional: true
+    default: true
+    comment: >-
+      Flag indicating if the device switcher renders. Without it, the block
+      shows the largest offered device that fits the viewport and swaps views
+      when the viewport crosses a device breakpoint.
 example: |
   heading:
     title: Live Preview

@@ -240,10 +240,34 @@
 
 {{/* Initialize local variables */}}
 {{- $page := or $args.page page -}}
-{{- $devices := slice "desktop" "tablet" "mobile" -}}
+{{- $devices := $args.devices -}}
 {{- $defaultDevice := $args.device -}}
 {{- $id := partial "utilities/UniqueID.html" (dict "prefix" "preview" "page" $page) -}}
+{{- $controls := $args.controls -}}
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
+
+{{/* Validate the offered devices: a non-empty list of known device names */}}
+{{- if not $error -}}
+    {{- $unknown := complement (slice "desktop" "tablet" "mobile") $devices -}}
+    {{- if or (not $devices) $unknown -}}
+        {{- partial "utilities/LogErr.html" (dict
+            "partial" "assets/preview.html"
+            "msg"     "Invalid argument 'devices'"
+            "details" (slice (printf "Expected a non-empty list of desktop, tablet or mobile, got %v" $devices))
+            "file"    $page.File
+        ) -}}
+        {{- $error = true -}}
+    {{- else if not (in $devices $defaultDevice) -}}
+        {{- partial "utilities/LogWarn.html" (dict
+            "partial" "assets/preview.html"
+            "warnid"  "warn-preview-device"
+            "msg"     "Default device not offered"
+            "details" (slice (printf "Device '%s' is not in devices %v; showing '%s' instead" $defaultDevice $devices (index $devices 0)))
+            "file"    $page.File
+        ) -}}
+        {{- $defaultDevice = index $devices 0 -}}
+    {{- end -}}
+{{- end -}}
 
 {{ if not $error }}
     {{/* Build-time detection of iframe embedding restrictions */}}
@@ -316,19 +340,20 @@
     {{ end }}
 
     {{/* Device selection button group — rendered above or below the preview */}}
-    {{- if and (not $showFallback) (not $controlsBelow) -}}
+    {{- if and (not $showFallback) $controls (not $controlsBelow) -}}
         {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "above" "page" $page) -}}
     {{- end -}}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}">
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
                  id="{{ $id }}-{{ $device }}"
-                 {{ if not $showFallback }}role="tabpanel" aria-labelledby="{{ $id }}-{{ $device }}-tab"{{ end }}>
+                 {{ if and (not $showFallback) $controls }}role="tabpanel" aria-labelledby="{{ $id }}-{{ $device }}-tab"{{ end }}>
                 {{- if $args.url }}
-                    <iframe src="{{ $args.url }}"
+                    {{/* Only the active view carries a src; the others load from data-src when first shown */}}
+                    <iframe data-src="{{ $args.url }}"{{ if $isActive }} src="{{ $args.url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
                         loading="lazy"
@@ -362,7 +387,7 @@
         {{- end -}}
     </div>
 
-    {{- if and (not $showFallback) $controlsBelow -}}
+    {{- if and (not $showFallback) $controls $controlsBelow -}}
         {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "below" "page" $page) -}}
     {{- end -}}
 {{ end }}

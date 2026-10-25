@@ -24,6 +24,8 @@ blueprint:
     subtle:
   url:
   device: desktop
+  devices:
+  controls: true
   image:
   mode:
   show_fallback:

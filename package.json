@@ -23,8 +23,10 @@
     "mod:tidy": "hugo mod tidy",
     "mod:vendor": "rimraf _vendor && hugo mod vendor",
     "postinstall": "echo TODO: add postinstall instructions",
-    "test": "pnpm test:bookshop && pnpm build",
+    "test": "pnpm test:bookshop && pnpm test:preview-js && pnpm test:preview-errors && pnpm build",
     "test:bookshop": "node scripts/check-bookshop-templates.mjs",
+    "test:preview-js": "node scripts/check-preview-js.mjs",
+    "test:preview-errors": "node scripts/check-preview-errors.mjs",
     "upgrade": "pnpm dlx npm-check-updates -u && pnpm mod:update",
     "prepare": "node .husky/install.mjs"
   },
