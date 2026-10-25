@@ -24,6 +24,7 @@ const SETTLE_MS = 500
 
 const PAGES = {
   default: [],
+  nocontrols: ['controls: false'],
   desktop: ['devices: [desktop]'],
   'desktop-nocontrols': ['devices: [desktop]', 'controls: false'],
   'desktop-tablet': ['devices: [desktop, tablet]'],
@@ -51,17 +52,24 @@ function findChrome () {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-browser-'))
 let server, browser
 
+// Settles with the promise, or after ms, whichever comes first.
+function within (promise, ms) {
+  let timer
+  return Promise.race([promise, new Promise(resolve => { timer = setTimeout(resolve, ms) })]).finally(() => clearTimeout(timer))
+}
+
 // Chrome must be gone before its profile directory can be removed.
 after(async () => {
   if (browser) {
+    const exited = new Promise(resolve => browser.proc.once('exit', resolve))
+    const running = () => browser.proc.exitCode === null && browser.proc.signalCode === null
+    if (browser.cdp) await within(browser.cdp.send('Browser.close').catch(() => {}), 5000)
     if (browser.ws) browser.ws.close()
-    if (browser.proc.exitCode === null) {
-      const exited = new Promise(resolve => browser.proc.once('exit', resolve))
-      browser.proc.kill()
-      await Promise.race([exited, sleep(5000)])
-    }
+    if (running()) await within(exited, 5000)
+    if (running()) { browser.proc.kill('SIGKILL'); await within(exited, 5000) }
+    browser.proc.unref()
   }
-  if (server) server.close()
+  if (server) { server.closeAllConnections(); server.close() }
   try {
     fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   } catch (error) {
@@ -142,29 +150,30 @@ class CDP {
 }
 
 // Starts Chrome and connects to it. browser holds the process from the start, so
-// the after hook stops it even when the connection is never made.
+// the after hook stops it even when the connection is never made. Chrome gets no
+// output pipes, because helper processes that outlived it kept a stderr pipe open
+// and this script from exiting. It reads the DevTools port from the
+// DevToolsActivePort file that Chrome writes to its profile directory instead.
 async function launch (chromePath) {
   const profile = path.join(tmp, 'profile')
   const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
     '--no-default-browser-check', '--disable-gpu', '--disable-extensions', '--disable-background-networking',
     '--disable-component-update', '--disable-sync', '--mute-audio', 'about:blank']
-  // Linux CI runners commonly cannot start Chrome's sandbox; the check only loads local pages.
+  // On Linux, run without Chrome's sandbox: the check loads only local pages, and
+  // a Chrome that cannot start its sandbox would skip the check.
   if (process.platform === 'linux') args.unshift('--no-sandbox')
-  const proc = spawn(chromePath, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+  const proc = spawn(chromePath, args, { stdio: 'ignore' })
   browser = { proc }
-  const endpoint = await new Promise((resolve, reject) => {
-    let stderr = ''
-    const fail = error => { clearTimeout(timer); reject(error) }
-    const timer = setTimeout(() => fail(new Error(`no DevTools endpoint within 30s\n${stderr}`)), 30000)
-    proc.on('error', fail)
-    proc.on('exit', code => fail(new Error(`exited with ${code}\n${stderr}`)))
-    proc.stderr.on('data', chunk => {
-      stderr += chunk
-      const match = /DevTools listening on (ws:\/\/\S+)/.exec(stderr)
-      if (match) { clearTimeout(timer); resolve(match[1]) }
-    })
-  })
-  browser.ws = new WebSocket(endpoint)
+  let failure
+  proc.on('error', error => { failure = error })
+  proc.on('exit', code => { failure ||= new Error(`exited with ${code}`) })
+  const activePort = path.join(profile, 'DevToolsActivePort')
+  const [port, browserPath] = await waitFor(() => {
+    if (failure) throw failure
+    const lines = fs.existsSync(activePort) ? fs.readFileSync(activePort, 'utf8').split('\n') : []
+    return lines.length >= 2 && lines[1] ? lines : null
+  }, 'the DevTools port', 30000)
+  browser.ws = new WebSocket(`ws://127.0.0.1:${port.trim()}${browserPath.trim()}`)
   await new Promise((resolve, reject) => { browser.ws.addEventListener('open', resolve); browser.ws.addEventListener('error', reject) })
   browser.cdp = new CDP(browser.ws)
 }
@@ -204,6 +213,8 @@ const STATE = `(() => {
 // the preview target are answered with a stub page. A lazy iframe does not delay
 // window load, so `hold` adds an image to the page at DOMContentLoaded and holds
 // its request until release() is called, which keeps window load from firing.
+// It also sets window.previewCheckReady then: readyState turns 'interactive'
+// before the deferred scripts, Bootstrap among them, have run.
 async function openPage (cdp, base, name, width, { hold = false } = {}) {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
@@ -240,7 +251,12 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
   await send('Fetch.enable', { patterns: [{ urlPattern: `${TARGET}*`, requestStage: 'Request' }] })
   if (hold) {
     await send('Page.addScriptToEvaluateOnNewDocument', {
-      source: `document.addEventListener('DOMContentLoaded', () => { const img = new Image(); img.src = '${TARGET}hold.png'; document.body.append(img) }, { once: true })`
+      source: `if (window === window.top) document.addEventListener('DOMContentLoaded', () => {
+        window.previewCheckReady = true
+        const img = new Image()
+        img.src = '${TARGET}hold.png'
+        document.body.append(img)
+      }, { once: true })`
     })
   }
   await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
@@ -253,8 +269,11 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
     state: () => evaluate(STATE),
     resize: w => send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false }),
     release () { holding = false; held.splice(0).forEach(fulfill) },
-    async settle () {
+    // Waits for window load and for the expected iframe requests (the assertions
+    // report any that never came), then lets SETTLE_MS pass for unexpected ones.
+    async settle (expected) {
       await waitFor(async () => (await evaluate('document.readyState')) === 'complete', 'window load')
+      await waitFor(() => expected.every(device => requests.includes(device)), 'the expected requests').catch(() => {})
       await sleep(SETTLE_MS)
       return evaluate(STATE)
     },
@@ -284,22 +303,34 @@ if (!skip && typeof WebSocket === 'undefined') skip = 'this Node has no global W
 
 let base
 if (!skip) {
+  const start = Date.now()
   server = await serve(buildSite())
   base = `http://127.0.0.1:${server.address().port}`
+  console.log(`# built the probe site in ${Date.now() - start} ms`)
   try {
     await launch(chromePath)
-    console.log(`# Chrome ${(await browser.cdp.send('Browser.getVersion')).product} at ${chromePath}`)
+    console.log(`# Chrome ${(await browser.cdp.send('Browser.getVersion')).product} at ${chromePath}, ready after ${Date.now() - start} ms`)
   } catch (error) {
     skip = `Chrome at ${chromePath} did not start: ${error.message.split('\n')[0]}`
   }
 }
 if (skip) console.log(`# skipped: ${skip}`)
 
-// Each case opens a page at a width and names the one view that must show.
+// Each case opens a page at a width and names the one view that must show. The
+// widths on either side of 1024px and 640px catch the stylesheet and the script
+// disagreeing about a breakpoint.
 const cases = [
   ['default', 1280, 'desktop'],
+  ['default', 1024, 'desktop'],
+  ['default', 1023, 'tablet'],
   ['default', 800, 'tablet'],
+  ['default', 640, 'tablet'],
+  ['default', 639, 'mobile'],
   ['default', 400, 'mobile'],
+  ['nocontrols', 1024, 'desktop'],
+  ['nocontrols', 1023, 'tablet'],
+  ['nocontrols', 640, 'tablet'],
+  ['nocontrols', 639, 'mobile'],
   ['desktop', 400, 'desktop'],
   ['desktop', 800, 'desktop'],
   ['desktop-nocontrols', 400, 'desktop'],
@@ -316,7 +347,7 @@ for (const [name, width, device] of cases) {
     const page = await openPage(browser.cdp, base, name, width)
     try {
       page.width = width
-      const state = await page.settle()
+      const state = await page.settle([device])
       assertView(page, state, device, [device], `${name} @${width}`)
       console.log(`# ${name} @${width}: visible ${visibleDevices(state.panes)}, requests [${page.requests}], src on [${loadedDevices(state)}]`)
     } finally {
@@ -329,12 +360,10 @@ test('desktop-mobile-nocontrols resized 1280px to 600px swaps to mobile and load
   const page = await openPage(browser.cdp, base, 'desktop-mobile-nocontrols', 1280)
   try {
     page.width = 1280
-    assertView(page, await page.settle(), 'desktop', ['desktop'], '@1280')
+    assertView(page, await page.settle(['desktop']), 'desktop', ['desktop'], '@1280')
     await page.resize(600)
     page.width = 600
-    await waitFor(async () => visibleDevices((await page.state()).panes).includes('mobile'), 'the mobile view')
-    await sleep(SETTLE_MS)
-    const state = await page.state()
+    const state = await page.settle(['desktop', 'mobile'])
     assertView(page, state, 'mobile', ['desktop', 'mobile'], '@600')
     console.log(`# desktop-mobile-nocontrols 1280->600: visible ${visibleDevices(state.panes)}, requests [${page.requests}]`)
   } finally {
@@ -346,12 +375,12 @@ test('default: a tablet click before window load loads the tablet view', { skip 
   const page = await openPage(browser.cdp, base, 'default', 1280, { hold: true })
   try {
     page.width = 1280
-    await waitFor(async () => (await page.evaluate('document.readyState')) === 'interactive', 'DOMContentLoaded')
+    await waitFor(() => page.evaluate('window.previewCheckReady === true'), 'DOMContentLoaded')
     await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-tablet"]\').click()')
     await waitFor(() => page.requests.includes('tablet'), 'the tablet request')
     assert.equal(await page.evaluate('document.readyState'), 'interactive', 'window load had not fired')
     page.release()
-    const state = await page.settle()
+    const state = await page.settle(['desktop', 'tablet'])
     assertView(page, state, 'tablet', ['desktop', 'tablet'], 'tablet clicked before load')
     console.log(`# default, tablet clicked before load: visible ${visibleDevices(state.panes)}, requests [${page.requests}]`)
   } finally {

@@ -11,6 +11,9 @@
     Each fixture block is also validated with `utilities/Args.html`, with the bookshop name and
     strict setting the block uses, and any error or warning counts as a failure.
 
+    After the fixtures, the page checks that the `devices` list in the Bookshop blueprint, which
+    seeds a new block in CloudCannon, matches the `devices` default in the component sidecar.
+
     The page sets `build.list: never`, which keeps it out of the sitemap, the RSS feed and the
     search index; no menu entry points to it.
 
@@ -77,6 +80,17 @@ FAIL {{ $case }}: {{ delimit $errs "; " }}
     {{- else }}
 PASS {{ $case }}
     {{- end -}}
+{{- end -}}
+{{- $blueprint := (resources.Get "bookshop/components/preview/preview.bookshop.yml" | transform.Unmarshal).blueprint -}}
+{{- $sidecar := (resources.Get "bookshop/components/preview/preview.yml" | transform.Unmarshal).arguments -}}
+{{- $wantDevices := delimit $sidecar.devices.default " " -}}
+{{- $gotDevices := delimit ($blueprint.devices | default slice) " " -}}
+{{- if ne $gotDevices $wantDevices }}
+FAIL blueprint-devices: want {{ $wantDevices }} got {{ $gotDevices }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "test-preview: blueprint-devices mismatch: want %q got %q" $wantDevices $gotDevices -}}
+{{- else }}
+PASS blueprint-devices
 {{- end }}
 
 PREVIEW BLOCK FAILURES: {{ $fail }}
