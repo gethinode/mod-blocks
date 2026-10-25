@@ -14,9 +14,10 @@ content_blocks:
         poster with a waiting status until the framed page posts the message
         example:ready to this page. The Ready tab frames a demo page that posts
         it, and answers when the preview asks for it. The Silent tab frames a
-        demo page that never posts it, so after five seconds that view shows
-        its poster again, with an alert and a link that opens the page in a new
-        tab. Each tab and each device view waits on its own.
+        demo page that never posts it, so that view keeps its poster with the
+        waiting status, and after five seconds an alert takes the place of the
+        status, with a link that opens the page in a new tab. Each tab and each
+        device view waits on its own.
     activation: click
     mode: true
     ready_message: example:ready

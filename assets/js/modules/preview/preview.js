@@ -27,8 +27,8 @@
  * which has no poster. Views still switch, but none loads until the poster
  * button is pressed: that loads the shown view, picking it first for a block
  * without controls, sets data-active="true" on the content, which hides the
- * posters, and dispatches a bubbling preview:activate event on the section.
- * After that, views load as above.
+ * posters unless the block has a ready message, and dispatches a bubbling
+ * preview:activate event on the section. After that, views load as above.
  *
  * With items, a tab per item sits above the frame, and every iframe starts with
  * the URL of the first item in data-src. Showing an item tab gives every iframe
@@ -47,9 +47,9 @@
  * seconds, 15 when that is not a positive number, which starts when the iframe
  * first intersects the viewport, or at once without IntersectionObserver. The
  * pane carries data-preview-state: waiting, ready or failed. When the deadline
- * passes first, the pane fails: its poster, if any, shows again, the iframe is
- * hidden and inert, and the pane shows its alert, whose link opens the shown
- * item. Showing an item resets every pane.
+ * passes first, the pane fails: its poster, if any, shows, the iframe is hidden
+ * and inert, and the pane shows its alert, whose link opens the shown item.
+ * Showing an item resets every pane.
  *
  * Without data-ready-message, the load event of the iframe makes the pane
  * ready. Chrome fires load for an error status and a refused connection too,
@@ -57,15 +57,16 @@
  * error. The iframe that the markup gives src gets no deadline, as its load
  * event may come before the script runs.
  *
- * With data-ready-message, load is no readiness. The pane is busy, its poster
- * shows a waiting status and its iframe is inert, until the window of its
- * current iframe posts exactly that string to this page. The script posts the
- * string to the iframe window on load, and at initialization for the iframe
- * that the markup gives src, so a frame that announced itself before the
- * script listened can answer. A message from another window, or with other
- * data, changes nothing, and message data is never used other than compared.
- * A late acknowledgement recovers a failed pane, and the script never moves
- * focus.
+ * With data-ready-message, every view has a poster, with load activation too,
+ * and load is no readiness. The pane is busy, its poster shows a waiting
+ * status, also after click activation, and its iframe is inert, until the
+ * window of its current iframe posts exactly that string to this page. The
+ * script posts the string to the iframe window on load, and at initialization
+ * for the iframe that the markup gives src, so a frame that announced itself
+ * before the script listened can answer. A message from another window, with
+ * other data, from an iframe without src or before click activation changes
+ * nothing, and message data is never used other than compared. A late
+ * acknowledgement recovers a failed pane, and the script never moves focus.
  */
 
 ;(function () {

@@ -70,8 +70,9 @@ section.preview {
         position: relative;
     }
 
-    // Poster over the view until the preview is activated. preview.js sizes it to the
-    // scaled iframe; before that it fills the pane. It fades out on activation and is
+    // Poster over the view until the preview is activated, or with a ready message until
+    // the view is ready, and over a view that fails, as the rules below set. preview.js
+    // sizes it to the scaled iframe; before that it fills the pane. It fades out and is
     // hidden once faded, so its button leaves the tab order.
     .preview-poster {
         position: absolute;
@@ -347,7 +348,9 @@ section.preview {
         }
     }
 
-    // Fallback state: controls are irrelevant and the image should not be height-constrained
+    // Fallback state: controls are irrelevant and the image should not be height-constrained,
+    // not even by the 80svh cap of a live frame on a phone, as the content box hides its
+    // overflow and the alert and its link follow the image
     &:has(.preview-error:not(.d-none)) {
         .preview-controls {
             display: none;
@@ -356,6 +359,7 @@ section.preview {
         .preview-content {
             height: auto;
             min-height: unset;
+            max-height: none;
         }
 
         // Keep the active tab pane visible at all viewport widths — responsive hiding

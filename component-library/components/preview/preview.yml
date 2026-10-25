@@ -44,11 +44,14 @@ arguments:
     type: map[string]interface {}
     optional: true
     comment: >-
-      Poster image per device view, shown until the preview is activated when
-      activation is click, except on a block that shows its fallback. The keys
-      are desktop, tablet and mobile. A view without a poster of its own uses
-      the desktop poster, or a plain background when there is none. The mode
-      argument applies to posters too.
+      Poster image per device view. With click activation, every view shows
+      its poster until the preview is activated. With ready-message, every view
+      shows its poster, with either activation, until its frame posts the ready
+      message. A view that does not load within load-timeout shows its poster,
+      when it has one, behind its alert. A block that shows its fallback shows
+      no poster. The keys are desktop, tablet and mobile. A view without a
+      poster of its own uses the desktop poster, or a plain background when
+      there is none. The mode argument applies to posters too.
   items:
     type:
       - slice
@@ -67,7 +70,9 @@ arguments:
       shows its fallback has no tabs and shows that heading of the first item
       only. The embedding checks run once per distinct item url, without its
       fragment, and the first url that cannot be framed shows the fallback,
-      whose alert names that url. The views take the title of the shown item
+      whose alert names that url. For a url without a host, such as /path, the
+      build requests no headers and checks only the frame-src of the site. The
+      views take the title of the shown item
       as their title.
   open-link:
     type: bool
@@ -88,12 +93,14 @@ arguments:
     comment: >-
       Seconds a view that the script loads may take before the view shows an
       alert with a link that opens the shown item in a new tab, over its poster
-      when it has one. The time counts from when the frame first comes into view. Without
-      ready-message, the load event of the frame ends the wait. Chrome fires
-      that event for an error status and a refused connection too, so it
-      catches a target that does not answer, not one that answers with an
-      error; a target whose headers refuse framing is caught when the site
-      builds. The view that loads with the page gets no deadline without
+      when it has one. The time counts from when the frame first comes into
+      view. Without ready-message, the load event of the frame ends the wait.
+      Chrome fires that event for an error status and a refused connection
+      too, so it catches a target that does not answer, not one that answers
+      with an error. When the site builds, a target whose response headers
+      refuse framing shows the fallback, if the build can request those
+      headers; it does not request them for a url without a host, such as
+      /path. The view that loads with the page gets no deadline without
       ready-message. A value that is not positive counts as 15.
   ready-message:
     type: string

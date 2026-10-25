@@ -132,6 +132,7 @@ function readyPages () {
         '  - title: View b', `    url: ${child('hang')}`, `    open_url: ${TARGET}b-open`]
     },
     'legacy-silent': legacy('silent'),
+    'fallback-portrait': ['show_fallback: true', 'image: img/poster-mobile.png', 'mode: true'],
     'legacy-click-hang': { url: child('hang'), lines: ['devices: [desktop, mobile]', 'load_timeout: 1', 'activation: click', 'poster:', '  desktop: img/poster-desktop.png'] },
     'legacy-503': legacy('503'),
     'legacy-refused': legacy('refused')
@@ -1535,3 +1536,55 @@ test('components/preview-ready: the Ready tab shows its view, the Silent tab fai
     await page.close()
   }
 })
+
+// A block that shows its build-time fallback on a phone shows all of it: its
+// portrait image, and its alert with the link, which the page scroll reaches.
+// Nothing in the content box is cut off. Only the page scrolls, as a touch on
+// the page does; scrollIntoView would also scroll the overflow: hidden content
+// box, which no touch can.
+const FALLBACK_BOXES = `(async () => {
+  const content = document.querySelector('section.preview .preview-content')
+  const pane = content.querySelector(':scope > .tab-pane.active')
+  const image = [...pane.querySelectorAll('.preview-fallback-image')].find(el => el.getBoundingClientRect().height > 0)
+  await image.decode().catch(() => {})
+  const alert = pane.querySelector('.preview-error .alert')
+  const link = alert.querySelector('a')
+  const linkTop = link.getBoundingClientRect().top + scrollY
+  scrollTo({ top: linkTop - innerHeight / 2, behavior: 'instant' })
+  const box = el => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) } }
+  const linkBox = link.getBoundingClientRect()
+  const hit = document.elementFromPoint(linkBox.left + linkBox.width / 2, linkBox.top + linkBox.height / 2)
+  const inside = (el, outer) => el.top >= outer.top - 1 && el.bottom <= outer.bottom + 1
+  const c = box(content)
+  return {
+    content: c.height,
+    clipped: content.scrollHeight > content.clientHeight + 1,
+    image: box(image).height,
+    imageInside: inside(box(image), c),
+    alert: box(alert).height,
+    alertInside: inside(box(alert), c),
+    linkReached: link === hit || link.contains(hit),
+    contentScrollTop: content.scrollTop,
+    scrollWidth: document.scrollingElement.scrollWidth
+  }
+})()`
+
+for (const height of [600, 844]) {
+  test(`fallback-portrait at 390x${height}px: the fallback image, alert and link all show`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'fallback-portrait', 390, { height })
+    try {
+      page.width = 390
+      await page.settle([])
+      const boxes = await page.evaluate(FALLBACK_BOXES)
+      assert.ok(boxes.content > 0 && boxes.image > 0 && boxes.alert > 0, `nonzero boxes: ${JSON.stringify(boxes)}`)
+      assert.ok(boxes.image > height * 0.8, `the portrait image is taller than 80% of the viewport: ${JSON.stringify(boxes)}`)
+      assert.deepEqual({ clipped: boxes.clipped, imageInside: boxes.imageInside, alertInside: boxes.alertInside, linkReached: boxes.linkReached, contentScrollTop: boxes.contentScrollTop },
+        { clipped: false, imageInside: true, alertInside: true, linkReached: true, contentScrollTop: 0 }, `nothing is cut off: ${JSON.stringify(boxes)}`)
+      assert.ok(boxes.scrollWidth <= 390, `no horizontal scroll: ${boxes.scrollWidth}`)
+      assert.deepEqual(page.urls, [], 'the fallback loads no view')
+      console.log(`# fallback-portrait @390x${height}: ${JSON.stringify(boxes)}`)
+    } finally {
+      await page.close()
+    }
+  })
+}

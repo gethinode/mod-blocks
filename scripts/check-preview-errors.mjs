@@ -308,3 +308,13 @@ test('a URL on this site renders when the site frame-src allows its own origin, 
   assert.match(denied.log, /URL 'http:\/\/example\.org\/preview-demo\/ready\/' allows being framed, but is not covered by the frame-src directive/)
   assert.doesNotMatch(denied.html.local, /class="preview-error d-none"/)
 })
+
+// A scheme-relative URL has a host, so the build still requests its headers,
+// unlike a URL without a host. The security policy of Hugo refuses the request,
+// and the build warns that it could not verify the URL.
+test('a scheme-relative URL with a host gets the header request, which warns when it fails', () => {
+  const result = build({ schemeless: { url: '//example.org/x', lines: [] } })
+  assert.equal(result.status, 0, result.log)
+  assert.match(result.log, /Could not verify embedding restrictions: schemeless\.md/)
+  assert.match(result.log, /Request to '\/\/example\.org\/x' failed/)
+})
