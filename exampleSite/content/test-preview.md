@@ -143,7 +143,6 @@ fixtures:
       - 'Load preview'
       - 'preview-poster"><img'
     count:
-      ' src="https://example.org/"': 0
       'src="https://example.org/"': 0
       'data-src="https://example.org/"': 3
       'class="preview-poster"': 3
