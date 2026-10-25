@@ -46,6 +46,7 @@ const PAGES = {
   'click-nocontrols': ['devices: [desktop, mobile]', 'controls: false', 'activation: click'],
   // A page whose lines start with items: gets no url of its own.
   items: ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B')],
+  'items-fallback': ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B'), 'show_fallback: true'],
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true']
 }
@@ -778,6 +779,17 @@ test('items at 1280px: arrow keys move between the item tabs, and each switch lo
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `desktop ${TARGET}a`])
     assert.equal(await page.evaluate('history.length'), history, 'the switches add no session history entry')
     console.log(`# items @1280 with arrow keys: requests [${page.urls}]`)
+  } finally {
+    await page.close()
+  }
+})
+
+test('items-fallback at 1280px shows the first item heading as a block, with no item tabs', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'items-fallback', 1280)
+  try {
+    await page.settle([])
+    assert.deepEqual(await page.evaluate(ITEMS_STATE), { selected: [], focused: null, headings: ['Heading A'], display: ['block'] })
+    assert.deepEqual(page.urls, [])
   } finally {
     await page.close()
   }

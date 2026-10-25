@@ -433,8 +433,10 @@
         ) }}
     {{ end }}
 
-    {{/* Item tabs — every tab names the URL its views show and the address of the item */}}
-    {{- if and $items (not $showFallback) }}
+    {{/* Item tabs — every tab names the URL its views show and the address of the item. Their
+         bottom margin spaces the content from the heading when the controls are below it. */}}
+    {{- $itemTabs := and $items (not $showFallback) -}}
+    {{- if $itemTabs }}
         <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="View selection">
             {{- range $n, $item := $items }}
                 {{- $isActive := eq $n 0 }}
@@ -449,7 +451,7 @@
     {{- end -}}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"

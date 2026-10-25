@@ -255,11 +255,11 @@ fixtures:
       - '-item-1" role="tabpanel"'
       - 'Heading B'
       - 'nav nav-pills'
-      - 'data-bs-target="#preview-'
-      - '-item-0" data-preview-url="https://example.org/a" data-preview-open-url="https://example.org/a"'
+      - 'class="nav-link active" data-bs-toggle="tab" data-bs-target="#preview-'
+      - '-item-0" data-preview-url="https://example.org/a" data-preview-open-url="https://example.org/a" role="tab" aria-selected="true"'
       - '>View A</button>'
-      - 'data-bs-target="#preview-'
-      - '-item-1" data-preview-url="https://example.org/b" data-preview-open-url="https://example.org/b-open"'
+      - 'class="nav-link" data-bs-toggle="tab" data-bs-target="#preview-'
+      - '-item-1" data-preview-url="https://example.org/b" data-preview-open-url="https://example.org/b-open" role="tab" aria-selected="false"'
       - '>View B</button>'
       - 'preview-controls'
       - 'preview-content'
@@ -400,4 +400,36 @@ fixtures:
     count:
       'src="https://example.org/a"': 0
       'data-src="https://example.org/a"': 3
+  - case: items-headings-controls-bottom
+    block:
+      _bookshop_name: preview
+      controls_placement: bottom
+      items:
+        - title: View A
+          url: https://example.org/a
+          heading:
+            title: Heading A
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'nav nav-pills'
+      - 'preview-controls controls-bottom'
+    reject:
+      - 'width-100 mt-3'
+  - case: items-headings-fallback-controls-bottom
+    block:
+      _bookshop_name: preview
+      controls_placement: bottom
+      show_fallback: true
+      items:
+        - title: View A
+          url: https://example.org/a
+          heading:
+            title: Heading A
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'width-100 mt-3'
+    reject:
+      - 'nav nav-pills'
 ---
