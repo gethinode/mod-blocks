@@ -105,7 +105,10 @@ arguments:
       framing shows the fallback; when the request fails, the build logs a
       warning instead. It requests no headers for a url without a host, such
       as /path. The view that loads with the page gets no deadline without
-      ready-message. A value that is not positive counts as 15.
+      ready-message. A block that shows its build-time fallback gets no
+      deadline: the script gives its views no waiting, failed or busy state,
+      even when it gives the hidden frame of a view its src. A value that is
+      not positive counts as 15.
   ready-message:
     type: string
     optional: true
@@ -119,7 +122,11 @@ arguments:
       for a frame that loaded with the page, so a page that announced itself
       before the script listened can answer. A late answer still shows the
       view. Showing another item, or a view for the first time, starts a new
-      wait. Leave it empty to end the wait on the load event of the frame.
+      wait. A block that shows its build-time fallback keeps data-ready-message
+      on its content but does not wait: its views take no waiting, ready or
+      failed state, busy state or deadline, the script posts no request to its
+      frames, and no message changes them. Leave it empty to end the wait on
+      the load event of the frame.
 example: |
   heading:
     title: Live Preview

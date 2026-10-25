@@ -254,8 +254,8 @@
 
     {{/* A target whose headers do not refuse framing, or were not checked, still renders as an
          empty box when this site's own CSP leaves it out, so check that too. It runs last, and
-         only for a target that would otherwise have loaded — telling an author to allow a URL
-         whose headers refuse to be framed would send them after a fix that cannot work. */}}
+         only when the preview would otherwise have been rendered — telling an author to allow a
+         URL whose headers refuse to be framed would send them after a fix that cannot work. */}}
     {{- if not $showFallback -}}
         {{- if not (partial "inline/preview-permitted-by-site.html" (dict "url" $url "origin" $origin)) -}}
             {{- $showFallback = true -}}
