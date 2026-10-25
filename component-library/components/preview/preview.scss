@@ -83,7 +83,10 @@ section.preview {
         overflow: hidden;
         background-color: var(--#{$prefix}tertiary-bg);
         border-radius: $theme-border-radius;
-        @include transition($transition-fade, visibility 0s linear .15s);
+        // Visibility reuses the timing of $transition-fade, and keeps its visible value
+        // until that fade ends.
+        @include transition($transition-fade);
+        transition-property: opacity, visibility;
 
         > :not(.preview-activate) {
             position: absolute;

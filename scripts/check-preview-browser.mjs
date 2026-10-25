@@ -604,13 +604,47 @@ test('click posters follow the color mode', { skip }, async () => {
   }
 })
 
+// Presses the shown poster button, pauses the transitions it starts on the poster
+// and samples the poster at points of the opacity fade, so no timing is involved.
+const FADE_SAMPLES = `(() => {
+  const poster = [...document.querySelectorAll('section.preview .preview-poster')].find(el => el.offsetParent)
+  poster.querySelector('.preview-activate').click()
+  const style = getComputedStyle(poster)
+  void style.opacity
+  const transitions = poster.getAnimations().filter(animation => animation.transitionProperty)
+  transitions.forEach(animation => animation.pause())
+  const fade = transitions.find(animation => animation.transitionProperty === 'opacity')
+  if (!fade) return { transitions: transitions.map(animation => animation.transitionProperty) }
+  const { delay, duration } = fade.effect.getComputedTiming()
+  const sample = at => { transitions.forEach(animation => { animation.currentTime = at }); return [Number(style.opacity).toFixed(2), style.visibility] }
+  return { duration, samples: [sample(delay + duration / 2), sample(delay + duration - 1), sample(delay + duration + 1000)] }
+})()`
+
+test('click posters stay visible until their fade ends', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 1280)
+  try {
+    page.width = 1280
+    await page.settle([])
+    const { duration, samples, transitions } = await page.evaluate(FADE_SAMPLES)
+    assert.ok(duration > 0, `the poster fades its opacity (transitions: ${transitions})`)
+    const [half, last, done] = samples
+    assert.ok(Number(half[0]) > 0 && Number(half[0]) < 1, `halfway through the fade the poster is partly opaque: ${half}`)
+    assert.equal(half[1], 'visible', 'halfway through the fade the poster is still visible')
+    assert.equal(last[1], 'visible', 'just before the fade ends the poster is still visible')
+    assert.deepEqual(done, ['0.00', 'hidden'], 'after the fade the poster is hidden')
+    console.log(`# click @1280: fade of ${duration}ms, samples ${JSON.stringify(samples)}`)
+  } finally {
+    await page.close()
+  }
+})
+
 test('click posters crossfade, and not when reduced motion is preferred', { skip }, async () => {
   const page = await openPage(browser.cdp, base, 'click', 1280)
   const transition = 'JSON.stringify([...document.querySelectorAll(\'section.preview .preview-poster\')].map(el => getComputedStyle(el).transitionProperty + \' \' + getComputedStyle(el).transitionDuration)[0])'
   try {
     page.width = 1280
     await page.settle([])
-    assert.equal(JSON.parse(await page.evaluate(transition)), 'opacity, visibility 0.15s, 0s')
+    assert.equal(JSON.parse(await page.evaluate(transition)), 'opacity, visibility 0.15s')
     await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
     assert.match(JSON.parse(await page.evaluate(transition)), / 0s$/)
     assert.doesNotMatch(JSON.parse(await page.evaluate(transition)), /0\.15s/)
