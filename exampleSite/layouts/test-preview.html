@@ -12,7 +12,8 @@
     strict setting the block uses, and any error or warning counts as a failure.
 
     After the fixtures, the page checks that the `devices` list in the Bookshop blueprint, which
-    seeds a new block in CloudCannon, matches the `devices` default in the component sidecar.
+    seeds a new block in CloudCannon, matches the `devices` default in the component sidecar, and
+    that the blueprint leaves `device` empty.
 
     The page sets `build.list: never`, which keeps it out of the sitemap, the RSS feed and the
     search index; no menu entry points to it.
@@ -91,6 +92,15 @@ FAIL blueprint-devices: want {{ $wantDevices }} got {{ $gotDevices }}
     {{- errorf "test-preview: blueprint-devices mismatch: want %q got %q" $wantDevices $gotDevices -}}
 {{- else }}
 PASS blueprint-devices
+{{- end }}
+{{- /* An empty device lets the block default to the first offered view without a warning,
+       so a CloudCannon block that offers no desktop view does not warn. */ -}}
+{{- with $blueprint.device }}
+FAIL blueprint-device: want empty got {{ . }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "test-preview: blueprint-device mismatch: want empty got %q" . -}}
+{{- else }}
+PASS blueprint-device
 {{- end }}
 
 PREVIEW BLOCK FAILURES: {{ $fail }}

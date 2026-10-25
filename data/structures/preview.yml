@@ -20,7 +20,8 @@ arguments:
       Device views to offer, in the order the views and their buttons render.
       Each entry is one of desktop, tablet or mobile, and the list must not be
       empty. A repeated entry is dropped with a warning. When device names a
-      view that is not offered, the first offered view is shown instead.
+      view that is not offered, the first offered view becomes the default
+      view instead.
     options:
       values:
         - desktop

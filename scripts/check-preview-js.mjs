@@ -175,6 +175,7 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
 
   const fire = type => (windowListeners[type] || []).forEach(fn => fn({}))
   const page = {
+    document,
     ready () { document.readyState = 'interactive'; document.dispatch('DOMContentLoaded') },
     load () { document.readyState = 'complete'; fire('load') },
     resize (newWidth) {
@@ -329,4 +330,13 @@ test('with controls, the smallest offered device takes over when none fits', () 
   run(preview, 400)
   assert.deepEqual(shown(preview), ['tablet'])
   assert.equal(src(preview.panes.tablet), URL)
+})
+
+test('a Bootstrap tab outside a preview block is left alone', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop' })
+  const page = run(preview, 1280)
+  const tab = new FakeElement({ dataset: { bsTarget: '#other' }, attrs: { 'data-bs-toggle': 'tab' } })
+  page.document.append(tab)
+  assert.doesNotThrow(() => tab.dispatch('shown.bs.tab'))
+  assert.deepEqual(loaded(preview), ['desktop'])
 })

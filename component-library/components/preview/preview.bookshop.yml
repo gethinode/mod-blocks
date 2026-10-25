@@ -23,7 +23,7 @@ blueprint:
     color:
     subtle:
   url:
-  device: desktop
+  device:
   devices:
     - desktop
     - tablet

@@ -122,46 +122,62 @@ section.preview {
 
     // Mobile panel: always visible
 
-    // Fix border-radius when buttons are hidden (based on WIDTH only)
-    // Override Bootstrap's default button group rounding with explicit rules
-    .preview-controls .btn-group .btn {
-        // Reset all corners to square by default
-        border-top-left-radius: 0 !important;
-        border-top-right-radius: 0 !important;
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-    }
+    // Round the outer corners of the first and last visible buttons. The buttons render in
+    // the offered order and the rules above hide some of them below a breakpoint, so a
+    // button is first when every button before it is hidden, and last when every button
+    // after it is hidden. Bootstrap rounds by position among all buttons, hidden ones too,
+    // so its rounding is reset here.
+    $preview-btn: ".btn-group > .btn";
+    $preview-desktop-btn: ".btn-group > .btn[data-bs-target$=\"-desktop\"]";
+    $preview-tablet-btn: ".btn-group > .btn[data-bs-target$=\"-tablet\"]";
 
-    // Desktop button: left rounded (when visible at ≥1024px width)
-    @media (min-width: 1024px) {
-        .preview-controls .btn-group .btn[data-bs-target*="desktop"] {
+    .preview-controls #{$preview-btn} {
+        border-radius: 0 !important;
+
+        &:first-child {
             border-top-left-radius: var(--bs-btn-border-radius) !important;
             border-bottom-left-radius: var(--bs-btn-border-radius) !important;
         }
-    }
 
-    // Tablet button: left rounded (when desktop is hidden AND tablet is visible)
-    // Desktop hidden: width < 1024px
-    // Tablet visible: width ≥ 640px
-    @media (min-width: 640px) and (max-width: 1023px) {
-        .preview-controls .btn-group .btn[data-bs-target*="tablet"] {
-            border-top-left-radius: var(--bs-btn-border-radius) !important;
-            border-bottom-left-radius: var(--bs-btn-border-radius) !important;
+        &:last-child {
+            border-top-right-radius: var(--bs-btn-border-radius) !important;
+            border-bottom-right-radius: var(--bs-btn-border-radius) !important;
         }
     }
 
-    // Mobile button: right rounded (always, since it's always the last visible button)
-    .preview-controls .btn-group .btn[data-bs-target*="mobile"] {
-        border-top-right-radius: var(--bs-btn-border-radius) !important;
-        border-bottom-right-radius: var(--bs-btn-border-radius) !important;
+    // Below 1024px the desktop button is hidden when a smaller device is offered
+    @media (max-width: 1023px) {
+        .preview-controls[data-devices~="tablet"],
+        .preview-controls[data-devices~="mobile"] {
+            #{$preview-desktop-btn}:first-child + .btn {
+                border-top-left-radius: var(--bs-btn-border-radius) !important;
+                border-bottom-left-radius: var(--bs-btn-border-radius) !important;
+            }
+
+            #{$preview-btn}:has(+ .btn[data-bs-target$="-desktop"]:last-child) {
+                border-top-right-radius: var(--bs-btn-border-radius) !important;
+                border-bottom-right-radius: var(--bs-btn-border-radius) !important;
+            }
+        }
     }
 
-    // Mobile button: also left rounded when it's the ONLY visible button
-    // This happens when both desktop AND tablet are hidden (width < 640px)
+    // Below 640px the tablet button is hidden too when mobile is offered; the rules above
+    // already cover a hidden desktop button on its own
     @media (max-width: 639px) {
-        .preview-controls .btn-group .btn[data-bs-target*="mobile"] {
-            border-top-left-radius: var(--bs-btn-border-radius) !important;
-            border-bottom-left-radius: var(--bs-btn-border-radius) !important;
+        .preview-controls[data-devices~="mobile"] {
+            #{$preview-tablet-btn}:first-child + .btn,
+            #{$preview-desktop-btn}:first-child + .btn[data-bs-target$="-tablet"] + .btn,
+            #{$preview-tablet-btn}:first-child + .btn[data-bs-target$="-desktop"] + .btn {
+                border-top-left-radius: var(--bs-btn-border-radius) !important;
+                border-bottom-left-radius: var(--bs-btn-border-radius) !important;
+            }
+
+            #{$preview-btn}:has(+ .btn[data-bs-target$="-tablet"]:last-child),
+            #{$preview-btn}:has(+ .btn[data-bs-target$="-desktop"] + .btn[data-bs-target$="-tablet"]:last-child),
+            #{$preview-btn}:has(+ .btn[data-bs-target$="-tablet"] + .btn[data-bs-target$="-desktop"]:last-child) {
+                border-top-right-radius: var(--bs-btn-border-radius) !important;
+                border-bottom-right-radius: var(--bs-btn-border-radius) !important;
+            }
         }
     }
 

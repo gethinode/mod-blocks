@@ -1,7 +1,8 @@
 // Checks the preview block in headless Chrome, with the real stylesheet and
 // Bootstrap: at each measured viewport width exactly one offered view is visible,
-// it is the view the block picks, and it is the only view whose iframe was
-// requested. check-preview-js.mjs drives the same module against a fake DOM that
+// it is the view the block picks, it is the only view whose iframe was
+// requested, and only the outer corners of the visible device buttons are
+// rounded. check-preview-js.mjs drives the same module against a fake DOM that
 // applies no CSS, which cannot show a view the stylesheet hides.
 //
 // The check builds the exampleSite with a throwaway content directory of probe
@@ -30,7 +31,14 @@ const PAGES = {
   'desktop-tablet': ['devices: [desktop, tablet]'],
   'desktop-tablet-nocontrols': ['devices: [desktop, tablet]', 'controls: false'],
   'desktop-mobile': ['devices: [desktop, mobile]'],
-  'desktop-mobile-nocontrols': ['devices: [desktop, mobile]', 'controls: false']
+  'desktop-mobile-nocontrols': ['devices: [desktop, mobile]', 'controls: false'],
+  'mobile-desktop': ['devices: [mobile, desktop]'],
+  'mobile-tablet-desktop': ['devices: [mobile, tablet, desktop]'],
+  'mobile-desktop-tablet': ['devices: [mobile, desktop, tablet]'],
+  'mobile-tablet': ['devices: [mobile, tablet]'],
+  'tablet-desktop-mobile': ['devices: [tablet, desktop, mobile]'],
+  'tablet-mobile': ['devices: [tablet, mobile]'],
+  tablet: ['devices: [tablet]']
 }
 
 function findChrome () {
@@ -205,7 +213,14 @@ const STATE = `(() => {
     readyState: document.readyState,
     width: window.innerWidth,
     panes: panes.map(el => ({ device: device(el), visible: visible(el), src: el.querySelector('iframe').hasAttribute('src') })),
-    buttons: buttons.map(el => ({ device: device(el), visible: visible(el), active: el.classList.contains('active') }))
+    buttons: buttons.map(el => {
+      const style = getComputedStyle(el)
+      const side = (top, bottom) => {
+        const round = [top, bottom].map(corner => parseFloat(style['border' + corner + 'Radius']) > 0)
+        return round[0] && round[1] ? 'round' : !round[0] && !round[1] ? 'square' : 'mixed'
+      }
+      return { device: device(el), visible: visible(el), active: el.classList.contains('active'), left: side('TopLeft', 'BottomLeft'), right: side('TopRight', 'BottomRight') }
+    })
   }
 })()`
 
@@ -284,6 +299,16 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
 const visibleDevices = items => items.filter(item => item.visible).map(item => item.device)
 const loadedDevices = state => state.panes.filter(pane => pane.src).map(pane => pane.device)
 
+// Asserts that the visible buttons read as one group: the first rounds its
+// left corners, the last its right corners, and every inner corner is square.
+function assertCorners (buttons, label) {
+  const visible = buttons.filter(button => button.visible)
+  visible.forEach((button, i) => {
+    const want = { left: i === 0 ? 'round' : 'square', right: i === visible.length - 1 ? 'round' : 'square' }
+    assert.deepEqual({ left: button.left, right: button.right }, want, `${label}: corners of the ${button.device} button, visible ${visible.map(b => b.device)}`)
+  })
+}
+
 // Asserts the invariant: one visible pane, the expected one, and only the
 // expected iframes requested so far.
 function assertView (page, state, device, requested, label) {
@@ -294,6 +319,7 @@ function assertView (page, state, device, requested, label) {
     const active = state.buttons.filter(button => button.active).map(button => button.device)
     assert.deepEqual(active, [device], `${label}: active button`)
     assert.ok(visibleDevices(state.buttons).includes(device), `${label}: the active button is visible`)
+    assertCorners(state.buttons, label)
   }
 }
 
@@ -339,7 +365,18 @@ const cases = [
   ['desktop-tablet-nocontrols', 400, 'tablet'],
   ['desktop-mobile', 800, 'mobile'],
   ['desktop-mobile-nocontrols', 1280, 'desktop'],
-  ['desktop-mobile-nocontrols', 400, 'mobile']
+  ['desktop-mobile-nocontrols', 400, 'mobile'],
+  ['mobile-desktop', 1280, 'desktop'],
+  ['mobile-desktop', 800, 'mobile'],
+  ['mobile-tablet-desktop', 1280, 'desktop'],
+  ['mobile-tablet-desktop', 800, 'tablet'],
+  ['mobile-tablet-desktop', 400, 'mobile'],
+  ['mobile-desktop-tablet', 400, 'mobile'],
+  ['mobile-tablet', 400, 'mobile'],
+  ['tablet-desktop-mobile', 400, 'mobile'],
+  ['tablet-mobile', 400, 'mobile'],
+  ['tablet', 800, 'tablet'],
+  ['tablet', 400, 'tablet']
 ]
 
 for (const [name, width, device] of cases) {

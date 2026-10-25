@@ -56,7 +56,11 @@ test('warn-preview-device fires for an explicit unoffered device and for duplica
   })
   assert.equal(result.status, 0, result.log)
   // Each warning of the partial names its message, then the page it comes from.
+  // Only the two warn-preview-device messages count: a target that cannot be
+  // reached adds a warn-preview-unverified warning to every page.
+  const deviceWarnings = ['Duplicate devices', 'Default device not offered']
   const warned = [...result.log.matchAll(/partial \[assets\/preview\.html\] - ([^:\n]+): (\S+)\.md/g)]
+    .filter(([, msg]) => deviceWarnings.includes(msg))
     .map(([, msg, page]) => `${page}: ${msg}`)
     .sort()
   assert.deepEqual(warned, ['duplicate: Duplicate devices', 'explicit: Default device not offered'])
