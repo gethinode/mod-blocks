@@ -35,10 +35,10 @@
  * the item URL in data-src, and loads it in the shown view when the block may
  * load its views; another view drops the URL it loaded, so it loads the item
  * URL when it is next shown. An iframe that has loaded is replaced by a copy
- * without src first, so a switch adds no entry to the session history. It also shows the poster image of the item in every
- * poster, points every .preview-open link at the open URL of the item, and
- * dispatches a bubbling preview:item event on the section, with the index of the
- * item in its detail.
+ * without src first, so a switch adds no entry to the session history. It
+ * also shows the poster image of the item in every poster, points every
+ * .preview-open link at the open URL of the item, and dispatches a bubbling
+ * preview:item event on the section, with the index of the item in its detail.
  */
 
 ;(function () {
