@@ -247,8 +247,8 @@
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 {{- $click := eq $args.activation "click" -}}
 {{- $posters := $args.poster | default dict -}}
-{{/* preview.js scans for blocks without controls once, when it initializes. Bookshop live
-     editing can render a block after that scan, so there the default view carries src. */}}
+{{/* Bookshop live rendering gives the default view src for load activation.
+     A block rendered afterwards is absent from the initial no-controls scan. */}}
 {{- $live := site.Params.env_bookshop_live -}}
 
 {{/* Validate the offered devices: a non-empty list of known device names */}}
