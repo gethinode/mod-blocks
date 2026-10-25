@@ -247,8 +247,8 @@
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 {{- $click := eq $args.activation "click" -}}
 {{- $posters := $args.poster | default dict -}}
-{{/* preview.js picks and loads a view without controls once, at DOMContentLoaded, so a block
-     that Bookshop live editing renders again gets no pick. There the default view carries src. */}}
+{{/* preview.js looks up the blocks without controls once, at DOMContentLoaded, so a block that
+     Bookshop live editing renders again is never picked. There the default view carries src. */}}
 {{- $live := site.Params.env_bookshop_live -}}
 
 {{/* Validate the offered devices: a non-empty list of known device names */}}

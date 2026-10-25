@@ -73,8 +73,8 @@ test('warn-preview-device fires for an explicit unoffered device and for duplica
   assert.equal(result.log.match(/ignoreLogs = \['warn-preview-device'\]/g)?.length, 2)
 })
 
-// preview.js picks a view without controls once, at DOMContentLoaded, so a block
-// that Bookshop live editing renders again gets no pick. Such a block must then
+// preview.js looks up the blocks without controls once, at DOMContentLoaded, so
+// a block that Bookshop live editing renders again is never picked. Such a block must then
 // load its default view itself, and a block with click activation must still
 // load none.
 test('in Bookshop live editing, only a block without controls carries src', () => {
