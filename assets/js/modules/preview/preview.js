@@ -15,18 +15,20 @@
  * Also switches to the largest visible device that fits when the active panel
  * is hidden by a viewport-width breakpoint.
  *
- * Only the active view loads: every iframe carries its URL in data-src. With
- * controls only the initially active one also carries src, and another view
- * gets its src when it is first shown. Without controls (data-controls="false")
- * no iframe carries src: the block picks the view itself at DOMContentLoaded
- * and again whenever the viewport crosses a device breakpoint.
+ * Every iframe carries its URL in data-src. With load activation, the default
+ * view also carries src in the markup when the block has controls, or when
+ * Bookshop live editing renders it; the script sets src on another view when
+ * that view is first shown. For the blocks without controls
+ * (data-controls="false") present when the script initializes, it picks the
+ * view then and again whenever the viewport crosses a device breakpoint.
  *
- * With click activation (data-activation="click") no iframe carries src and
- * every view shows a poster, unless the block shows its fallback, which has no
- * poster. Views still switch, but none loads until the poster button is
- * pressed: that loads the shown view, sets data-active="true" on the content,
- * which hides the posters, and dispatches a bubbling
- * preview:activate event on the section. After that, views load as above.
+ * With click activation (data-activation="click") no iframe carries src in the
+ * markup, and every view shows a poster, unless the block shows its fallback,
+ * which has no poster. Views still switch, but none loads until the poster
+ * button is pressed: that loads the shown view, picking it first for a block
+ * without controls, sets data-active="true" on the content, which hides the
+ * posters, and dispatches a bubbling preview:activate event on the section.
+ * After that, views load as above.
  */
 
 ;(function () {

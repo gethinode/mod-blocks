@@ -105,9 +105,10 @@ function cssHides (device, offered, width) {
   return false
 }
 
-// Builds a preview section as preview.html renders it: without controls no iframe
-// carries src, with controls only the active one does. With click activation no
-// iframe carries src, and every pane holds a poster with its button.
+// Builds a preview section as preview.html renders it outside Bookshop live
+// editing: without controls no iframe carries src, with controls only the active
+// one does. With click activation no iframe carries src, and every pane holds a
+// poster with its button.
 function buildPreview ({ devices, active, controls = true, activation = 'load' }) {
   const click = activation === 'click'
   const id = 'preview-1'

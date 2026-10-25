@@ -82,24 +82,30 @@ test('warn-preview-device fires for an explicit unoffered device and for duplica
   assert.equal(result.log.match(/ignoreLogs = \['warn-preview-device'\]/g)?.length, 2)
 })
 
-// preview.js looks up the blocks without controls once, at DOMContentLoaded, so
-// a block that Bookshop live editing renders again is never picked. Such a block must then
-// load its default view itself, and a block with click activation must still
-// load none.
-test('in Bookshop live editing, only a block without controls carries src', () => {
+// Bookshop live editing can render a block after preview.js scanned the page for
+// blocks without controls, when it initialized, so there the markup puts src on
+// the default view of a block with load activation.
+test('in Bookshop live editing, load puts src on the default view and click on none, with or without controls', () => {
   // The x after HUGO sets the delimiter, so the underscores stay in the key.
   const result = build({
     nocontrols: ['devices: [desktop, mobile]', 'controls: false'],
+    'nocontrols-mobile': ['devices: [desktop, mobile]', 'controls: false', 'device: mobile'],
+    controls: ['devices: [desktop, mobile]'],
+    'controls-mobile': ['devices: [desktop, mobile]', 'device: mobile'],
     click: ['devices: [desktop, mobile]', 'controls: false', 'activation: click'],
-    controls: ['devices: [desktop, mobile]']
+    'click-controls': ['devices: [desktop, mobile]', 'activation: click']
   }, { HUGOxPARAMSxENV_BOOKSHOP_LIVE: 'true' })
   assert.equal(result.status, 0, result.log)
   const srcs = html => [...html.matchAll(/<iframe data-src="https:\/\/example\.org\/" src="https:\/\/example\.org\/"\s+class="preview-iframe preview-(\w+)/g)].map(([, device]) => device)
-  assert.deepEqual(srcs(result.html.nocontrols), ['desktop'])
-  assert.deepEqual(srcs(result.html.click), [])
-  assert.deepEqual(srcs(result.html.controls), ['desktop'])
-  assert.equal((result.html.click.match(/ src="https:\/\/example\.org\//g) || []).length, 0)
-  assert.match(result.html.click, /class="btn btn-primary preview-activate"/)
+  const all = html => (html.match(/ src="https:\/\/example\.org\//g) || []).length
+  for (const [name, want] of [['nocontrols', ['desktop']], ['nocontrols-mobile', ['mobile']], ['controls', ['desktop']], ['controls-mobile', ['mobile']]]) {
+    assert.deepEqual(srcs(result.html[name]), want, name)
+    assert.equal(all(result.html[name]), 1, name)
+  }
+  for (const name of ['click', 'click-controls']) {
+    assert.equal(all(result.html[name]), 0, name)
+    assert.match(result.html[name], /class="btn btn-primary preview-activate"/, name)
+  }
 })
 
 // The button label comes from the i18n strings of the module, so a site in another

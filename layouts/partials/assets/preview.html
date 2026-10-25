@@ -247,8 +247,8 @@
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
 {{- $click := eq $args.activation "click" -}}
 {{- $posters := $args.poster | default dict -}}
-{{/* preview.js looks up the blocks without controls once, at DOMContentLoaded, so a block that
-     Bookshop live editing renders again is never picked. There the default view carries src. */}}
+{{/* preview.js scans for blocks without controls once, when it initializes. Bookshop live
+     editing can render a block after that scan, so there the default view carries src. */}}
 {{- $live := site.Params.env_bookshop_live -}}
 
 {{/* Validate the offered devices: a non-empty list of known device names */}}
@@ -375,10 +375,10 @@
                  id="{{ $id }}-{{ $device }}"
                  {{ if and (not $showFallback) $controls }}role="tabpanel" aria-labelledby="{{ $id }}-{{ $device }}-tab"{{ end }}>
                 {{- if $args.url }}
-                    {{/* With controls only the active view carries a src, and the others load from data-src
-                         when first shown. Without controls no view does: the script picks the view that fits
-                         the viewport and loads it. With click activation no view carries a src, and the
-                         script loads the shown view when the poster button is pressed. */}}
+                    {{/* With load activation the default view carries src when the block has controls or
+                         renders in Bookshop live editing; with click activation no view does. The script
+                         sets src from data-src when a view is shown, and with click activation only
+                         after the poster button is pressed. */}}
                     <iframe data-src="{{ $args.url }}"{{ if and $isActive (not $click) (or $controls $live) }} src="{{ $args.url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"

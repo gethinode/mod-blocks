@@ -3,11 +3,13 @@
 // it is the view the block picks, it is the only view whose iframe was
 // requested, and only the outer corners of the visible device buttons are
 // rounded. With click activation, no iframe is requested until the poster
-// button of the shown view is pressed. check-preview-js.mjs drives the same module against a fake DOM that
-// applies no CSS, which cannot show a view the stylesheet hides.
+// button of the shown view is pressed, and the poster fades for the configured
+// $transition-fade. check-preview-js.mjs drives the same module against a fake
+// DOM that applies no CSS, which cannot show a view the stylesheet hides.
 //
 // The check builds the exampleSite with a throwaway content directory of probe
-// pages, serves it on 127.0.0.1 and drives Chrome over the DevTools protocol.
+// pages, once as is and once with a longer $transition-fade, serves both on
+// 127.0.0.1 and drives Chrome over the DevTools protocol.
 // Chrome never reaches https://example.org/: the check answers those requests
 // itself and records which view's iframe made each one.
 //
@@ -61,7 +63,8 @@ function findChrome () {
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-browser-'))
-let server, browser
+const servers = []
+let browser
 
 // Settles with the promise, or after ms, whichever comes first.
 function within (promise, ms) {
@@ -80,7 +83,7 @@ after(async () => {
     if (running()) { browser.proc.kill('SIGKILL'); await within(exited, 5000) }
     browser.proc.unref()
   }
-  if (server) { server.closeAllConnections(); server.close() }
+  servers.forEach(server => { server.closeAllConnections(); server.close() })
   try {
     fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   } catch (error) {
@@ -88,9 +91,21 @@ after(async () => {
   }
 })
 
+const content = path.join(tmp, 'content')
+
+// Builds the probe site into tmp/<name>, with extra hugo arguments. A build that
+// runs longer than two minutes is stopped.
+function hugo (name, args = []) {
+  const publish = path.join(tmp, name)
+  // On Windows the hugo-extended bin is a .cmd shim, which only a shell resolves.
+  const shell = process.platform === 'win32'
+  const quote = arg => shell ? `"${arg}"` : arg
+  const result = spawnSync('hugo', ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish), ...args.map(quote)], { encoding: 'utf8', shell, timeout: 120000 })
+  assert.equal(result.status, 0, `probe site build failed:\n${result.error || ''}${result.stderr}${result.stdout}`)
+  return publish
+}
+
 function buildSite () {
-  const content = path.join(tmp, 'content')
-  const publish = path.join(tmp, 'public')
   fs.mkdirSync(content)
   for (const [name, lines] of Object.entries(PAGES)) {
     fs.writeFileSync(path.join(content, `${name}.md`), [
@@ -105,12 +120,26 @@ function buildSite () {
       ''
     ].join('\n'))
   }
-  // On Windows the hugo-extended bin is a .cmd shim, which only a shell resolves.
+  return hugo('public')
+}
+
+// The fade of a site that sets its own $transition-fade. Hinode imports
+// scss/theme/_variables.scss before Bootstrap, so a module that provides that
+// file ahead of the site imports sets the fade.
+const CUSTOM_FADE_MS = 600
+
+function buildCustomFadeSite () {
+  const themes = path.join(tmp, 'themes')
+  const scss = path.join(themes, 'preview-fade', 'assets', 'scss', 'theme')
+  fs.mkdirSync(scss, { recursive: true })
+  fs.writeFileSync(path.join(scss, '_variables.scss'), `$transition-fade: opacity ${CUSTOM_FADE_MS / 1000}s linear;\n`)
   const shell = process.platform === 'win32'
-  const quote = arg => shell ? `"${arg}"` : arg
-  const result = spawnSync('hugo', ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish)], { encoding: 'utf8', shell })
-  assert.equal(result.status, 0, `probe site build failed:\n${result.stderr}${result.stdout}`)
-  return publish
+  const config = spawnSync('hugo', ['config', '-s', 'exampleSite', '--format', 'json'], { encoding: 'utf8', shell, timeout: 120000 })
+  assert.equal(config.status, 0, `hugo config failed:\n${config.error || ''}${config.stderr}`)
+  const imports = JSON.parse(config.stdout).module.imports.map(({ path }) => ({ path }))
+  const file = path.join(tmp, 'custom-fade.json')
+  fs.writeFileSync(file, JSON.stringify({ module: { imports: [{ path: 'preview-fade' }, ...imports] } }))
+  return hugo('public-fade', ['--config', `hugo.toml,${file}`, '--themesDir', themes])
 }
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' }
@@ -346,12 +375,12 @@ const chromePath = findChrome()
 let skip = chromePath ? false : 'no Chrome found; set CHROME_PATH to run this check'
 if (!skip && typeof WebSocket === 'undefined') skip = 'this Node has no global WebSocket'
 
-let base
+let base, customFadeBase
 if (!skip) {
   const start = Date.now()
-  server = await serve(buildSite())
-  base = `http://127.0.0.1:${server.address().port}`
-  console.log(`# built the probe site in ${Date.now() - start} ms`)
+  servers.push(await serve(buildSite()), await serve(buildCustomFadeSite()))
+  ;[base, customFadeBase] = servers.map(server => `http://127.0.0.1:${server.address().port}`)
+  console.log(`# built the probe sites in ${Date.now() - start} ms`)
   try {
     await launch(chromePath)
     console.log(`# Chrome ${(await browser.cdp.send('Browser.getVersion')).product} at ${chromePath}, ready after ${Date.now() - start} ms`)
@@ -500,28 +529,35 @@ async function activateWithEnter (page) {
   await page.pressEnter()
 }
 
-test('click at 1280px loads nothing until Enter on the poster button, then desktop only', { skip }, async () => {
-  const page = await openPage(browser.cdp, base, 'click', 1280)
-  try {
-    page.width = 1280
-    let state = await page.settle([])
-    assertView(page, state, 'desktop', [], 'before activation')
-    assert.equal(visiblePoster(state).visible, true, 'the desktop poster shows')
-    assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'the desktop poster shows')
-    await assertPosterCovers(page, 'desktop @1280')
-    assert.equal(state.active, null)
-    await activateWithEnter(page)
-    state = await page.settle(['desktop'])
-    assertView(page, state, 'desktop', ['desktop'], 'after activation')
-    assert.equal(state.active, 'true')
-    assert.equal(visiblePoster(state).visible, false, 'the poster is hidden')
-    assert.deepEqual(await page.evaluate(POSTERS_GONE), { opacity: ['0', '0', '0'], focusable: [false, false, false] }, 'every poster faded out and left the tab order')
-    assert.deepEqual(await page.evaluate('window.previewActivations'), [true], 'one preview:activate event on the section')
-    console.log(`# click @1280: requests before activation [], after [${page.requests}]`)
-  } finally {
-    await page.close()
-  }
-})
+// The fade and activation checks run on the probe site with Bootstrap's own
+// $transition-fade and on the one that sets a longer fade. ms is the configured
+// fade, where the check sets it.
+const FADES = [['the default fade', base, null], [`a ${CUSTOM_FADE_MS}ms fade`, customFadeBase, CUSTOM_FADE_MS]]
+
+for (const [fade, site] of FADES) {
+  test(`with ${fade}, click at 1280px loads nothing until Enter on the poster button, then desktop only`, { skip }, async () => {
+    const page = await openPage(browser.cdp, site, 'click', 1280)
+    try {
+      page.width = 1280
+      let state = await page.settle([])
+      assertView(page, state, 'desktop', [], 'before activation')
+      assert.equal(visiblePoster(state).visible, true, 'the desktop poster shows')
+      assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'the desktop poster shows')
+      await assertPosterCovers(page, 'desktop @1280')
+      assert.equal(state.active, null)
+      await activateWithEnter(page)
+      state = await page.settle(['desktop'])
+      assertView(page, state, 'desktop', ['desktop'], 'after activation')
+      assert.equal(state.active, 'true')
+      await waitFor(async () => !visiblePoster(await page.state()).visible, 'the poster to hide')
+      assert.deepEqual(await page.evaluate(POSTERS_GONE), { opacity: ['0', '0', '0'], focusable: [false, false, false] }, 'every poster faded out and left the tab order')
+      assert.deepEqual(await page.evaluate('window.previewActivations'), [true], 'one preview:activate event on the section')
+      console.log(`# click @1280: requests before activation [], after [${page.requests}]`)
+    } finally {
+      await page.close()
+    }
+  })
+}
 
 test('click at 1280px: a device switch before activation swaps the poster and loads nothing', { skip }, async () => {
   const page = await openPage(browser.cdp, base, 'click', 1280)
@@ -615,41 +651,41 @@ const FADE_SAMPLES = `(() => {
   const transitions = poster.getAnimations().filter(animation => animation.transitionProperty)
   transitions.forEach(animation => animation.pause())
   const fade = transitions.find(animation => animation.transitionProperty === 'opacity')
-  if (!fade) return { transitions: transitions.map(animation => animation.transitionProperty) }
+  if (!fade) return { transitions: transitions.map(animation => animation.transitionProperty), now: [Number(style.opacity).toFixed(2), style.visibility] }
   const { delay, duration } = fade.effect.getComputedTiming()
   const sample = at => { transitions.forEach(animation => { animation.currentTime = at }); return [Number(style.opacity).toFixed(2), style.visibility] }
   return { duration, samples: [sample(delay + duration / 2), sample(delay + duration - 1), sample(delay + duration + 1000)] }
 })()`
 
-test('click posters stay visible until their fade ends', { skip }, async () => {
-  const page = await openPage(browser.cdp, base, 'click', 1280)
-  try {
-    page.width = 1280
-    await page.settle([])
-    const { duration, samples, transitions } = await page.evaluate(FADE_SAMPLES)
-    assert.ok(duration > 0, `the poster fades its opacity (transitions: ${transitions})`)
-    const [half, last, done] = samples
-    assert.ok(Number(half[0]) > 0 && Number(half[0]) < 1, `halfway through the fade the poster is partly opaque: ${half}`)
-    assert.equal(half[1], 'visible', 'halfway through the fade the poster is still visible')
-    assert.equal(last[1], 'visible', 'just before the fade ends the poster is still visible')
-    assert.deepEqual(done, ['0.00', 'hidden'], 'after the fade the poster is hidden')
-    console.log(`# click @1280: fade of ${duration}ms, samples ${JSON.stringify(samples)}`)
-  } finally {
-    await page.close()
-  }
-})
+for (const [fade, site, ms] of FADES) {
+  test(`with ${fade}, click posters stay visible until their fade ends`, { skip }, async () => {
+    const page = await openPage(browser.cdp, site, 'click', 1280)
+    try {
+      page.width = 1280
+      await page.settle([])
+      const { duration, samples, transitions } = await page.evaluate(FADE_SAMPLES)
+      assert.ok(duration > 0, `the poster fades its opacity (transitions: ${transitions})`)
+      if (ms) assert.equal(duration, ms, 'the poster fades for the configured duration')
+      const [half, last, done] = samples
+      assert.ok(Number(half[0]) > 0 && Number(half[0]) < 1, `halfway through the fade the poster is partly opaque: ${half}`)
+      assert.equal(half[1], 'visible', 'halfway through the fade the poster is still visible')
+      assert.equal(last[1], 'visible', 'just before the fade ends the poster is still visible')
+      assert.deepEqual(done, ['0.00', 'hidden'], 'after the fade the poster is hidden')
+      console.log(`# click @1280 with ${fade}: fade of ${duration}ms, samples ${JSON.stringify(samples)}`)
+    } finally {
+      await page.close()
+    }
+  })
 
-test('click posters crossfade, and not when reduced motion is preferred', { skip }, async () => {
-  const page = await openPage(browser.cdp, base, 'click', 1280)
-  const transition = 'JSON.stringify([...document.querySelectorAll(\'section.preview .preview-poster\')].map(el => getComputedStyle(el).transitionProperty + \' \' + getComputedStyle(el).transitionDuration)[0])'
-  try {
-    page.width = 1280
-    await page.settle([])
-    assert.equal(JSON.parse(await page.evaluate(transition)), 'opacity, visibility 0.15s')
-    await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
-    assert.match(JSON.parse(await page.evaluate(transition)), / 0s$/)
-    assert.doesNotMatch(JSON.parse(await page.evaluate(transition)), /0\.15s/)
-  } finally {
-    await page.close()
-  }
-})
+  test(`with ${fade}, click posters hide at once when reduced motion is preferred`, { skip }, async () => {
+    const page = await openPage(browser.cdp, site, 'click', 1280)
+    try {
+      page.width = 1280
+      await page.settle([])
+      await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+      assert.deepEqual(await page.evaluate(FADE_SAMPLES), { transitions: [], now: ['0.00', 'hidden'] })
+    } finally {
+      await page.close()
+    }
+  })
+}
