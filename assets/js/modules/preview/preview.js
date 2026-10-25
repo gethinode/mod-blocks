@@ -151,7 +151,6 @@
   function stopDeadline (record) {
     clearTimeout(record.timer)
     if (record.observer) record.observer.disconnect()
-    record.observer = null
   }
 
   /**
@@ -217,7 +216,6 @@
   function forget (pane, iframe) {
     const record = frames.get(iframe)
     if (record) stopDeadline(record)
-    frames.delete(iframe)
     delete pane.dataset.previewState
     pane.removeAttribute('aria-busy')
     if (readyMessage(pane.closest('.preview-content'))) iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
