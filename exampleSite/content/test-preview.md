@@ -19,12 +19,12 @@ fixtures:
       - 'id="preview-'
       - 'preview-desktop" '
       - 'data-src="https://example.org/"'
-      - 'src="https://example.org/" class="preview-iframe preview-desktop"'
       - 'data-devices="desktop tablet mobile"'
       - 'preview-controls'
     reject:
       - 'data-controls='
     count:
+      'src="https://example.org/" class="preview-iframe preview-desktop"': 1
       'src="https://example.org/"': 1
       'data-src="https://example.org/"': 3
   - case: device-mobile-active
@@ -32,9 +32,8 @@ fixtures:
       _bookshop_name: preview
       url: https://example.org/
       device: mobile
-    want:
-      - 'src="https://example.org/" class="preview-iframe preview-mobile"'
     count:
+      'src="https://example.org/" class="preview-iframe preview-mobile"': 1
       'src="https://example.org/"': 1
       'show active': 1
   - case: devices-subset
@@ -61,12 +60,12 @@ fixtures:
     want:
       - 'preview-mobile'
       - 'show active'
-      - 'src="https://example.org/" class="preview-iframe preview-mobile"'
     reject:
       - 'preview-desktop'
       - '-desktop"'
       - '-desktop-tab'
     count:
+      'src="https://example.org/" class="preview-iframe preview-mobile"': 1
       'src="https://example.org/"': 1
   - case: devices-excludes-default-picks-first
     block:
@@ -74,9 +73,9 @@ fixtures:
       url: https://example.org/
       devices: [tablet, mobile]
     want:
-      - 'src="https://example.org/" class="preview-iframe preview-tablet"'
       - 'data-devices="tablet mobile"'
     count:
+      'src="https://example.org/" class="preview-iframe preview-tablet"': 1
       'src="https://example.org/"': 1
       'show active': 1
   - case: controls-false-snake
