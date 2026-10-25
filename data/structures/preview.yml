@@ -77,12 +77,14 @@ arguments:
       heading, each tab shows the heading of its item, or the block heading
       when its item has none, in place of the block heading. A block that
       shows its fallback has no tabs and shows that heading of the first item
-      only. The embedding checks run once per distinct item url, without its
-      fragment, and the first url that cannot be framed shows the fallback,
-      whose alert names that url. For a url without a host, such as /path, the
-      build requests no headers and checks only the frame-src of the site. The
-      views take the title of the shown item
-      as their title.
+      only. When the base URL of the site has a host and the block does not
+      already show its fallback, the build checks each distinct item url once,
+      without its fragment, in order, until one cannot be framed; that url
+      shows the fallback, and its alert names it. A url with a host gets a
+      request for its headers and, unless they refuse framing, a check against
+      the frame-src that the site publishes, if any; a url without a host,
+      such as /path, gets that frame-src check only. The views take the title
+      of the shown item as their title.
   open-link:
     type: bool
     optional: true
@@ -106,10 +108,12 @@ arguments:
       view. Without ready-message, the load event of the frame ends the wait.
       Chrome fires that event for an error status and a refused connection
       too, so it catches a target that does not answer, not one that answers
-      with an error. When the site builds, a target whose response headers
-      refuse framing shows the fallback, if the build can request those
-      headers; it does not request them for a url without a host, such as
-      /path. The view that loads with the page gets no deadline without
+      with an error. When the base URL of the site has a host and the block
+      does not already show its fallback, the build requests the response
+      headers of a target url with a host, and a target whose headers refuse
+      framing shows the fallback; when the request fails, the build logs a
+      warning instead. It requests no headers for a url without a host, such
+      as /path. The view that loads with the page gets no deadline without
       ready-message. A value that is not positive counts as 15.
   ready-message:
     type: string

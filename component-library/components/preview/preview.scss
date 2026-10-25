@@ -158,7 +158,7 @@ section.preview {
         display: flex;
     }
 
-    // A view that failed to load in time shows its poster again, with an alert over it
+    // A view that failed to load in time shows an alert, over its poster when it has one
     .preview-unavailable {
         display: none;
         position: absolute;
