@@ -42,6 +42,30 @@
  * poster, points every .preview-open link at the open URL of the item, and
  * dispatches a bubbling preview:item event on the section, with the index of
  * the item in its detail.
+ *
+ * Each navigation the script starts gets a deadline of data-load-timeout
+ * seconds, 15 when that is not a positive number, which starts when the iframe
+ * first intersects the viewport, or at once without IntersectionObserver. The
+ * pane carries data-preview-state: waiting, ready or failed. When the deadline
+ * passes first, the pane fails: its poster shows again, the iframe is hidden
+ * and inert, and the pane shows its alert, whose link points at the open URL of
+ * the shown item. Showing an item resets every pane.
+ *
+ * Without data-ready-message, the load event of the iframe makes the pane
+ * ready. Chrome fires load for an error status and a refused connection too,
+ * so this catches a target that does not answer, not one that answers with an
+ * error. The iframe that the markup gives src gets no deadline, as its load
+ * event may come before the script runs.
+ *
+ * With data-ready-message, load is no readiness. The pane is busy, its poster
+ * shows a waiting status and its iframe is inert, until the window of its
+ * current iframe posts exactly that string to this page. The script posts the
+ * string to the iframe window on load, and at initialization for the iframe
+ * that the markup gives src, so a frame that announced itself before the
+ * script listened can answer. A message from another window, or with other
+ * data, changes nothing, and message data is never used other than compared.
+ * A late acknowledgement recovers a failed pane, and the script never moves
+ * focus.
  */
 
 ;(function () {
@@ -89,6 +113,130 @@
     })
   }
 
+  // The default deadline of a navigation, in seconds.
+  const PREVIEW_LOAD_TIMEOUT = 15
+
+  // The navigation record of each watched iframe.
+  const frames = new WeakMap()
+
+  function readyMessage (container) {
+    return container.dataset.readyMessage || ''
+  }
+
+  function loadTimeout (container) {
+    const seconds = Number(container.dataset.loadTimeout)
+    return (seconds > 0 ? seconds : PREVIEW_LOAD_TIMEOUT) * 1000
+  }
+
+  /**
+   * Sets the state of the pane of a navigation, with the busy state and inert
+   * iframe that go with it, and points a failed pane's link at the open URL of
+   * the shown item.
+   */
+  function setState (record, state) {
+    const { iframe, pane, container } = record
+    record.state = state
+    pane.dataset.previewState = state
+    const waiting = state === 'waiting' && readyMessage(container) !== ''
+    if (waiting) pane.setAttribute('aria-busy', 'true'); else pane.removeAttribute('aria-busy')
+    if (waiting || state === 'failed') iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
+    if (state === 'failed') {
+      const section = container.closest('section.preview')
+      const tab = Array.from(section.querySelectorAll('.preview-items [data-bs-toggle="tab"]')).find(el => el.classList.contains('active'))
+      const link = pane.querySelector('.preview-unavailable-link')
+      if (tab && link) link.href = tab.dataset.previewOpenUrl
+    }
+  }
+
+  function stopDeadline (record) {
+    clearTimeout(record.timer)
+    if (record.observer) record.observer.disconnect()
+    record.observer = null
+  }
+
+  /**
+   * Starts the deadline of a navigation once its iframe first intersects the
+   * viewport, or at once without IntersectionObserver.
+   */
+  function startDeadline (record) {
+    const start = () => {
+      record.timer = setTimeout(() => {
+        if (frames.get(record.iframe) === record && record.state === 'waiting') setState(record, 'failed')
+      }, loadTimeout(record.container))
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      start()
+      return
+    }
+    record.observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return
+      stopDeadline(record)
+      if (record.state === 'waiting') start()
+    })
+    record.observer.observe(record.iframe)
+  }
+
+  function markReady (record) {
+    if (record.state === 'ready') return
+    stopDeadline(record)
+    setState(record, 'ready')
+  }
+
+  // Posts the ready message to the window of the iframe of a navigation.
+  function askReady (record) {
+    record.iframe.contentWindow.postMessage(readyMessage(record.container), '*')
+  }
+
+  /**
+   * Creates the record of an iframe in a view pane, which belongs to it alone,
+   * so a copy that replaces it starts from nothing.
+   */
+  function track (iframe) {
+    const pane = iframe.closest('.tab-pane')
+    const record = { iframe, pane, container: pane.closest('.preview-content'), state: null, timer: null, observer: null }
+    frames.set(iframe, record)
+    return record
+  }
+
+  /**
+   * Watches the navigation of an iframe in a view pane, before the script gives
+   * it src or, for the iframe the markup gives src, at initialization.
+   */
+  function watch (iframe) {
+    const record = track(iframe)
+    iframe.addEventListener('load', () => {
+      if (frames.get(iframe) !== record) return
+      if (readyMessage(record.container)) askReady(record); else markReady(record)
+    })
+    setState(record, 'waiting')
+    startDeadline(record)
+    return record
+  }
+
+  /**
+   * Forgets the navigation of the pane's iframe and resets the pane. The
+   * iframe stays inert while a ready message is still to come.
+   */
+  function forget (pane, iframe) {
+    const record = frames.get(iframe)
+    if (record) stopDeadline(record)
+    frames.delete(iframe)
+    delete pane.dataset.previewState
+    pane.removeAttribute('aria-busy')
+    if (readyMessage(pane.closest('.preview-content'))) iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
+  }
+
+  // Makes a pane ready when the window of its current iframe posts the ready
+  // message of its block. Listen from the start, before any navigation.
+  window.addEventListener('message', event => {
+    document.querySelectorAll('section.preview .preview-content .preview-iframe').forEach(iframe => {
+      if (iframe.contentWindow !== event.source) return
+      const message = readyMessage(iframe.closest('.preview-content'))
+      if (message === '' || event.data !== message) return
+      markReady(frames.get(iframe) || track(iframe))
+    })
+  })
+
   /**
    * Gives the pane's iframe its src from data-src, once.
    */
@@ -96,6 +244,7 @@
     if (!pane) return
     const iframe = pane.querySelector('iframe[data-src]')
     if (iframe && !iframe.hasAttribute('src')) {
+      watch(iframe)
       iframe.src = iframe.dataset.src
     }
   }
@@ -141,6 +290,7 @@
     container.querySelectorAll(':scope > .tab-pane').forEach(pane => {
       let iframe = pane.querySelector('iframe[data-src]')
       if (iframe) {
+        forget(pane, iframe)
         if (iframe.hasAttribute('src')) {
           const copy = iframe.cloneNode(false)
           copy.removeAttribute('src')
@@ -149,7 +299,10 @@
         }
         iframe.dataset.src = url
         iframe.setAttribute('title', title)
-        if (activated && pane.classList.contains('active')) iframe.src = url
+        if (activated && pane.classList.contains('active')) {
+          watch(iframe)
+          iframe.src = url
+        }
       }
       pane.querySelectorAll('.preview-poster-item').forEach(image => {
         image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
@@ -271,7 +424,19 @@
     section.dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
   })
 
+  /**
+   * With a ready message, watches each iframe the markup gives src and asks it
+   * at once, as it may have loaded and announced itself before this script ran.
+   */
+  function initPreviewReady () {
+    document.querySelectorAll('section.preview .preview-content[data-ready-message] .preview-iframe').forEach(iframe => {
+      if (!iframe.hasAttribute('src') || frames.has(iframe)) return
+      askReady(watch(iframe))
+    })
+  }
+
   function init () {
+    initPreviewReady()
     updatePreviewScale()
     initPreviewAutoPick()
     initPreviewAutoSwitch()

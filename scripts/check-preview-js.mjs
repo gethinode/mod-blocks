@@ -17,6 +17,12 @@ import vm from 'node:vm'
 const source = fs.readFileSync(process.env.PREVIEW_JS || 'assets/js/modules/preview/preview.js', 'utf8')
 const URL = 'https://example.org/'
 
+// The window of an iframe, which records each message posted to it.
+class FakeWindow {
+  constructor () { this.posted = [] }
+  postMessage (data, targetOrigin) { this.posted.push([data, targetOrigin]) }
+}
+
 class FakeElement {
   constructor ({ id = '', classes = [], dataset = {}, attrs = {}, device } = {}) {
     this.id = id
@@ -30,6 +36,7 @@ class FakeElement {
     this.style = { setProperty () {} }
     this.clientWidth = 1000
     this.clientHeight = 600
+    if (this.classList.contains('preview-iframe')) this.contentWindow = new FakeWindow()
   }
 
   append (...children) {
@@ -43,7 +50,7 @@ class FakeElement {
   getAttribute (name) { return name in this.attrs ? this.attrs[name] : null }
   setAttribute (name, value) { this.attrs[name] = String(value) }
   // A shallow copy: the same classes, data and attributes, without children,
-  // listeners or the count of src sets.
+  // listeners or the count of src sets, and with a window of its own.
   cloneNode () {
     return new FakeElement({ id: this.id, classes: [...this.classList.set], dataset: { ...this.dataset }, attrs: this.attrs, device: this.device })
   }
@@ -99,7 +106,12 @@ const rules = {
   '.preview-iframe': el => el.classList.contains('preview-iframe'),
   'iframe[data-src]': el => el.classList.contains('preview-iframe') && 'src' in el.dataset,
   '.preview-controls [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
-  '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab'
+  '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab',
+  '.preview-items [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab' && !!el.parent.closest('.preview-items'),
+  '.preview-unavailable-link': el => el.classList.contains('preview-unavailable-link'),
+  'section.preview .preview-content .preview-iframe': el => el.classList.contains('preview-iframe') && !!el.closest('.preview-content'),
+  'section.preview .preview-content[data-ready-message] .preview-iframe': el => el.classList.contains('preview-iframe') &&
+    'readyMessage' in ((el.closest('.preview-content') || {}).dataset || {})
 }
 
 function matches (el, selector) {
@@ -130,14 +142,21 @@ function cssHides (device, offered, width) {
 // item, every iframe starts with the URL of the first item, every poster holds
 // one image per item, and an open link follows the frame. Every iframe takes
 // the title of the first item. With panel, the items carry no headings, so
-// the content is the tab panel of every item tab, labelled by the first.
-function buildPreview ({ devices, active, controls = true, activation = 'load', items, panel = false }) {
+// the content is the tab panel of every item tab, labelled by the first. Every
+// pane holds the hidden runtime failure alert, whose link opens the first URL,
+// unless the block shows its fallback.
+// With readyMessage, every iframe is inert and every pane holds a poster with a
+// waiting status, and the poster button only with click activation. timeout
+// is the data-load-timeout value, or null for none.
+function buildPreview ({ devices, active, controls = true, activation = 'load', items, panel = false, readyMessage, timeout = '15', fallback = false }) {
   const click = activation === 'click'
   const id = 'preview-1'
   const section = new FakeElement({ classes: ['preview'] })
   const dataset = { devices: devices.join(' '), desktopResponsive: 'true' }
   if (!controls) dataset.controls = 'false'
   if (click) dataset.activation = 'click'
+  if (timeout !== null) dataset.loadTimeout = timeout
+  if (readyMessage) dataset.readyMessage = readyMessage
   const content = new FakeElement({
     id: panel ? `${id}-items-panel` : '',
     classes: ['tab-content', 'preview-content'],
@@ -170,12 +189,19 @@ function buildPreview ({ devices, active, controls = true, activation = 'load', 
     const iframe = new FakeElement({
       classes: ['preview-iframe', `preview-${device}`],
       dataset: { src: first },
-      attrs: { ...(isActive && controls && !click ? { src: first } : {}), ...(items ? { title: items[0].title } : {}) }
+      attrs: { ...(isActive && controls && !click ? { src: first } : {}), ...(items ? { title: items[0].title } : {}), ...(readyMessage ? { inert: '' } : {}) }
     })
     panes[device] = new FakeElement({ id: `${id}-${device}`, classes: ['tab-pane', 'fade', ...(isActive ? ['show', 'active'] : [])], device }).append(iframe)
-    if (click) {
+    if (click || readyMessage) {
       const posterItems = (items || []).map((item, n) => new FakeElement({ classes: ['preview-poster-item', ...(n > 0 ? ['d-none'] : [])], dataset: { previewItem: String(n) } }))
-      panes[device].append(new FakeElement({ classes: ['preview-poster'] }).append(...posterItems, new FakeElement({ classes: ['btn', 'preview-activate'] })))
+      panes[device].append(new FakeElement({ classes: ['preview-poster'] }).append(...posterItems,
+        ...(click ? [new FakeElement({ classes: ['btn', 'preview-activate'] })] : []),
+        ...(readyMessage ? [new FakeElement({ classes: ['preview-waiting'] })] : [])))
+    }
+    if (!fallback) {
+      const link = new FakeElement({ classes: ['alert-link', 'preview-unavailable-link'] })
+      link.href = items ? (items[0].openUrl || first) : first
+      panes[device].append(new FakeElement({ classes: ['preview-unavailable'] }).append(new FakeElement({ classes: ['alert'] }).append(link)))
     }
     content.append(panes[device])
     if (controls) {
@@ -201,7 +227,8 @@ function buildPreview ({ devices, active, controls = true, activation = 'load', 
 // Loads preview.js into a fresh context with the given viewport width. `until`
 // names the last page event to fire: 'none', 'ready' (DOMContentLoaded) or 'load'.
 // readyState is the document state when the script runs.
-function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
+// globals adds names to the context of the script, such as IntersectionObserver.
+function run (preview, width, { until = 'load', readyState = 'loading', globals = {} } = {}) {
   let viewport = width
   const windowListeners = {}
   const queries = new Map()
@@ -229,7 +256,13 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
   class CustomEvent {
     constructor (type, { bubbles = false, detail } = {}) { Object.assign(this, { type, bubbles, detail }) }
   }
-  const context = { window, document, CustomEvent, setTimeout: fn => fn(), clearTimeout () {} }
+  // Timers wait until elapse() runs them; delays records the delay of each.
+  const timers = new Map()
+  const delays = []
+  let nextTimer = 1
+  const setTimeout = (fn, ms) => { delays.push(ms); timers.set(nextTimer, fn); return nextTimer++ }
+  const clearTimeout = timer => { timers.delete(timer) }
+  const context = { window, document, CustomEvent, setTimeout, clearTimeout, ...globals }
   vm.runInNewContext(source, context)
 
   // Bootstrap's tab plugin: registered after preview.js, as the deferred core
@@ -248,6 +281,11 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
   const fire = type => (windowListeners[type] || []).forEach(fn => fn({}))
   const page = {
     document,
+    delays,
+    // Runs every pending timer, as if its delay had passed.
+    elapse () { const due = [...timers.values()]; timers.clear(); due.forEach(fn => fn()) },
+    // Posts a message to the page from source, as a window does.
+    message (data, source) { (windowListeners.message || []).forEach(fn => fn({ data, source })) },
     ready () { document.readyState = 'interactive'; document.dispatch('DOMContentLoaded') },
     load () { document.readyState = 'complete'; fire('load') },
     resize (newWidth) {
@@ -595,4 +633,249 @@ test('with item headings, the content is no tab panel and gets no label', () => 
   run(preview, 1280)
   preview.itemButtons[1].click()
   assert.equal(preview.content.getAttribute('aria-labelledby'), null)
+})
+
+// Runtime fallback and readiness. The state of a view is the data-preview-state
+// of its pane; the iframe of a pane is the current one after any replacement.
+const frame = pane => pane.children[0]
+const state = pane => pane.dataset.previewState
+const states = preview => Object.fromEntries(Object.entries(preview.panes).map(([device, pane]) => [device, state(pane)]))
+const failLink = pane => pane.children.find(el => el.classList.contains('preview-unavailable')).children[0].children[0]
+const inert = pane => frame(pane).hasAttribute('inert')
+const busy = pane => pane.getAttribute('aria-busy')
+const TOKEN = 'demo:ok'
+
+test('without a ready message, a view the script loads fails after the load timeout', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop' })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: 'waiting' }, 'the view in the markup gets no deadline')
+  assert.equal(inert(preview.panes.mobile), false, 'a loading view stays focusable without a ready message')
+  assert.equal(busy(preview.panes.mobile), null)
+  page.elapse()
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: 'failed' })
+  assert.equal(inert(preview.panes.mobile), true, 'a failed view cannot take focus')
+  assert.equal(failLink(preview.panes.mobile).href, URL)
+})
+
+test('without a ready message, a load before the deadline makes the view ready', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop' })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  frame(preview.panes.mobile).dispatch('load')
+  assert.equal(state(preview.panes.mobile), 'ready')
+  page.elapse()
+  assert.equal(state(preview.panes.mobile), 'ready', 'the deadline no longer fails it')
+})
+
+test('without a ready message, a late load recovers a failed view', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop' })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  page.elapse()
+  assert.equal(state(preview.panes.mobile), 'failed')
+  frame(preview.panes.mobile).dispatch('load')
+  assert.equal(state(preview.panes.mobile), 'ready')
+  assert.equal(inert(preview.panes.mobile), false)
+})
+
+test('without a ready message, no message makes a view ready', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop' })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  page.message('', frame(preview.panes.mobile).contentWindow)
+  page.message(undefined, frame(preview.panes.mobile).contentWindow)
+  assert.equal(state(preview.panes.mobile), 'waiting')
+  assert.deepEqual(frame(preview.panes.mobile).contentWindow.posted, [], 'and none is sent')
+})
+
+for (const [timeout, ms] of [['5', 5000], ['0.5', 500], [null, 15000], ['0', 15000], ['-3', 15000], ['soon', 15000]]) {
+  test(`a load-timeout of ${timeout} gives a deadline of ${ms}ms`, () => {
+    const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', timeout })
+    const page = run(preview, 1280)
+    preview.buttons.mobile.click()
+    assert.deepEqual(page.delays, [ms])
+  })
+}
+
+test('with a ready message, the view in the markup waits and asks its frame at initialization', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  run(preview, 1280, { until: 'none' })
+  assert.deepEqual(frame(preview.panes.desktop).contentWindow.posted, [], 'nothing before initialization')
+  const page = run(preview, 1280, { until: 'none', readyState: 'interactive' })
+  assert.deepEqual(states(preview), { desktop: 'waiting', mobile: undefined })
+  assert.deepEqual(frame(preview.panes.desktop).contentWindow.posted, [[TOKEN, '*']], 'one request with the configured message')
+  assert.equal(busy(preview.panes.desktop), 'true')
+  assert.equal(inert(preview.panes.desktop), true)
+  assert.deepEqual(page.delays, [15000])
+  assert.deepEqual(frame(preview.panes.mobile).contentWindow.posted, [], 'a view that has not loaded is not asked')
+})
+
+test('with a ready message, a load asks the frame again but does not end the wait', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  const iframe = frame(preview.panes.mobile)
+  assert.deepEqual(iframe.contentWindow.posted, [], 'a view the script loads is asked on load')
+  iframe.dispatch('load')
+  assert.deepEqual(iframe.contentWindow.posted, [[TOKEN, '*']])
+  assert.equal(state(preview.panes.mobile), 'waiting')
+  assert.equal(inert(preview.panes.mobile), true)
+  page.elapse()
+  assert.equal(state(preview.panes.mobile), 'failed', 'a load is no readiness')
+  assert.equal(busy(preview.panes.mobile), null, 'a failed view is not busy')
+})
+
+test('with a ready message, only that exact message from the current frame makes the view ready', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  const pane = preview.panes.desktop
+  const win = frame(pane).contentWindow
+  page.message('preview:ready', win)
+  page.message(`${TOKEN} `, win)
+  page.message(TOKEN.toUpperCase(), win)
+  page.message({ data: TOKEN }, win)
+  page.message([TOKEN], win)
+  page.message(new String(TOKEN), win) // eslint-disable-line no-new-wrappers
+  page.message(TOKEN, frame(preview.panes.mobile).contentWindow)
+  page.message(TOKEN, new FakeWindow())
+  page.message(TOKEN, null)
+  assert.equal(state(pane), 'waiting', 'no other message, sibling frame or window makes it ready')
+  page.message(TOKEN, win)
+  assert.equal(state(pane), 'ready')
+  assert.equal(inert(pane), false)
+  assert.equal(busy(pane), null)
+  page.elapse()
+  assert.equal(state(pane), 'ready', 'the deadline ended')
+})
+
+test('with a ready message, the acknowledgement of one view does not reveal another', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.deepEqual(states(preview), { desktop: 'ready', mobile: 'waiting' })
+  page.elapse()
+  assert.deepEqual(states(preview), { desktop: 'ready', mobile: 'failed' })
+})
+
+test('with a ready message, a late acknowledgement recovers a failed view', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  page.elapse()
+  assert.equal(state(preview.panes.desktop), 'failed')
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.equal(state(preview.panes.desktop), 'ready')
+  assert.equal(inert(preview.panes.desktop), false)
+})
+
+test('with a ready message, an item switch ignores the replaced frame and waits for the copy', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN, items: ITEMS })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  preview.buttons.desktop.click()
+  page.message(TOKEN, frame(preview.panes.mobile).contentWindow)
+  const old = frame(preview.panes.desktop)
+  preview.itemButtons[1].click()
+  const copy = frame(preview.panes.desktop)
+  assert.notEqual(copy, old)
+  assert.deepEqual(states(preview), { desktop: 'waiting', mobile: undefined }, 'the switch resets every view')
+  assert.equal(inert(preview.panes.mobile), true, 'the reset view cannot take focus')
+  assert.equal(busy(preview.panes.mobile), null)
+  page.message(TOKEN, old.contentWindow)
+  assert.equal(state(preview.panes.desktop), 'waiting', 'the replaced frame cannot make the copy ready')
+  page.message(TOKEN, copy.contentWindow)
+  assert.equal(state(preview.panes.desktop), 'ready')
+  page.elapse()
+  assert.deepEqual(states(preview), { desktop: 'ready', mobile: undefined }, 'no earlier deadline fails a view')
+})
+
+test('without a ready message, an item switch resets a failed view so its copy can take focus', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', items: ITEMS })
+  const page = run(preview, 1280)
+  preview.buttons.mobile.click()
+  page.elapse()
+  assert.equal(state(preview.panes.mobile), 'failed')
+  preview.itemButtons[1].click()
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: 'waiting' })
+  assert.equal(inert(preview.panes.mobile), false)
+  assert.equal(inert(preview.panes.desktop), false)
+})
+
+test('a failed view links to the open URL of the shown item', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN, items: ITEMS })
+  const page = run(preview, 1280)
+  preview.itemButtons[1].click()
+  page.elapse()
+  assert.equal(state(preview.panes.desktop), 'failed')
+  assert.equal(failLink(preview.panes.desktop).href, 'https://example.org/b-open')
+  preview.itemButtons[0].click()
+  page.elapse()
+  assert.equal(failLink(preview.panes.desktop).href, A, 'the item URL when it has no open URL')
+})
+
+test('with a ready message and click activation, nothing waits or is asked before the poster button', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN, activation: 'click' })
+  const page = run(preview, 1280)
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: undefined })
+  assert.deepEqual(page.delays, [])
+  preview.activate('desktop')
+  assert.deepEqual(states(preview), { desktop: 'waiting', mobile: undefined })
+  frame(preview.panes.desktop).dispatch('load')
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.equal(state(preview.panes.desktop), 'ready')
+})
+
+test('with a ready message, a frame rendered after initialization becomes ready on its acknowledgement', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  const later = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN })
+  page.document.append(later.section)
+  page.message('other', frame(later.panes.desktop).contentWindow)
+  assert.equal(state(later.panes.desktop), undefined)
+  page.message(TOKEN, frame(later.panes.desktop).contentWindow)
+  assert.equal(state(later.panes.desktop), 'ready')
+  assert.equal(inert(later.panes.desktop), false)
+})
+
+test('with an IntersectionObserver, the deadline starts when the frame first comes into view', () => {
+  const observers = []
+  class IntersectionObserver {
+    constructor (callback) { this.callback = callback; this.targets = []; observers.push(this) }
+    observe (target) { this.targets.push(target) }
+    disconnect () { this.targets = [] }
+  }
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280, { globals: { IntersectionObserver } })
+  const iframe = frame(preview.panes.desktop)
+  assert.deepEqual(observers.flatMap(observer => observer.targets), [iframe])
+  assert.deepEqual(page.delays, [], 'no deadline out of view')
+  observers[0].callback([{ target: iframe, isIntersecting: false }])
+  assert.deepEqual(page.delays, [])
+  observers[0].callback([{ target: iframe, isIntersecting: true }])
+  assert.deepEqual(page.delays, [15000])
+  assert.deepEqual(observers[0].targets, [], 'it stops observing')
+  page.elapse()
+  assert.equal(state(preview.panes.desktop), 'failed')
+})
+
+test('with an IntersectionObserver, a view that is ready before it comes into view gets no deadline', () => {
+  const observers = []
+  class IntersectionObserver {
+    constructor (callback) { this.callback = callback; observers.push(this) }
+    observe () {}
+    disconnect () {}
+  }
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280, { globals: { IntersectionObserver } })
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  observers[0].callback([{ target: frame(preview.panes.desktop), isIntersecting: true }])
+  assert.deepEqual(page.delays, [])
+})
+
+test('a view of a block that shows its fallback, which has no failure alert, still fails', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', controls: false, fallback: true, items: ITEMS })
+  const page = run(preview, 400)
+  page.elapse()
+  assert.equal(state(preview.panes.mobile), 'failed')
 })

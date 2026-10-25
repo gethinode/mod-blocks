@@ -112,15 +112,34 @@ test('in Bookshop live editing, load puts src on the default view and click on n
 })
 
 // The button label comes from the i18n strings of the module, so a site in another
-// language gets its own label.
-for (const [lang, label] of [['de', 'Vorschau laden'], ['fr', 'Charger l\'aperçu'], ['nl', 'Voorbeeld laden'], ['pl', 'Załaduj podgląd']]) {
-  test(`with ${lang} as the site language, the poster button reads ${label}`, () => {
-    const result = build({ click: ['activation: click'] }, {}, `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
+// language gets its own label, and so do the waiting status and the runtime
+// failure alert.
+const LABELS = {
+  de: ['Vorschau laden', 'Live-Vorschau wird geladen', 'Die Live-Vorschau ist gerade nicht verfügbar.'],
+  fr: ['Charger l\'aperçu', 'Chargement de l\'aperçu en direct', 'L\'aperçu en direct n\'est pas disponible pour le moment.'],
+  nl: ['Voorbeeld laden', 'Live voorbeeld wordt geladen', 'Het live voorbeeld is nu niet beschikbaar.'],
+  pl: ['Załaduj podgląd', 'Wczytywanie podglądu na żywo', 'Podgląd na żywo jest teraz niedostępny.']
+}
+const text = value => value.trim().replaceAll('&#39;', "'")
+for (const [lang, [label, loading, unavailable]] of Object.entries(LABELS)) {
+  test(`with ${lang} as the site language, the poster button reads ${label}, and the waiting and failure texts are ${lang}`, () => {
+    const result = build({ click: ['activation: click', 'ready_message: demo:ok'] }, {}, `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
     assert.equal(result.status, 0, result.log)
-    const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, text]) => text.trim().replaceAll('&#39;', "'"))
+    const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, value]) => text(value))
     assert.deepEqual(labels, [label, label, label])
+    const statuses = [...result.html.click.matchAll(/class="preview-waiting" role="status">.*?<span>([^<]*)<\/span>/g)].map(([, value]) => text(value))
+    assert.deepEqual(statuses, [loading, loading, loading])
+    const alerts = [...result.html.click.matchAll(/preview-unavailable-alert" role="alert">[\s\S]*?<span>([^<]*)<a /g)].map(([, value]) => text(value))
+    assert.deepEqual(alerts, [unavailable, unavailable, unavailable])
   })
 }
+
+test('the open link, load timeout and ready message read kebab-case keys too', () => {
+  const result = build({ kebab: ['open-link: true', 'load-timeout: 7', 'ready-message: demo:kebab'] })
+  assert.equal(result.status, 0, result.log)
+  assert.match(result.html.kebab, /<a class="preview-open" href="https:\/\/example\.org\/"/)
+  assert.match(result.html.kebab, /data-load-timeout="7" data-ready-message="demo:kebab"/)
+})
 
 const item = (title, url, ...lines) => [`  - title: ${title}`, `    url: ${url}`, ...lines.map(line => `    ${line}`)]
 

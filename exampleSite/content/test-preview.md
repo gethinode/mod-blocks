@@ -498,4 +498,127 @@ fixtures:
       - 'section-title'
     count:
       'Heading B': 0
+  - case: open-link
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      open_link: true
+    want:
+      - '<a class="preview-open" href="https://example.org/" target="_blank" rel="noopener">Open in new tab</a>'
+    order:
+      - 'preview-content'
+      - 'preview-open'
+    count:
+      'class="preview-open"': 1
+  - case: open-link-items-open-url
+    block:
+      _bookshop_name: preview
+      open_link: true
+      items:
+        - title: View A
+          url: https://example.org/a
+          open_url: https://example.org/a-open
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'class="preview-open" href="https://example.org/a-open"'
+      - 'class="alert-link preview-unavailable-link" href="https://example.org/a-open"'
+    count:
+      'class="preview-open"': 1
+      'class="alert-link preview-unavailable-link" href="https://example.org/a-open"': 3
+  - case: open-link-fallback
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      open_link: true
+      show_fallback: true
+    reject:
+      - 'preview-open'
+      - 'preview-unavailable'
+      - 'preview-waiting'
+  - case: links
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      links:
+        - title: Get started
+          url: https://gethinode.com/
+    want:
+      - 'btn btn-primary'
+      - 'Get started'
+    order:
+      - 'preview-content'
+      - 'btn btn-primary'
+      - 'Get started'
+  - case: legacy-defaults
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+    want:
+      - 'data-load-timeout="15"'
+      - '<div class="preview-unavailable"><div class="alert alert-warning preview-unavailable-alert" role="alert">'
+      - 'The live preview is not available right now.'
+      - 'class="alert-link preview-unavailable-link" href="https://example.org/" target="_blank" rel="noopener">Open in new tab</a>'
+    reject:
+      - 'data-ready-message'
+      - 'preview-waiting'
+      - 'preview-poster'
+      - 'preview-open'
+      - ' inert'
+      - 'aria-busy'
+    count:
+      'class="preview-unavailable"': 3
+  - case: timeout
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      load_timeout: 5
+    want:
+      - 'data-load-timeout="5"'
+  - case: ready-message-load
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      ready_message: 'demo:ok'
+    want:
+      - 'data-ready-message="demo:ok"'
+      - '<div class="preview-waiting" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Loading the live preview</span></div>'
+    reject:
+      - 'preview-activate'
+    count:
+      'class="preview-poster"': 3
+      'class="preview-waiting"': 3
+      'inert': 3
+      'src="https://example.org/"': 1
+  - case: ready-message-click
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+      ready_message: 'demo:ok'
+    count:
+      'class="preview-poster"': 3
+      'class="preview-waiting"': 3
+      'class="btn btn-primary preview-activate"': 3
+      'inert': 3
+      'src="https://example.org/"': 0
+  - case: ready-message-escaped
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      ready_message: 'a"b<c'
+    want:
+      - 'data-ready-message="a&#34;b&lt;c"'
+    reject:
+      - 'a"b<c'
+  - case: ready-message-fallback
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      ready_message: 'demo:ok'
+      show_fallback: true
+    reject:
+      - 'preview-poster'
+      - 'preview-waiting'
+      - 'preview-unavailable'
 ---

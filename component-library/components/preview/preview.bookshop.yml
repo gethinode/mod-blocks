@@ -46,6 +46,13 @@ blueprint:
         preheading:
         title:
         content:
+  open_link: false
+  links:
+    -
+      title:
+      url:
+  load_timeout:
+  ready_message:
   image:
   mode:
   show_fallback:

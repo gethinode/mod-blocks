@@ -314,6 +314,7 @@
 {{- $posters := $args.poster | default dict -}}
 {{- $items := $args.items | default slice -}}
 {{- $url := $args.url -}}
+{{- $ready := $args.readyMessage -}}
 {{/* Bookshop live rendering gives the default view src for load activation.
      A block rendered afterwards is absent from the initial no-controls scan. */}}
 {{- $live := site.Params.env_bookshop_live -}}
@@ -383,6 +384,11 @@
     {{- end -}}
     {{- $url = (index $items 0).url -}}
 {{- end -}}
+
+{{/* The open links point at the open URL of the first item, else its URL, which the script
+     swaps for the shown item */}}
+{{- $openUrl := $url -}}
+{{- with $items }}{{ $openUrl = or (index (index . 0) "open-url") (index . 0).url }}{{ end -}}
 
 {{/* The iframes take the title of the first item, which the script swaps for the shown item */}}
 {{- $frameTitle := or $args.heading.title (printf "Preview of %s" $url) -}}
@@ -470,7 +476,7 @@
     {{- end -}}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}"{{ if $sharedPanel }} id="{{ $id }}-items-panel" role="tabpanel" aria-labelledby="{{ $id }}-item-0-tab"{{ end }} data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}"{{ if $sharedPanel }} id="{{ $id }}-items-panel" role="tabpanel" aria-labelledby="{{ $id }}-item-0-tab"{{ end }} data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }} data-load-timeout="{{ $args.loadTimeout }}"{{ with $ready }} data-ready-message="{{ . }}"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
@@ -483,16 +489,17 @@
                          after the poster button is pressed. */}}
                     <iframe data-src="{{ $url }}"{{ if and $isActive (not $click) (or $controls $live) }} src="{{ $url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
-                        title="{{ $frameTitle }}"
+                        title="{{ $frameTitle }}"{{ if $ready }} inert{{ end }}
                         loading="lazy"
                         allow="storage-access"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
                     </iframe>
-                    {{- if and $click (not $showFallback) }}
+                    {{- if and (or $click $ready) (not $showFallback) }}
                         {{/* The poster of the view, else the desktop poster, else a plain background. With
                              items, each item gets an image of its own poster, else of the block poster,
-                             and only the image of the first item lacks d-none. */}}
+                             and only the image of the first item lacks d-none. A ready message gives
+                             every view a poster with a waiting status, and click activation a button. */}}
                         {{- $poster := or (index $posters $device) (index $posters "desktop") -}}
                         <div class="preview-poster">
                             {{- range $n, $item := $items }}
@@ -522,8 +529,20 @@
                                     ) }}
                                 {{- end }}
                             {{- end }}
+                            {{- if $click }}
                             <button type="button" class="btn btn-primary preview-activate">{{ T "previewActivate" }}</button>
+                            {{- end }}
+                            {{- if $ready }}
+                            <div class="preview-waiting" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>{{ T "previewLoading" }}</span></div>
+                            {{- end }}
                         </div>
+                    {{- end }}
+                    {{- if not $showFallback }}
+                        {{/* Shows when the script marks the view failed, as it did not load in time */}}
+                        <div class="preview-unavailable"><div class="alert alert-warning preview-unavailable-alert" role="alert">
+                            {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false "page" $page) }}
+                            <span>{{ T "previewUnavailable" }} <a class="alert-link preview-unavailable-link" href="{{ $openUrl }}" target="_blank" rel="noopener">{{ T "previewOpenTab" }}</a></span>
+                        </div></div>
                     {{- end }}
                 {{- end }}
                 <div class="preview-error{{ if not $showFallback }} d-none{{ end }}">
@@ -554,4 +573,14 @@
     {{- if and (not $showFallback) $controls $controlsBelow -}}
         {{- partial "inline/preview-btn-group.html" (dict "id" $id "devices" $devices "deviceIcons" $deviceIcons "defaultDevice" $defaultDevice "placement" "below" "page" $page) -}}
     {{- end -}}
+
+    {{- if and $args.openLink $url (not $showFallback) }}
+        <p class="text-center mt-3 mb-0"><a class="preview-open" href="{{ $openUrl }}" target="_blank" rel="noopener">{{ T "previewOpenTab" }}</a></p>
+    {{- end }}
+
+    {{- with $args.links }}
+        <div class="mt-3">
+            {{ partial "assets/links.html" (dict "page" $page "links" . "justify" "center") }}
+        </div>
+    {{- end }}
 {{ end }}

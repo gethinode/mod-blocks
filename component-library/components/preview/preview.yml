@@ -69,6 +69,46 @@ arguments:
       fragment, and the first url that cannot be framed shows the fallback,
       whose alert names that url. The views take the title of the shown item
       as their title.
+  open-link:
+    type: bool
+    optional: true
+    default: false
+    comment: >-
+      Flag indicating if a link that opens the shown view in a new tab renders
+      under the frame. It points at the open-url of the shown item, else at its
+      url, else at url. A block that shows its fallback renders no such link.
+  links:
+    optional: true
+    comment: >-
+      Links to render as buttons under the frame, centered.
+  load-timeout:
+    type: int
+    optional: true
+    default: 15
+    comment: >-
+      Seconds a view that the script loads may take before the view shows its
+      poster again with an alert and a link that opens the shown item in a new
+      tab. The time counts from when the frame first comes into view. Without
+      ready-message, the load event of the frame ends the wait. Chrome fires
+      that event for an error status and a refused connection too, so it
+      catches a target that does not answer, not one that answers with an
+      error; a target whose headers refuse framing is caught when the site
+      builds. The view that loads with the page gets no deadline without
+      ready-message. A value that is not positive counts as 15.
+  ready-message:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Message that the framed page posts to this page when it is ready. When
+      set, a view stays busy behind its poster, with a waiting status and a
+      frame that cannot take focus, until the window of its current frame
+      posts exactly this string, or until load-timeout passes. The script posts
+      the same string to the frame when it loads, and when the script starts
+      for a frame that loaded with the page, so a page that announced itself
+      before the script listened can answer. A late answer still shows the
+      view. Showing another item, or a view for the first time, starts a new
+      wait. Leave it empty to end the wait on the load event of the frame.
 example: |
   heading:
     title: Live Preview

@@ -11,7 +11,11 @@
 // pages, once as is and once with a longer $transition-fade, serves both on
 // 127.0.0.1 and drives Chrome over the DevTools protocol.
 // Chrome never reaches https://example.org/: the check answers those requests
-// itself and records which view's iframe made each one.
+// itself and records which view's iframe made each one. A path under
+// https://example.org/child/ gets a child document of CHILDREN, which posts
+// the ready message of a block or not, answers with an error status, refuses
+// the connection or never answers, so the readiness checks run against real
+// cross-origin frames.
 //
 // Chrome is looked up at CHROME_PATH, then at the usual install locations. When
 // none is found, or it does not start, the check is skipped with the reason.
@@ -22,9 +26,50 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import test, { after } from 'node:test'
+import util from 'node:util'
 
 const TARGET = 'https://example.org/'
 const SETTLE_MS = 500
+
+// The child documents, by the name that follows /child/ in their URL. A child
+// that announces posts TOKEN to its parent once its DOM is ready, after delay
+// ms; one that replies answers a TOKEN request from its parent once it has
+// announced or would have. wrong posts and answers everything but TOKEN alone.
+// phone stays silent in a frame narrower than 600px.
+const TOKEN = 'demo:ok'
+const CHILDREN = {
+  ok: { announce: true, reply: true },
+  slow: { announce: true, reply: true, delay: 1200 },
+  late: { announce: true, reply: true, delay: 3500 },
+  reply: { announce: false, reply: true },
+  announce: { announce: true, reply: false },
+  silent: { announce: false, reply: false },
+  wrong: { wrong: true },
+  phone: { announce: true, reply: true, delay: 1200, phone: 'silent' },
+  503: { status: 503 },
+  refused: { refuse: true },
+  hang: { hang: true }
+}
+const child = name => `${TARGET}child/${name}`
+
+function childDocument ({ announce, reply, delay = 0, wrong, phone }) {
+  const script = wrong
+    ? `const bad = [${JSON.stringify(TOKEN + ' ')}, ${JSON.stringify(TOKEN.toUpperCase())}, { type: ${JSON.stringify(TOKEN)} }, [${JSON.stringify(TOKEN)}], 'preview:ready']
+      document.addEventListener('DOMContentLoaded', () => bad.forEach(data => parent.postMessage(data, '*')))
+      addEventListener('message', event => { if (event.source === parent) bad.forEach(data => event.source.postMessage(data, '*')) })`
+    : `const silent = ${JSON.stringify(phone === 'silent')} && innerWidth < 600
+      let ready = false
+      document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+        ready = true
+        if (${announce} && !silent) parent.postMessage(${JSON.stringify(TOKEN)}, '*')
+      }, ${delay}))
+      addEventListener('message', event => {
+        if (${reply} && !silent && ready && event.source === parent && event.data === ${JSON.stringify(TOKEN)}) {
+          event.source.postMessage(${JSON.stringify(TOKEN)}, event.origin === 'null' ? '*' : event.origin)
+        }
+      })`
+  return `<!doctype html><title>child</title><p>child</p><script>${script}</script>`
+}
 
 const PAGES = {
   default: [],
@@ -49,7 +94,43 @@ const PAGES = {
   'items-plain': ['items:', '  - title: View a', `    url: ${TARGET}a`, '  - title: View b', `    url: ${TARGET}b`],
   'items-fallback': ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B'), 'show_fallback: true'],
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
-    'activation: click', 'mode: true']
+    'activation: click', 'mode: true'],
+  ...readyPages()
+}
+
+// The readiness probe pages. Each block waits for TOKEN, unless it is a legacy
+// one, and gives up after two seconds, or one for the legacy pages.
+function readyPages () {
+  const ready = (name, ...lines) => ({ url: child(name), lines: ['devices: [desktop, mobile]', `ready_message: '${TOKEN}'`, 'load_timeout: 2', ...lines] })
+  const legacy = name => ({ url: child(name), lines: ['devices: [desktop, mobile]', 'load_timeout: 1'] })
+  return {
+    'ready-slow': ready('slow'),
+    'ready-ok': ready('ok'),
+    'ready-silent': ready('silent', 'open_link: true'),
+    'ready-503': ready('503'),
+    'ready-refused': ready('refused'),
+    'ready-late': ready('late'),
+    'ready-reply': ready('reply'),
+    'ready-announce': ready('announce'),
+    'ready-wrong': ready('wrong'),
+    'ready-phone': ready('phone'),
+    'ready-items-click': {
+      url: null,
+      lines: ['devices: [desktop, mobile]', `ready_message: '${TOKEN}'`, 'load_timeout: 2', 'activation: click', 'mode: true', 'open_link: true',
+        'poster:', '  desktop: img/poster-desktop.png', 'links:', '  - title: Start', '    url: https://gethinode.com/',
+        'items:', '  - title: View a', `    url: ${child('slow')}`, `    open_url: ${TARGET}a-open`,
+        '  - title: View b', `    url: ${child('silent')}`, `    open_url: ${TARGET}b-open`, '    poster:', '      desktop: img/poster-mobile.png']
+    },
+    'legacy-hang': legacy('hang'),
+    'legacy-items': {
+      url: null,
+      lines: ['devices: [desktop, mobile]', 'load_timeout: 1', 'items:', '  - title: View a', `    url: ${TARGET}a`,
+        '  - title: View b', `    url: ${child('hang')}`, `    open_url: ${TARGET}b-open`]
+    },
+    'legacy-silent': legacy('silent'),
+    'legacy-503': legacy('503'),
+    'legacy-refused': legacy('refused')
+  }
 }
 
 // One item of a page, viewing TARGET followed by its name, with a heading and,
@@ -118,16 +199,19 @@ function hugo (name, args = []) {
   return publish
 }
 
+// A page is the lines of its one block, which also gets url: TARGET, or
+// { url, lines } to give it another url, or none when url is null.
 function buildSite () {
   fs.mkdirSync(content)
-  for (const [name, lines] of Object.entries(PAGES)) {
+  for (const [name, page] of Object.entries(PAGES)) {
+    const { url = TARGET, lines } = Array.isArray(page) ? { lines: page } : page
     fs.writeFileSync(path.join(content, `${name}.md`), [
       '---',
       `title: ${name}`,
       'modules: [preview]',
       'content_blocks:',
       '  - _bookshop_name: preview',
-      `    url: ${TARGET}`,
+      ...(url === null ? [] : [`    url: ${url}`]),
       ...lines.map(line => `    ${line}`),
       '---',
       ''
@@ -284,8 +368,12 @@ const STATE = `(() => {
 // window load, so `hold` adds an image to the page at DOMContentLoaded and holds
 // its request until release() is called, which keeps window load from firing.
 // It also sets window.previewCheckReady then: readyState turns 'interactive'
-// before the deferred scripts, Bootstrap among them, have run.
-async function openPage (cdp, base, name, width, { hold = false } = {}) {
+// before the deferred scripts, Bootstrap among them, have run. With holdScript,
+// the request for the preview script waits until a child document has been
+// answered and holdScript ms have passed, so the child can announce itself
+// before the script listens. Every page records the src of each iframe whose
+// load event fires in window.previewLoads.
+async function openPage (cdp, base, name, width, { hold = false, height = 900, holdScript = 0 } = {}) {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
   const send = (method, params) => cdp.send(method, params, sessionId)
@@ -294,15 +382,31 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
   const urls = []
   const held = []
   let holding = hold
-  const fulfill = requestId => send('Fetch.fulfillRequest', {
+  const fulfill = (requestId, body = '<!doctype html><title>stub</title><p>stub</p>', responseCode = 200) => send('Fetch.fulfillRequest', {
     requestId,
-    responseCode: 200,
+    responseCode,
     responseHeaders: [{ name: 'Content-Type', value: 'text/html' }],
-    body: Buffer.from('<!doctype html><title>stub</title><p>stub</p>').toString('base64')
+    body: Buffer.from(body).toString('base64')
   }).catch(() => {})
+  // Answers a document request, with a child document under /child/.
+  const answer = (requestId, url) => {
+    const name = url.startsWith(`${TARGET}child/`) && url.slice(`${TARGET}child/`.length)
+    const spec = name && CHILDREN[name]
+    if (!spec) return fulfill(requestId)
+    if (spec.hang) return
+    if (spec.refuse) return send('Fetch.failRequest', { requestId, errorReason: 'ConnectionRefused' }).catch(() => {})
+    if (spec.status) return fulfill(requestId, '<!doctype html><title>Service Unavailable</title><p>unavailable</p>', spec.status)
+    return fulfill(requestId, childDocument(spec)).then(() => { childAnswered = Date.now() })
+  }
+  let childAnswered = 0
+  const scripts = []
   const off = cdp.on(async msg => {
     if (msg.sessionId !== sessionId || msg.method !== 'Fetch.requestPaused') return
     const { requestId, frameId, resourceType } = msg.params
+    if (!msg.params.request.url.startsWith(TARGET)) {
+      scripts.push(requestId)
+      return
+    }
     if (resourceType !== 'Document') {
       if (holding) held.push(requestId); else fulfill(requestId)
       return
@@ -316,12 +420,27 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
     } catch {}
     requests.push(owner)
     urls.push(`${owner} ${msg.params.request.url}`)
-    fulfill(requestId)
+    answer(requestId, msg.params.request.url)
   })
+  // Lets the held preview script through once a child document was answered
+  // holdScript ms ago, or after ten seconds.
+  const started = Date.now()
+  const releaseScripts = holdScript && (async () => {
+    await waitFor(() => (childAnswered && Date.now() - childAnswered > holdScript) || Date.now() - started > 10000, 'the child document', 15000)
+    scripts.splice(0).forEach(requestId => send('Fetch.continueRequest', { requestId }).catch(() => {}))
+    return childAnswered
+  })()
   await send('Page.enable')
   await send('DOM.enable')
   await send('Runtime.enable')
-  await send('Fetch.enable', { patterns: [{ urlPattern: `${TARGET}*`, requestStage: 'Request' }] })
+  await send('Fetch.enable', {
+    patterns: [{ urlPattern: `${TARGET}*`, requestStage: 'Request' }, ...(holdScript ? [{ urlPattern: `${base}/js/preview*`, requestStage: 'Request' }] : [])]
+  })
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `if (window === window.top) { window.previewLoads = []; document.addEventListener('load', event => {
+      if (event.target.tagName === 'IFRAME') window.previewLoads.push(event.target.getAttribute('src'))
+    }, true) }`
+  })
   if (hold) {
     await send('Page.addScriptToEvaluateOnNewDocument', {
       source: `if (window === window.top) document.addEventListener('DOMContentLoaded', () => {
@@ -332,7 +451,7 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
       }, { once: true })`
     })
   }
-  await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
+  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
   await send('Page.navigate', { url: `${base}/${name}/` })
 
   const evaluate = async expression => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result.value
@@ -341,7 +460,8 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
     urls,
     evaluate,
     state: () => evaluate(STATE),
-    resize: w => send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false }),
+    releaseScripts,
+    resize: (w, h = height) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }),
     // Presses Enter on the focused element, as a keyboard does.
     async pressEnter () {
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
@@ -354,7 +474,7 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode })
     },
     emulateMedia: features => send('Emulation.setEmulatedMedia', { features }),
-    release () { holding = false; held.splice(0).forEach(fulfill) },
+    release () { holding = false; held.splice(0).forEach(requestId => fulfill(requestId)) },
     // Waits for window load and for the expected iframe requests (the assertions
     // report any that never came), then lets SETTLE_MS pass for unexpected ones.
     async settle (expected) {
@@ -858,3 +978,414 @@ test('items-plain at 1280px: every item tab controls the content panel, whose la
     await page.close()
   }
 })
+
+// Readiness and runtime fallback. READY_STATE reports the shown pane: its
+// data-preview-state and aria-busy, whether its iframe is inert and shows,
+// whether its poster shows, the text of its waiting status and of its alert
+// when they show, with the alert link, and the element that has focus.
+const READY_STATE = `(() => {
+  const shows = el => {
+    if (!el) return false
+    const style = getComputedStyle(el)
+    const box = el.getBoundingClientRect()
+    return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && box.width > 0 && box.height > 0
+  }
+  const pane = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent)
+  const iframe = pane.querySelector('iframe')
+  const status = pane.querySelector('.preview-waiting')
+  const alert = pane.querySelector('.preview-unavailable')
+  const link = alert && alert.querySelector('a')
+  return {
+    device: pane.id.split('-').pop(),
+    state: pane.dataset.previewState || null,
+    busy: pane.getAttribute('aria-busy'),
+    inert: iframe.inert,
+    iframe: shows(iframe),
+    poster: shows(pane.querySelector('.preview-poster')),
+    hasPoster: !!pane.querySelector('.preview-poster'),
+    waiting: shows(status) ? status.textContent.trim() : null,
+    alert: shows(alert) ? { text: alert.textContent.replace(/\\s+/g, ' ').trim(), role: alert.querySelector('[role]').getAttribute('role'), href: link.href, name: link.textContent.trim() } : null,
+    focus: document.activeElement === document.body ? 'body' : document.activeElement.className || document.activeElement.tagName
+  }
+})()`
+// Reports whether the iframe of the shown pane takes focus, and gives focus back.
+const IFRAME_FOCUS = `(() => {
+  const before = document.activeElement
+  const iframe = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent).querySelector('iframe')
+  iframe.focus()
+  const focused = document.activeElement === iframe
+  if (focused) { iframe.blur(); if (before && before.focus) before.focus() }
+  return focused
+})()`
+const readyState = page => page.evaluate(READY_STATE)
+// Waits until the state of the shown pane passes check, and returns it. The
+// state is undefined until the page has its preview.
+const until = (page, check, what, timeout = 8000) => waitFor(async () => {
+  const value = await readyState(page).catch(() => undefined)
+  return value && check(value) && value
+}, what, timeout)
+
+const WAITING = 'Loading the live preview'
+const UNAVAILABLE = 'The live preview is not available right now. Open in new tab'
+
+// Picks the fields of a state that want names.
+const pick = (state, want) => Object.fromEntries(Object.keys(want).map(key => [key, state[key]]))
+
+// Waits up to a second, for the fades of the poster and the iframe, until the
+// state of the shown pane matches want, and asserts that it does.
+async function settleTo (page, want, label) {
+  const state = await until(page, value => util.isDeepStrictEqual(pick(value, want), want), label, 1000).catch(() => readyState(page))
+  assert.deepEqual(pick(state, want), want, label)
+  return state
+}
+
+// The shown view waits behind its poster: busy, with its status, and an iframe
+// that neither shows nor takes focus.
+async function assertWaiting (page, label) {
+  await settleTo(page, { state: 'waiting', busy: 'true', inert: true, iframe: false, poster: true, waiting: WAITING, alert: null }, `${label}: waiting`)
+  assert.equal(await page.evaluate(IFRAME_FOCUS), false, `${label}: the waiting iframe cannot take focus`)
+}
+
+// The shown view failed: its poster, when it has one, and alert show, the alert
+// links to href, and the iframe neither shows nor takes focus.
+async function assertFailed (page, href, label) {
+  const { hasPoster } = await until(page, value => value.state === 'failed', `${label}: the failure`)
+  const state = await settleTo(page, { busy: null, inert: true, iframe: false, poster: hasPoster, waiting: null, alert: { text: UNAVAILABLE, role: 'alert', href, name: 'Open in new tab' } }, `${label}: failed`)
+  assert.equal(await page.evaluate(IFRAME_FOCUS), false, `${label}: the failed iframe cannot take focus`)
+  return state
+}
+
+// The shown view is ready: the iframe shows and takes focus, the poster, status
+// and alert are gone.
+async function assertReady (page, label) {
+  const state = await until(page, value => value.state === 'ready' && value.iframe && !value.poster, `${label}: readiness`)
+  assert.deepEqual({ busy: state.busy, inert: state.inert, waiting: state.waiting, alert: state.alert }, { busy: null, inert: false, waiting: null, alert: null }, `${label}: ready`)
+  assert.equal(await page.evaluate(IFRAME_FOCUS), true, `${label}: the ready iframe takes focus`)
+  return state
+}
+
+const iframeLoads = page => page.evaluate('window.previewLoads')
+
+test('ready-slow: the view waits behind its poster until its frame posts the ready message, without moving focus', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-slow', 1280)
+  try {
+    await waitFor(() => page.requests.length > 0, 'the frame request')
+    await until(page, value => value.state === 'waiting', 'the wait')
+    await assertWaiting(page, 'ready-slow')
+    const tab = 'document.querySelector(\'section.preview .preview-controls .btn.active\')'
+    assert.equal(await page.evaluate(`(() => { ${tab}.focus(); return document.activeElement === ${tab} })()`), true)
+    const state = await assertReady(page, 'ready-slow')
+    assert.equal(state.focus.includes('btn'), true, `focus stays on the device button, not ${state.focus}`)
+    assert.deepEqual(page.urls, [`desktop ${child('slow')}`])
+  } finally {
+    await page.close()
+  }
+})
+
+for (const [name, what] of [['silent', 'a frame that loads and never posts'], ['503', 'a 503 answer'], ['refused', 'a refused connection'], ['wrong', 'a frame that posts and answers other data only']]) {
+  test(`ready-${name}: ${what} fails after the load timeout with a friendly alert that opens the URL`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, `ready-${name}`, 1280)
+    try {
+      await until(page, value => value.state === 'waiting', 'the wait')
+      const started = Date.now()
+      if (name === 'silent' || name === 'wrong') {
+        await waitFor(async () => (await iframeLoads(page)).length > 0, 'the iframe load')
+        await sleep(300)
+        await assertWaiting(page, `${name} after its load`)
+      }
+      const state = await assertFailed(page, child(name), `ready-${name}`)
+      assert.ok(Date.now() - started > 1000, 'it fails at the deadline, not before')
+      assert.doesNotMatch(state.alert.text, /example\.org|child/, 'the alert names no URL')
+      assert.equal(state.focus, 'body', 'focus does not move')
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+test('ready-silent: messages from the page itself and from a sibling frame change nothing', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-silent', 1280)
+  try {
+    await until(page, value => value.state === 'waiting', 'the wait')
+    await page.evaluate(`(() => {
+      window.postMessage('${TOKEN}', '*')
+      const sibling = document.createElement('iframe')
+      sibling.srcdoc = '<script>parent.postMessage(${JSON.stringify(TOKEN)}, "*")<\\/script>'
+      document.querySelector('section.preview').append(sibling)
+    })()`)
+    await sleep(500)
+    await assertWaiting(page, 'after the sibling messages')
+    await assertFailed(page, child('silent'), 'ready-silent')
+  } finally {
+    await page.close()
+  }
+})
+
+test('ready-late: an acknowledgement after the deadline recovers the failed view without moving focus', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-late', 1280)
+  try {
+    await assertFailed(page, child('late'), 'ready-late')
+    const state = await assertReady(page, 'ready-late')
+    assert.equal(state.focus, 'body')
+  } finally {
+    await page.close()
+  }
+})
+
+test('ready-reply: a frame that only answers requests becomes ready, as the script asks on load', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-reply', 1280)
+  try {
+    await assertReady(page, 'ready-reply')
+  } finally {
+    await page.close()
+  }
+})
+
+for (const [name, ready] of [['ok', true], ['announce', false]]) {
+  test(`ready-${name}: when the frame announced itself before the script ran, ${ready ? 'its answer to the request makes the view ready' : 'the view without an answer fails'}`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, `ready-${name}`, 1280, { holdScript: 1000 })
+    try {
+      assert.ok(await page.releaseScripts, 'the child document was answered before the script')
+      if (ready) await assertReady(page, `held ready-${name}`); else await assertFailed(page, child(name), `held ready-${name}`)
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+test('ready-phone: the acknowledgement of one device view does not reveal another, which waits on its own deadline', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-phone', 1280)
+  try {
+    await until(page, value => value.state === 'waiting', 'the desktop wait')
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+    await until(page, value => value.device === 'mobile' && value.state === 'waiting', 'the mobile wait')
+    await assertWaiting(page, 'mobile')
+    await waitFor(() => page.evaluate('document.querySelector(\'section.preview [id$="-desktop"]\').dataset.previewState === \'ready\''), 'the hidden desktop view to become ready')
+    await assertWaiting(page, 'mobile after the desktop acknowledgement')
+    await assertFailed(page, child('phone'), 'mobile')
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-desktop"]\').click()')
+    await assertReady(page, 'desktop shown again')
+    assert.deepEqual(page.urls, [`desktop ${child('phone')}`, `mobile ${child('phone')}`])
+  } finally {
+    await page.close()
+  }
+})
+
+// Dispatches a message event with the ready message on the page, from the
+// window of the shown iframe, or from the window stored in window.previewOld.
+const fakeAck = from => `window.dispatchEvent(new MessageEvent('message', { data: '${TOKEN}', source: ${from === 'old' ? 'window.previewOld' : '[...document.querySelectorAll(\'section.preview .preview-content > .tab-pane\')].find(el => el.offsetParent).querySelector(\'iframe\').contentWindow'} }))`
+
+test('ready-items-click: activation and item switches wait for the current frame, ignore the replaced one, and link the shown item', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-items-click', 1280)
+  try {
+    await page.settle([])
+    let state = await readyState(page)
+    assert.deepEqual({ state: state.state, poster: state.poster, waiting: state.waiting, alert: state.alert }, { state: null, poster: true, waiting: null, alert: null }, 'before activation')
+    assert.deepEqual(page.urls, [])
+    await activateWithEnter(page)
+    await until(page, value => value.state === 'waiting', 'the wait after activation')
+    await assertWaiting(page, 'item a after activation')
+    assert.equal(await page.evaluate('getComputedStyle(document.querySelector(\'section.preview .preview-content > .tab-pane.active .preview-activate\')).display'), 'none', 'the poster button is gone')
+    await assertReady(page, 'item a')
+    await page.evaluate('window.previewOld = [...document.querySelectorAll(\'section.preview .preview-content > .tab-pane\')].find(el => el.offsetParent).querySelector(\'iframe\').contentWindow')
+    await clickItem(page, 1)
+    await until(page, value => value.state === 'waiting', 'the wait for item b')
+    await assertWaiting(page, 'item b')
+    assert.match(visiblePoster(await page.state()).image, /^poster-mobile-light-/, 'item b shows its poster')
+    assert.equal(await page.evaluate('new MessageEvent(\'message\', { source: window.previewOld }).source === window.previewOld'), true, 'the replaced window can be a message source')
+    await page.evaluate(fakeAck('old'))
+    await assertWaiting(page, 'item b after a message from the replaced frame')
+    const failed = await assertFailed(page, `${TARGET}b-open`, 'item b')
+    assert.equal(failed.focus.includes('nav-link'), false)
+    await page.evaluate(fakeAck('current'))
+    await assertReady(page, 'item b after a message from its own frame')
+    await clickItem(page, 0)
+    await until(page, value => value.state === 'waiting', 'the wait for item a again')
+    await assertReady(page, 'item a again')
+    assert.deepEqual(page.urls, [`desktop ${child('slow')}`, `desktop ${child('silent')}`, `desktop ${child('slow')}`])
+    const open = await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => [el.href, el.textContent.trim(), el.getBoundingClientRect().top > document.querySelector(\'section.preview .preview-content\').getBoundingClientRect().bottom])')
+    assert.deepEqual(open, [[`${TARGET}a-open`, 'Open in new tab', true]], 'the open link under the frame follows the item')
+    const buttons = await page.evaluate('[...document.querySelectorAll(\'section.preview .btn.btn-primary:not(.preview-activate)\')].filter(el => el.offsetParent).map(el => [el.textContent.trim(), el.getBoundingClientRect().top > document.querySelector(\'section.preview .preview-content\').getBoundingClientRect().bottom])')
+    assert.deepEqual(buttons, [['Start', true]], 'the visible link buttons render under the frame')
+  } finally {
+    await page.close()
+  }
+})
+
+for (const mode of ['light', 'dark']) {
+  test(`ready-silent in ${mode} mode: the waiting status and the alert read against their background`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'ready-silent', 1280)
+    try {
+      const colors = selector => page.evaluate(`(() => { const el = document.querySelector('section.preview .preview-content > .tab-pane.active ${selector}'); const s = getComputedStyle(el); return [s.color, s.backgroundColor] })()`)
+      await until(page, value => value.state === 'waiting', 'the wait')
+      await page.evaluate(`document.documentElement.setAttribute('data-bs-theme', '${mode}')`)
+      assert.equal(await page.evaluate('getComputedStyle(document.body).backgroundColor === \'rgb(255, 255, 255)\''), mode === 'light', `${mode}: the page takes the color mode`)
+      const waiting = await colors('.preview-waiting')
+      assert.notEqual(waiting[0], waiting[1], `${mode}: status text ${waiting[0]} on ${waiting[1]}`)
+      assert.notEqual(waiting[1], 'rgba(0, 0, 0, 0)', `${mode}: the status has a background`)
+      await assertFailed(page, child('silent'), mode)
+      const alert = await colors('.preview-unavailable .alert')
+      assert.notEqual(alert[0], alert[1], `${mode}: alert text ${alert[0]} on ${alert[1]}`)
+      console.log(`# ready-silent ${mode}: status ${waiting}, alert ${alert}`)
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+// Makes the shown view ready with a message from its own frame, pauses the
+// transitions that starts on its iframe and poster, and samples them halfway
+// through the iframe fade and after it.
+const READY_FADE = `(() => {
+  const pane = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent)
+  const iframe = pane.querySelector('iframe')
+  const poster = pane.querySelector('.preview-poster')
+  ${fakeAck('current')}
+  const styles = [getComputedStyle(iframe), getComputedStyle(poster)]
+  styles.forEach(style => void style.opacity)
+  const transitions = [...iframe.getAnimations(), ...poster.getAnimations()].filter(animation => animation.transitionProperty)
+  transitions.forEach(animation => animation.pause())
+  const now = () => [Number(styles[0].opacity).toFixed(2), Number(styles[1].opacity).toFixed(2), styles[1].visibility]
+  const fade = iframe.getAnimations().find(animation => animation.transitionProperty === 'opacity')
+  if (!fade) return { transitions: transitions.map(animation => animation.transitionProperty), now: now() }
+  const { delay, duration } = fade.effect.getComputedTiming()
+  const sample = at => { transitions.forEach(animation => { animation.currentTime = at }); return now() }
+  return { duration, samples: [sample(delay + duration / 2), sample(delay + duration + 1000)] }
+})()`
+
+for (const [fade, site, ms] of FADES) {
+  test(`with ${fade}, a ready view fades its iframe in and its poster out`, { skip }, async () => {
+    const page = await openPage(browser.cdp, site, 'ready-silent', 1280)
+    try {
+      await until(page, value => value.state === 'waiting', 'the wait')
+      const { duration, samples, transitions } = await page.evaluate(READY_FADE)
+      assert.ok(duration > 0, `the iframe fades (transitions: ${transitions})`)
+      if (ms) assert.equal(duration, ms, 'the iframe fades for the configured duration')
+      const [half, done] = samples
+      assert.ok(Number(half[0]) > 0 && Number(half[0]) < 1, `halfway the iframe is partly opaque: ${half}`)
+      assert.ok(Number(half[1]) > 0 && Number(half[1]) < 1 && half[2] === 'visible', `halfway the poster is partly opaque: ${half}`)
+      assert.deepEqual(done, ['1.00', '0.00', 'hidden'], 'after the fade the iframe shows and the poster is hidden')
+      console.log(`# ready-silent with ${fade}: fade of ${duration}ms, samples ${JSON.stringify(samples)}`)
+    } finally {
+      await page.close()
+    }
+  })
+
+  test(`with ${fade}, a ready view shows at once when reduced motion is preferred`, { skip }, async () => {
+    const page = await openPage(browser.cdp, site, 'ready-silent', 1280)
+    try {
+      await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+      await until(page, value => value.state === 'waiting', 'the wait')
+      assert.deepEqual(await page.evaluate(READY_FADE), { transitions: [], now: ['1.00', '0.00', 'hidden'] })
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+test('ready-silent below the fold: the deadline starts when the frame comes into view', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-silent', 1280, { height: 60 })
+  try {
+    await until(page, value => value.state === 'waiting', 'the wait')
+    assert.equal(await page.evaluate('document.querySelector(\'section.preview iframe[src]\').getBoundingClientRect().top > innerHeight'), true, 'the frame starts out of view')
+    await sleep(3000)
+    assert.equal((await readyState(page)).state, 'waiting', 'no deadline out of view')
+    await page.resize(1280, 900)
+    await assertFailed(page, child('silent'), 'in view')
+  } finally {
+    await page.close()
+  }
+})
+
+// Without a ready message, a view the script loads fails when its iframe does
+// not load in time. Browsers fire load for error pages too, so an error answer
+// or a refused connection counts as loaded.
+test('legacy-hang: the view in the markup gets no deadline, and a view the script loads fails when its frame never answers', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'legacy-hang', 1280)
+  try {
+    await sleep(2000)
+    let state = await readyState(page)
+    assert.deepEqual({ state: state.state, iframe: state.iframe, alert: state.alert }, { state: null, iframe: true, alert: null }, 'the markup view')
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+    state = await until(page, value => value.device === 'mobile' && value.state === 'waiting', 'the mobile wait')
+    assert.deepEqual({ busy: state.busy, inert: state.inert, waiting: state.waiting }, { busy: null, inert: false, waiting: null }, 'a loading view is neither busy nor inert')
+    await assertFailed(page, child('hang'), 'legacy-hang mobile')
+  } finally {
+    await page.close()
+  }
+})
+
+test('legacy-items: the copy that replaces a loaded iframe on an item switch fails when its frame never answers', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'legacy-items', 1280)
+  try {
+    await page.settle(['desktop'])
+    await clickItem(page, 1)
+    let state = await until(page, value => value.state === 'waiting', 'the wait for item b')
+    await sleep(300)
+    state = await readyState(page)
+    assert.equal(state.state, 'waiting', 'the inserted copy does not count as loaded')
+    await assertFailed(page, `${TARGET}b-open`, 'legacy-items b')
+    await clickItem(page, 0)
+    await until(page, value => value.state === 'ready', 'item a loads')
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${child('hang')}`, `desktop ${TARGET}a`])
+  } finally {
+    await page.close()
+  }
+})
+
+for (const name of ['silent', '503', 'refused']) {
+  test(`legacy-${name}: a view the script loads is ready on its load event`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, `legacy-${name}`, 1280)
+    try {
+      await page.settle(['desktop'])
+      await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+      await until(page, value => value.device === 'mobile' && value.state === 'ready', 'the mobile load')
+      await sleep(1500)
+      const state = await readyState(page)
+      assert.deepEqual({ state: state.state, iframe: state.iframe, alert: state.alert, inert: state.inert }, { state: 'ready', iframe: true, alert: null, inert: false })
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+// On a phone, the frame leaves part of the viewport to scroll the page with:
+// the content box is at most 80% of the viewport height and the page scrolls
+// past it above and below. At 480px the 400px minimum height would pass that.
+const PHONE_BOXES = `(() => {
+  const content = document.querySelector('section.preview .preview-content')
+  const iframe = [...content.querySelectorAll('iframe')].find(el => el.offsetParent)
+  content.scrollIntoView({ block: 'center', behavior: 'instant' })
+  const box = content.getBoundingClientRect()
+  const frame = iframe.getBoundingClientRect()
+  return {
+    viewport: [innerWidth, innerHeight],
+    content: [box.width, box.height].map(Math.round),
+    frame: [frame.width, frame.height].map(Math.round),
+    frameInside: frame.left >= box.left - 1 && frame.right <= box.right + 1 && frame.top >= box.top - 1 && frame.bottom <= box.bottom + 1,
+    scrollWidth: document.scrollingElement.scrollWidth,
+    above: Math.round(box.top),
+    below: Math.round(innerHeight - box.bottom),
+    scrolls: document.scrollingElement.scrollHeight > innerHeight
+  }
+})()`
+
+for (const height of [844, 600, 480]) {
+  test(`default at 390x${height}px: the mobile frame fits and leaves page scroll above and below it`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'default', 390, { height })
+    try {
+      page.width = 390
+      await page.settle(['mobile'])
+      const boxes = await page.evaluate(PHONE_BOXES)
+      assert.deepEqual(boxes.viewport, [390, height])
+      assert.ok(boxes.content[0] > 0 && boxes.content[1] > 0 && boxes.frame[0] > 0 && boxes.frame[1] > 0, `nonzero boxes: ${JSON.stringify(boxes)}`)
+      assert.ok(boxes.frameInside, 'the scaled frame fits its content box')
+      assert.ok(boxes.scrollWidth <= 390, `no horizontal scroll: ${boxes.scrollWidth}`)
+      assert.ok(boxes.content[1] <= Math.ceil(height * 0.8), `the content is at most 80% of the viewport height: ${boxes.content[1]} of ${height}`)
+      assert.ok(boxes.scrolls && boxes.above > 0 && boxes.below > 0, `page scroll reaches past the frame: ${JSON.stringify(boxes)}`)
+      console.log(`# default @390x${height}: ${JSON.stringify(boxes)}`)
+    } finally {
+      await page.close()
+    }
+  })
+}

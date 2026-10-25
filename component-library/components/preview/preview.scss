@@ -88,7 +88,7 @@ section.preview {
         @include transition($transition-fade);
         transition-property: opacity, visibility;
 
-        > :not(.preview-activate) {
+        > :not(.preview-activate, .preview-waiting) {
             position: absolute;
             inset: 0;
         }
@@ -114,6 +114,81 @@ section.preview {
     .preview-content[data-active="true"] .preview-poster {
         opacity: 0;
         visibility: hidden;
+    }
+
+    // preview.js sets data-preview-state on a pane to waiting, ready or failed. With a
+    // ready message, the poster covers a view until it is ready, also after activation,
+    // with a waiting status instead of its button, and the iframe fades in under it.
+    .preview-content[data-ready-message] {
+        > .tab-pane:not([data-preview-state="ready"]) .preview-poster {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        > .tab-pane[data-preview-state="ready"] .preview-poster {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        &[data-active="true"] .preview-activate {
+            display: none;
+        }
+
+        .preview-iframe {
+            @include transition($transition-fade);
+        }
+
+        > .tab-pane:not([data-preview-state="ready"]) .preview-iframe {
+            opacity: 0;
+        }
+    }
+
+    .preview-waiting {
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: var(--#{$prefix}border-radius);
+        background-color: var(--#{$prefix}body-bg);
+        color: var(--#{$prefix}body-color);
+    }
+
+    .preview-content > .tab-pane[data-preview-state="waiting"] .preview-waiting {
+        display: flex;
+    }
+
+    // A view that failed to load in time shows its poster again, with an alert over it
+    .preview-unavailable {
+        display: none;
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+
+        .alert {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+        }
+    }
+
+    .preview-content > .tab-pane[data-preview-state="failed"] {
+        .preview-poster {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .preview-activate,
+        .preview-iframe {
+            visibility: hidden;
+        }
+
+        > .preview-unavailable {
+            display: flex;
+        }
     }
 
     .preview-iframe {
@@ -292,6 +367,12 @@ section.preview {
 
     // Responsive behavior for small screens
     @media (max-width: 639px) {
+        // The 400px minimum height passes 80svh on a viewport under 500px tall; cap it so
+        // the page keeps a fifth of the small viewport to scroll with
+        .preview-content {
+            min-height: min(400px, 80svh);
+        }
+
         .preview-controls {
             padding: 0.5rem 0;
 
