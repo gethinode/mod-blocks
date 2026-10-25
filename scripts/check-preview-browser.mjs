@@ -450,18 +450,49 @@ const visiblePoster = state => state.panes.find(pane => pane.visible).poster
 const RECORD_ACTIVATE = `window.previewActivations = []; document.addEventListener('preview:activate', event => window.previewActivations.push(event.target.matches('section.preview')))`
 const FOCUS_ACTIVATE = `(() => { const button = [...document.querySelectorAll('section.preview .preview-activate')].find(el => el.offsetParent); button.focus(); return document.activeElement === button })()`
 
-// The poster of the shown view must cover the box of its scaled iframe.
+// The poster of the shown view must cover the box of its scaled iframe, with the
+// same corners and a background of its own; its image, when it has one, must fill
+// it without distortion; and its button must be the element under its center.
 const POSTER_BOXES = `(() => {
   const pane = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent)
   const box = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round) }
-  return { iframe: box(pane.querySelector('iframe')), poster: box(pane.querySelector('.preview-poster')) }
+  const iframe = pane.querySelector('iframe')
+  const poster = pane.querySelector('.preview-poster')
+  const image = [...poster.querySelectorAll('img')].find(el => el.offsetParent)
+  const button = poster.querySelector('.preview-activate').getBoundingClientRect()
+  const style = getComputedStyle(poster)
+  return {
+    iframe: box(iframe),
+    poster: box(poster),
+    image: image ? box(image) : null,
+    fit: image ? getComputedStyle(image).objectFit + ' ' + getComputedStyle(image).objectPosition : null,
+    radius: [style.borderTopLeftRadius, getComputedStyle(iframe).borderTopLeftRadius],
+    background: style.backgroundColor,
+    buttonOnTop: document.elementFromPoint(button.left + button.width / 2, button.top + button.height / 2) === poster.querySelector('.preview-activate')
+  }
 })()`
 
+const near = (got, want) => got.every((value, i) => Math.abs(value - want[i]) <= 1)
+
 async function assertPosterCovers (page, label) {
-  const { iframe, poster } = await page.evaluate(POSTER_BOXES)
-  poster.forEach((value, i) => assert.ok(Math.abs(value - iframe[i]) <= 1, `${label}: poster box ${poster} covers iframe box ${iframe}`))
-  console.log(`# ${label}: iframe box ${iframe}, poster box ${poster}`)
+  const { iframe, poster, image, fit, radius, background, buttonOnTop } = await page.evaluate(POSTER_BOXES)
+  assert.ok(near(poster, iframe), `${label}: poster box ${poster} covers iframe box ${iframe}`)
+  if (image) {
+    assert.ok(near(image, poster), `${label}: image box ${image} fills poster box ${poster}`)
+    assert.equal(fit, 'cover 50% 0%', `${label}: the image is cropped, not stretched`)
+  }
+  assert.equal(radius[0], radius[1], `${label}: poster corners match the iframe`)
+  assert.notEqual(background, 'rgba(0, 0, 0, 0)', `${label}: the poster has a background`)
+  assert.ok(buttonOnTop, `${label}: the button is on top of the poster`)
+  console.log(`# ${label}: iframe box ${iframe}, poster box ${poster}, image box ${image}`)
 }
+
+// After activation the posters are faded out and their buttons cannot take focus.
+const POSTERS_GONE = `(() => {
+  const posters = [...document.querySelectorAll('section.preview .preview-poster')]
+  const focusable = posters.map(poster => { const button = poster.querySelector('.preview-activate'); button.focus(); return document.activeElement === button })
+  return { opacity: posters.map(poster => getComputedStyle(poster).opacity), focusable }
+})()`
 
 async function activateWithEnter (page) {
   await page.evaluate(RECORD_ACTIVATE)
@@ -484,6 +515,7 @@ test('click at 1280px loads nothing until Enter on the poster button, then deskt
     assertView(page, state, 'desktop', ['desktop'], 'after activation')
     assert.equal(state.active, 'true')
     assert.equal(visiblePoster(state).visible, false, 'the poster is hidden')
+    assert.deepEqual(await page.evaluate(POSTERS_GONE), { opacity: ['0', '0', '0'], focusable: [false, false, false] }, 'every poster faded out and left the tab order')
     assert.deepEqual(await page.evaluate('window.previewActivations'), [true], 'one preview:activate event on the section')
     console.log(`# click @1280: requests before activation [], after [${page.requests}]`)
   } finally {
@@ -540,6 +572,7 @@ test('click-nocontrols loads the picked view on Enter, then the next one on resi
     let state = await page.settle([])
     assertView(page, state, 'mobile', [], 'before activation')
     assert.deepEqual(visiblePoster(state), { visible: true, image: null }, 'a poster without an image')
+    await assertPosterCovers(page, 'mobile without an image @400')
     await page.resize(1280)
     page.width = 1280
     state = await page.settle([])
