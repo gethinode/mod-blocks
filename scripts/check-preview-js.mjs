@@ -40,6 +40,8 @@ class FakeElement {
 
   hasAttribute (name) { return name in this.attrs }
   removeAttribute (name) { delete this.attrs[name] }
+  getAttribute (name) { return name in this.attrs ? this.attrs[name] : null }
+  setAttribute (name, value) { this.attrs[name] = String(value) }
   // A shallow copy: the same classes, data and attributes, without children,
   // listeners or the count of src sets.
   cloneNode () {
@@ -126,15 +128,22 @@ function cssHides (device, offered, width) {
 // one does. With click activation no iframe carries src, and every pane holds a
 // poster with its button. With items, a heading pane and an item tab render per
 // item, every iframe starts with the URL of the first item, every poster holds
-// one image per item, and an open link follows the frame.
-function buildPreview ({ devices, active, controls = true, activation = 'load', items }) {
+// one image per item, and an open link follows the frame. Every iframe takes
+// the title of the first item. With panel, the items carry no headings, so
+// the content is the tab panel of every item tab, labelled by the first.
+function buildPreview ({ devices, active, controls = true, activation = 'load', items, panel = false }) {
   const click = activation === 'click'
   const id = 'preview-1'
   const section = new FakeElement({ classes: ['preview'] })
   const dataset = { devices: devices.join(' '), desktopResponsive: 'true' }
   if (!controls) dataset.controls = 'false'
   if (click) dataset.activation = 'click'
-  const content = new FakeElement({ classes: ['tab-content', 'preview-content'], dataset })
+  const content = new FakeElement({
+    id: panel ? `${id}-items-panel` : '',
+    classes: ['tab-content', 'preview-content'],
+    dataset,
+    attrs: panel ? { role: 'tabpanel', 'aria-labelledby': `${id}-item-0-tab` } : {}
+  })
   const panes = {}
   const buttons = {}
   const first = items ? items[0].url : URL
@@ -143,13 +152,16 @@ function buildPreview ({ devices, active, controls = true, activation = 'load', 
   if (items) {
     const headingContent = new FakeElement({ classes: ['tab-content', 'preview-headings'] })
     const nav = new FakeElement({ classes: ['nav', 'nav-pills', 'preview-items'] })
-    items.forEach(({ url, openUrl = url }, n) => {
-      headings.push(new FakeElement({ id: `${id}-item-${n}`, classes: ['tab-pane', 'fade', ...(n === 0 ? ['show', 'active'] : [])] }))
-      itemButtons.push(new FakeElement({
+    items.forEach(({ url, openUrl = url, title }, n) => {
+      if (!panel) headings.push(new FakeElement({ id: `${id}-item-${n}`, classes: ['tab-pane', 'fade', ...(n === 0 ? ['show', 'active'] : [])] }))
+      const button = new FakeElement({
+        id: `${id}-item-${n}-tab`,
         classes: ['nav-link', ...(n === 0 ? ['active'] : [])],
         dataset: { bsTarget: `#${id}-item-${n}`, previewUrl: url, previewOpenUrl: openUrl },
-        attrs: { 'data-bs-toggle': 'tab' }
-      }))
+        attrs: { 'data-bs-toggle': 'tab', 'aria-controls': panel ? `${id}-items-panel` : `${id}-item-${n}` }
+      })
+      button.textContent = ` ${title} `
+      itemButtons.push(button)
     })
     section.append(headingContent.append(...headings), nav.append(...itemButtons))
   }
@@ -158,7 +170,7 @@ function buildPreview ({ devices, active, controls = true, activation = 'load', 
     const iframe = new FakeElement({
       classes: ['preview-iframe', `preview-${device}`],
       dataset: { src: first },
-      attrs: isActive && controls && !click ? { src: first } : {}
+      attrs: { ...(isActive && controls && !click ? { src: first } : {}), ...(items ? { title: items[0].title } : {}) }
     })
     panes[device] = new FakeElement({ id: `${id}-${device}`, classes: ['tab-pane', 'fade', ...(isActive ? ['show', 'active'] : [])], device }).append(iframe)
     if (click) {
@@ -479,7 +491,8 @@ test('a poster button outside a preview block is left alone', () => {
 
 const A = 'https://example.org/a'
 const B = 'https://example.org/b'
-const ITEMS = [{ url: A }, { url: B, openUrl: 'https://example.org/b-open' }]
+const ITEMS = [{ url: A, title: 'View A' }, { url: B, openUrl: 'https://example.org/b-open', title: 'View B' }]
+const titles = preview => Object.values(preview.panes).map(pane => pane.children[0].getAttribute('title'))
 const dataSrcs = preview => Object.values(preview.panes).map(pane => pane.children[0].dataset.src)
 const srcs = preview => Object.fromEntries(Object.entries(preview.panes).map(([device, pane]) => [device, src(pane)]))
 // The item each poster shows: the index of its one poster image without d-none.
@@ -497,8 +510,10 @@ test('with items and click activation, an item tab before activation swaps URL a
   const page = run(preview, 1280)
   const events = recordItems(page)
   assert.deepEqual(posterItems(preview), ['0', '0', '0'])
+  assert.deepEqual(titles(preview), ['View A', 'View A', 'View A'])
   preview.itemButtons[1].click()
   assert.deepEqual(dataSrcs(preview), [B, B, B])
+  assert.deepEqual(titles(preview), ['View B', 'View B', 'View B'], 'every iframe takes the title of the item')
   assert.deepEqual(loaded(preview), [])
   assert.deepEqual(posterItems(preview), ['1', '1', '1'])
   assert.equal(preview.open.href, 'https://example.org/b-open')
@@ -530,8 +545,11 @@ test('with items and click activation, an item tab after activation loads the sh
   assert.equal(before[0].attrs.src, A, 'the replaced iframe is left as it was')
   assert.equal(preview.panes.tablet.children[0].srcSets, 1, 'the new tablet iframe loads once')
   assert.deepEqual(after[0].classList.set, before[0].classList.set, 'the copy keeps the classes')
+  assert.deepEqual(titles(preview), ['View B', 'View B', 'View B'], 'the copies and the untouched iframe take the item title')
+  assert.equal(before[0].getAttribute('title'), 'View A', 'the replaced iframe keeps its title')
   preview.buttons.desktop.click()
   assert.deepEqual(srcs(preview), { desktop: B, tablet: B, mobile: undefined }, 'a view shown later loads the item URL')
+  assert.equal(preview.panes.desktop.children[0].getAttribute('title'), 'View B', 'and carries its title')
 })
 
 test('with items and load activation, an item tab loads the shown view at once', () => {
@@ -559,4 +577,22 @@ test('an item tab does not load a heading pane as a view', () => {
   run(preview, 1280)
   assert.doesNotThrow(() => preview.itemButtons[1].click())
   assert.deepEqual(preview.headings.map(isShown), [false, true])
+})
+
+test('with items without headings, the content panel is labelled by the shown item tab', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', items: ITEMS, panel: true })
+  run(preview, 1280)
+  assert.equal(preview.content.getAttribute('aria-labelledby'), 'preview-1-item-0-tab')
+  preview.itemButtons[1].click()
+  assert.equal(preview.content.getAttribute('aria-labelledby'), 'preview-1-item-1-tab')
+  assert.deepEqual(srcs(preview), { desktop: B, mobile: undefined })
+  preview.itemButtons[0].click()
+  assert.equal(preview.content.getAttribute('aria-labelledby'), 'preview-1-item-0-tab')
+})
+
+test('with item headings, the content is no tab panel and gets no label', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', items: ITEMS })
+  run(preview, 1280)
+  preview.itemButtons[1].click()
+  assert.equal(preview.content.getAttribute('aria-labelledby'), null)
 })

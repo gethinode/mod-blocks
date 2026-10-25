@@ -248,6 +248,8 @@ fixtures:
       - 'role="tablist"'
     reject:
       - 'Block heading </h'
+      - 'title="Block heading"'
+      - '-items-panel'
     order:
       - 'class="tab-pane fade show active" id="preview-'
       - '-item-0" role="tabpanel"'
@@ -272,6 +274,8 @@ fixtures:
       'class="nav-link"': 1
       'role="tabpanel"': 5
       'data-bs-toggle="tab"': 5
+      'title="View A"': 3
+      'title="View B"': 0
   - case: items-heading-fallback
     block:
       _bookshop_name: preview
@@ -309,10 +313,20 @@ fixtures:
     order:
       - 'Block heading'
       - 'nav nav-pills'
+      - 'role="tab" aria-selected="true" aria-controls="preview-'
+      - '-items-panel">View A</button>'
+      - 'role="tab" aria-selected="false" aria-controls="preview-'
+      - '-items-panel">View B</button>'
+      - 'class="tab-content preview-content'
+      - 'id="preview-'
+      - '-items-panel" role="tabpanel" aria-labelledby="preview-'
+      - '-item-0-tab"'
+      - 'preview-desktop'
     count:
       'Block heading': 1
-      'role="tabpanel"': 3
-      'aria-controls="preview-': 3
+      'role="tabpanel"': 4
+      'aria-controls="preview-': 5
+      'title="View A"': 3
       'show active': 1
   - case: items-with-fallback
     block:
@@ -328,9 +342,12 @@ fixtures:
     want:
       - 'class="preview-error"'
       - 'Heading A'
+      - 'Unable to load preview for <code>https://example.org/a</code>'
     reject:
       - 'preview-items'
       - 'data-preview-url'
+      - '-items-panel'
+      - 'role="tab"'
   - case: items-override-url
     block:
       _bookshop_name: preview

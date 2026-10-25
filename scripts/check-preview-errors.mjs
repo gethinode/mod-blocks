@@ -168,3 +168,21 @@ for (const [label, lines] of [['a title', ['  - url: https://example.org/a']], [
     assert.match(result.log, /Invalid argument 'items'/)
   })
 }
+
+// The alerts of the fallback, each as the URL in its text and the URL of its link.
+const alerts = html => [...html.matchAll(/<div class="alert alert-warning" role="alert">([\s\S]*?)<\/div>/g)]
+  .map(([, body]) => [body.match(/<code>([^<]*)<\/code>/)?.[1], body.match(/<a href="([^"]*)"/)?.[1]])
+
+test('the fallback alert names the item URL whose origin shows the fallback', () => {
+  // The first item is on an origin the site CSP covers; the second is not.
+  const result = build({
+    later: { url: null, lines: ['items:', ...item('A', 'https://example.org/a'), ...item('B', 'https://preview-blocked.invalid/b')] },
+    explicit: { url: null, lines: ['show_fallback: true', 'items:', ...item('A', 'https://example.org/a'), ...item('B', 'https://preview-blocked.invalid/b')] }
+  })
+  assert.equal(result.status, 0, result.log)
+  const blocked = 'https://preview-blocked.invalid/b'
+  assert.deepEqual(alerts(result.html.later), [[blocked, blocked], [blocked, blocked], [blocked, blocked]])
+  assert.match(result.html.later, /class="preview-error"/)
+  const first = 'https://example.org/a'
+  assert.deepEqual(alerts(result.html.explicit), [[first, first], [first, first], [first, first]], 'an explicit fallback names the first item')
+})

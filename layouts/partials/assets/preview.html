@@ -384,13 +384,19 @@
     {{- $url = (index $items 0).url -}}
 {{- end -}}
 
+{{/* The iframes take the title of the first item, which the script swaps for the shown item */}}
+{{- $frameTitle := or $args.heading.title (printf "Preview of %s" $url) -}}
+{{- with $items }}{{ $frameTitle = (index . 0).title }}{{ end -}}
+
 {{ if not $error }}
     {{/* Build-time detection of iframe embedding restrictions */}}
     {{- $showFallback := or $args.showFallback (not $url) -}}
     {{- $origin := partial "inline/preview-origin.html" site.BaseURL -}}
 
     {{/* Items share one check per origin, against the first item URL on that origin; the
-         first origin that cannot be framed shows the fallback and ends the checks. */}}
+         first origin that cannot be framed shows the fallback and ends the checks. The fallback
+         alert names the URL of that check. */}}
+    {{- $fallbackUrl := $url -}}
     {{- if and $url (not $showFallback) $origin.host -}}
         {{- $checked := slice -}}
         {{- range $target := (cond (gt (len $items) 0) (apply $items "index" "." "url") (slice $url)) -}}
@@ -398,7 +404,10 @@
             {{- $key := printf "%s://%s:%s" $o.scheme $o.host $o.port -}}
             {{- if and (not $showFallback) (not (in $checked $key)) -}}
                 {{- $checked = $checked | append $key -}}
-                {{- $showFallback = partial "inline/preview-framing.html" (dict "url" $target "origin" $origin "file" $page.File) -}}
+                {{- if partial "inline/preview-framing.html" (dict "url" $target "origin" $origin "file" $page.File) -}}
+                    {{- $showFallback = true -}}
+                    {{- $fallbackUrl = $target -}}
+                {{- end -}}
             {{- end -}}
         {{- end -}}
     {{- end -}}
@@ -434,13 +443,16 @@
     {{ end }}
 
     {{/* Item tabs — every tab names the URL its views show and the address of the item. Their
-         bottom margin spaces the content from the heading when the controls are below it. */}}
+         bottom margin spaces the content from the heading when the controls are below it. A tab
+         controls the heading pane of its item; without item headings, every tab controls the
+         content, which the script labels with the shown tab. */}}
     {{- $itemTabs := and $items (not $showFallback) -}}
+    {{- $sharedPanel := and $itemTabs (not $headed) -}}
     {{- if $itemTabs }}
         <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="View selection">
             {{- range $n, $item := $items }}
                 {{- $isActive := eq $n 0 }}
-                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}"{{ if $headed }} aria-controls="{{ $id }}-item-{{ $n }}"{{ end }}>{{ $item.title }}</button>
+                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}">{{ $item.title }}</button>
             {{- end }}
         </div>
     {{- end }}
@@ -451,7 +463,7 @@
     {{- end -}}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}"{{ if $sharedPanel }} id="{{ $id }}-items-panel" role="tabpanel" aria-labelledby="{{ $id }}-item-0-tab"{{ end }} data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
@@ -464,7 +476,7 @@
                          after the poster button is pressed. */}}
                     <iframe data-src="{{ $url }}"{{ if and $isActive (not $click) (or $controls $live) }} src="{{ $url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
-                        title="{{ or $args.heading.title (printf "Preview of %s" $url) }}"
+                        title="{{ $frameTitle }}"
                         loading="lazy"
                         allow="storage-access"
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
@@ -521,8 +533,8 @@
                     {{- if $url }}
                     <div class="alert alert-warning" role="alert">
                         {{ partial "assets/icon.html" (dict "icon" $previewError "spacing" false "page" $page) }}
-                        {{ T "previewError" }} <code>{{ $url }}</code>.
-                        <a href="{{ $url }}" target="_blank" rel="noopener" class="alert-link">
+                        {{ T "previewError" }} <code>{{ $fallbackUrl }}</code>.
+                        <a href="{{ $fallbackUrl }}" target="_blank" rel="noopener" class="alert-link">
                             {{ T "previewOpenTab" }}
                         </a>
                     </div>

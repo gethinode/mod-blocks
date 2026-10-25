@@ -65,7 +65,9 @@ arguments:
       heading, each tab shows the heading of its item, or the block heading
       when its item has none, in place of the block heading. The embedding
       checks run once per origin of the items, and the first origin that
-      cannot be framed shows the fallback.
+      cannot be framed shows the fallback, whose alert names the item url
+      checked on that origin. The views take the title of the shown item as
+      their title.
 example: |
   heading:
     title: Live Preview

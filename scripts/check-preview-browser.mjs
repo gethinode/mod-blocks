@@ -46,6 +46,7 @@ const PAGES = {
   'click-nocontrols': ['devices: [desktop, mobile]', 'controls: false', 'activation: click'],
   // A page whose lines start with items: gets no url of its own.
   items: ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B')],
+  'items-plain': ['items:', '  - title: View a', `    url: ${TARGET}a`, '  - title: View b', `    url: ${TARGET}b`],
   'items-fallback': ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B'), 'show_fallback: true'],
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true']
@@ -724,6 +725,23 @@ const ITEMS_STATE = `(() => {
     display: [...new Set([...document.querySelectorAll('section.preview .preview-headings > .tab-pane.active')].map(el => getComputedStyle(el).display))]
   }
 })()`
+// Items: the role of the element each item tab controls, the text of the label of
+// the panel the selected tab controls, whether that panel is visible, and the
+// title of every view iframe.
+const ARIA_STATE = `(() => {
+  const tabs = [...document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')]
+  const byId = id => id ? document.getElementById(id) : null
+  const selected = tabs.find(tab => tab.getAttribute('aria-selected') === 'true')
+  const panel = byId(selected.getAttribute('aria-controls'))
+  const label = panel && byId(panel.getAttribute('aria-labelledby'))
+  return {
+    controlled: tabs.map(tab => { const el = byId(tab.getAttribute('aria-controls')); return el ? el.getAttribute('role') : null }),
+    label: label ? label.textContent.trim() : null,
+    panelVisible: !!panel && panel.getBoundingClientRect().height > 0,
+    titles: [...document.querySelectorAll('section.preview .preview-content .preview-iframe')].map(el => el.title)
+  }
+})()`
+const aria = (label, n = 3) => ({ controlled: ['tabpanel', 'tabpanel'], label, panelVisible: true, titles: Array(n).fill(label) })
 const clickItem = (page, n) => page.evaluate(`document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')[${n}].click()`)
 const itemsState = async page => { await sleep(SETTLE_MS); return page.evaluate(ITEMS_STATE) }
 
@@ -737,6 +755,7 @@ test('items-click at 1280px: item tabs before activation swap heading and poster
     assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'item A shows its poster')
     await clickItem(page, 1)
     assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: null, headings: ['Heading B'], display: ['block'] })
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View b'), 'before activation the titles follow the item')
     state = await page.settle([])
     assertView(page, state, 'desktop', [], 'item B before activation')
     assert.match(visiblePoster(state).image, /^poster-mobile-light-/, 'item B shows its poster')
@@ -749,9 +768,11 @@ test('items-click at 1280px: item tabs before activation swap heading and poster
     state = await page.settle([])
     assert.deepEqual(page.urls, [`desktop ${TARGET}b`, `desktop ${TARGET}a`], 'one request, for the shown view only')
     assert.deepEqual((await page.evaluate(ITEMS_STATE)).headings, ['Heading A'])
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View a'), 'after activation the titles follow the item')
     await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-tablet"]\').click()')
     state = await page.settle(['desktop', 'tablet'])
     assert.deepEqual(page.urls, [`desktop ${TARGET}b`, `desktop ${TARGET}a`, `tablet ${TARGET}a`])
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View a'), 'a view shown later carries the item title')
     console.log(`# items-click @1280: requests [${page.urls}]`)
   } finally {
     await page.close()
@@ -790,6 +811,30 @@ test('items-fallback at 1280px shows the first item heading as a block, with no 
     await page.settle([])
     assert.deepEqual(await page.evaluate(ITEMS_STATE), { selected: [], focused: null, headings: ['Heading A'], display: ['block'] })
     assert.deepEqual(page.urls, [])
+  } finally {
+    await page.close()
+  }
+})
+
+test('items-plain at 1280px: every item tab controls the content panel, whose label and iframe titles follow the selection', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'items-plain', 1280)
+  try {
+    page.width = 1280
+    await page.settle(['desktop'])
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View a'))
+    assert.equal(await page.evaluate(`(() => { const ids = [...document.querySelectorAll('section.preview .preview-items [aria-controls]')].map(el => el.getAttribute('aria-controls')); return ids.length === 2 && ids[0] === ids[1] && document.getElementById(ids[0]).classList.contains('preview-content') })()`), true, 'both tabs control the content')
+    assert.equal(await page.evaluate('(() => { const tab = document.querySelector(\'section.preview .preview-items .active\'); tab.focus(); return document.activeElement === tab })()'), true)
+    await page.pressArrow('ArrowRight')
+    await waitFor(() => page.urls.length > 1, 'the item b request').catch(() => {})
+    await sleep(SETTLE_MS)
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View b'))
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`])
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+    const state = await page.settle(['desktop', 'mobile'])
+    assertView(page, state, 'mobile', ['desktop', 'desktop', 'mobile'], 'mobile after item b')
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `mobile ${TARGET}b`])
+    assert.deepEqual(await page.evaluate(ARIA_STATE), aria('View b'))
+    console.log(`# items-plain @1280: requests [${page.urls}]`)
   } finally {
     await page.close()
   }

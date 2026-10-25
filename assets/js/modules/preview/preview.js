@@ -35,10 +35,13 @@
  * the item URL in data-src, and loads it in the shown view when the block may
  * load its views; another view drops the URL it loaded, so it loads the item
  * URL when it is next shown. An iframe that has loaded is replaced by a copy
- * without src first, so a switch adds no entry to the session history. It
- * also shows the poster image of the item in every poster, points every
- * .preview-open link at the open URL of the item, and dispatches a bubbling
- * preview:item event on the section, with the index of the item in its detail.
+ * without src first, so a switch adds no entry to the session history. Every
+ * iframe takes the label of the item tab as its title. When the content is the
+ * tab panel of the item tabs, which it is when no item has a heading, the shown
+ * tab labels it. The script also shows the poster image of the item in every
+ * poster, points every .preview-open link at the open URL of the item, and
+ * dispatches a bubbling preview:item event on the section, with the index of
+ * the item in its detail.
  */
 
 ;(function () {
@@ -129,8 +132,12 @@
   function showItem (section, tab) {
     const index = Array.from(tab.closest('.preview-items').querySelectorAll('[data-bs-toggle="tab"]')).indexOf(tab)
     const url = tab.dataset.previewUrl
+    const title = tab.textContent.trim()
     const container = section.querySelector('.preview-content')
     const activated = isActivated(container)
+    if (tab.getAttribute('aria-controls') === container.id) {
+      container.setAttribute('aria-labelledby', tab.id)
+    }
     container.querySelectorAll(':scope > .tab-pane').forEach(pane => {
       let iframe = pane.querySelector('iframe[data-src]')
       if (iframe) {
@@ -141,6 +148,7 @@
           iframe = copy
         }
         iframe.dataset.src = url
+        iframe.setAttribute('title', title)
         if (activated && pane.classList.contains('active')) iframe.src = url
       }
       pane.querySelectorAll('.preview-poster-item').forEach(image => {
