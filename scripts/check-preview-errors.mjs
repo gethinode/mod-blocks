@@ -1,6 +1,6 @@
 // Builds the exampleSite with a throwaway content directory holding one preview
 // block with invalid `devices`, and checks that the build fails with the
-// partial's error. An error ends a Hugo build, so these cases cannot live among
+// partial's error. An error fails the whole Hugo build, so these cases cannot live among
 // the fixtures in exampleSite/content/test-preview.md.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
