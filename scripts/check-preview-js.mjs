@@ -49,6 +49,7 @@ class FakeElement {
   }
 
   click () { this.dispatch('click') }
+  dispatchEvent (event) { this.dispatch(event.type, { detail: event.detail, bubbles: event.bubbles }) }
   closest (selector) {
     for (let el = this; el; el = el.parent) if (matches(el, selector)) return el
     return null
@@ -72,6 +73,10 @@ const rules = {
   'section.preview': el => el.classList.contains('preview'),
   '.preview-controls': el => el.classList.contains('preview-controls'),
   'section.preview .preview-content': el => el.classList.contains('preview-content'),
+  '.preview-content': el => el.classList.contains('preview-content'),
+  '.preview-activate': el => el.classList.contains('preview-activate'),
+  '.preview-poster': el => el.classList.contains('preview-poster'),
+  '.tab-pane': el => el.classList.contains('tab-pane'),
   'section.preview .preview-content[data-controls="false"]': el => el.classList.contains('preview-content') && el.dataset.controls === 'false',
   '.preview-iframe': el => el.classList.contains('preview-iframe'),
   'iframe[data-src]': el => el.classList.contains('preview-iframe') && 'src' in el.dataset,
@@ -87,6 +92,7 @@ function matches (el, selector) {
 
 function select (root, selector) {
   if (selector === ':scope > .tab-pane') return root.children.filter(el => el.classList.contains('tab-pane'))
+  if (selector === ':scope > .tab-pane.active') return root.children.filter(el => el.classList.contains('tab-pane') && el.classList.contains('active'))
   if (selector.startsWith('#')) return root.descendants().filter(el => el.id === selector.slice(1))
   return root.descendants().filter(el => matches(el, selector))
 }
@@ -100,12 +106,15 @@ function cssHides (device, offered, width) {
 }
 
 // Builds a preview section as preview.html renders it: without controls no iframe
-// carries src, with controls only the active one does.
-function buildPreview ({ devices, active, controls = true }) {
+// carries src, with controls only the active one does. With click activation no
+// iframe carries src, and every pane holds a poster with its button.
+function buildPreview ({ devices, active, controls = true, activation = 'load' }) {
+  const click = activation === 'click'
   const id = 'preview-1'
   const section = new FakeElement({ classes: ['preview'] })
   const dataset = { devices: devices.join(' '), desktopResponsive: 'true' }
   if (!controls) dataset.controls = 'false'
+  if (click) dataset.activation = 'click'
   const content = new FakeElement({ classes: ['tab-content', 'preview-content'], dataset })
   const panes = {}
   const buttons = {}
@@ -114,9 +123,10 @@ function buildPreview ({ devices, active, controls = true }) {
     const iframe = new FakeElement({
       classes: ['preview-iframe', `preview-${device}`],
       dataset: { src: URL },
-      attrs: isActive && controls ? { src: URL } : {}
+      attrs: isActive && controls && !click ? { src: URL } : {}
     })
     panes[device] = new FakeElement({ id: `${id}-${device}`, classes: ['tab-pane', 'fade', ...(isActive ? ['show', 'active'] : [])], device }).append(iframe)
+    if (click) panes[device].append(new FakeElement({ classes: ['preview-poster'] }).append(new FakeElement({ classes: ['btn', 'preview-activate'] })))
     content.append(panes[device])
     if (controls) {
       buttons[device] = new FakeElement({
@@ -129,7 +139,8 @@ function buildPreview ({ devices, active, controls = true }) {
   }
   if (controls) section.append(new FakeElement({ classes: ['preview-controls'] }).append(...Object.values(buttons)))
   section.append(content)
-  return { section, panes, buttons, devices }
+  const activate = device => panes[device].children[1].children[0].click()
+  return { section, content, panes, buttons, devices, activate }
 }
 
 // Loads preview.js into a fresh context with the given viewport width. `until`
@@ -160,7 +171,10 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
       return queries.get(query)
     }
   }
-  const context = { window, document, setTimeout: fn => fn(), clearTimeout () {} }
+  class CustomEvent {
+    constructor (type, { bubbles = false, detail } = {}) { Object.assign(this, { type, bubbles, detail }) }
+  }
+  const context = { window, document, CustomEvent, setTimeout: fn => fn(), clearTimeout () {} }
   vm.runInNewContext(source, context)
 
   // Bootstrap's tab plugin: registered after preview.js, as the deferred core
@@ -339,4 +353,80 @@ test('a Bootstrap tab outside a preview block is left alone', () => {
   page.document.append(tab)
   assert.doesNotThrow(() => tab.dispatch('shown.bs.tab'))
   assert.deepEqual(loaded(preview), ['desktop'])
+})
+
+test('with click activation, nothing loads before the poster button is pressed', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click' })
+  run(preview, 1280)
+  preview.buttons.tablet.click()
+  assert.deepEqual(shown(preview), ['tablet'], 'the switcher still swaps the posters')
+  assert.deepEqual(loaded(preview), [])
+  assert.equal(preview.content.dataset.active, undefined)
+})
+
+test('with click activation, the button loads the view the switcher shows, once', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click' })
+  const page = run(preview, 1280)
+  const events = []
+  page.document.addEventListener('preview:activate', event => events.push(event))
+  preview.buttons.tablet.click()
+  preview.activate('tablet')
+  assert.equal(preview.content.dataset.active, 'true')
+  assert.deepEqual(loaded(preview), ['tablet'])
+  assert.equal(events.length, 1, 'one preview:activate event')
+  assert.equal(events[0].target, preview.section, 'dispatched on the section')
+  assert.equal(events[0].bubbles, true)
+  preview.activate('tablet')
+  assert.equal(preview.panes.tablet.children[0].srcSets, 1, 'tablet src is set once')
+})
+
+test('with click activation, later device switches load as without it', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click' })
+  run(preview, 1280)
+  preview.activate('desktop')
+  preview.buttons.mobile.click()
+  assert.deepEqual(loaded(preview), ['desktop', 'mobile'])
+})
+
+test('with click activation, a hidden active view switches but does not load', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click' })
+  run(preview, 400)
+  assert.deepEqual(shown(preview), ['mobile'])
+  assert.deepEqual(loaded(preview), [])
+  preview.activate('mobile')
+  assert.deepEqual(loaded(preview), ['mobile'])
+})
+
+test('with click activation and no controls, the picked view loads on the button only', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', controls: false, activation: 'click' })
+  const page = run(preview, 400)
+  assert.deepEqual(shown(preview), ['mobile'])
+  assert.deepEqual(loaded(preview), [])
+  page.resize(1280)
+  assert.deepEqual(shown(preview), ['desktop'], 'crossing a breakpoint swaps the posters')
+  assert.deepEqual(loaded(preview), [])
+  preview.activate('desktop')
+  assert.deepEqual(loaded(preview), ['desktop'])
+  page.resize(400)
+  assert.deepEqual(shown(preview), ['mobile'])
+  assert.deepEqual(loaded(preview), ['desktop', 'mobile'])
+})
+
+test('with click activation and no controls, the button picks the view itself', () => {
+  // A block rendered after the script ran, as Bookshop live editing renders
+  // one again, shows its default view and has had no pick.
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', controls: false, activation: 'click' })
+  run(preview, 400, { until: 'none' })
+  preview.activate('desktop')
+  assert.deepEqual(shown(preview), ['mobile'])
+  assert.deepEqual(loaded(preview), ['mobile'])
+})
+
+test('a poster button outside a preview block is left alone', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', activation: 'click' })
+  const page = run(preview, 1280)
+  const stray = new FakeElement({ classes: ['preview-activate'] })
+  page.document.append(stray)
+  assert.doesNotThrow(() => stray.click())
+  assert.deepEqual(loaded(preview), [])
 })

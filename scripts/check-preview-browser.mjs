@@ -2,7 +2,8 @@
 // Bootstrap: at each measured viewport width exactly one offered view is visible,
 // it is the view the block picks, it is the only view whose iframe was
 // requested, and only the outer corners of the visible device buttons are
-// rounded. check-preview-js.mjs drives the same module against a fake DOM that
+// rounded. With click activation, no iframe is requested until the poster
+// button of the shown view is pressed. check-preview-js.mjs drives the same module against a fake DOM that
 // applies no CSS, which cannot show a view the stylesheet hides.
 //
 // The check builds the exampleSite with a throwaway content directory of probe
@@ -38,7 +39,9 @@ const PAGES = {
   'mobile-tablet': ['devices: [mobile, tablet]'],
   'tablet-desktop-mobile': ['devices: [tablet, desktop, mobile]'],
   'tablet-mobile': ['devices: [tablet, mobile]'],
-  tablet: ['devices: [tablet]']
+  tablet: ['devices: [tablet]'],
+  click: ['activation: click', 'mode: true', 'poster:', '  desktop: img/poster-desktop.png', '  mobile: img/poster-mobile.png'],
+  'click-nocontrols': ['devices: [desktop, mobile]', 'controls: false', 'activation: click']
 }
 
 function findChrome () {
@@ -212,7 +215,17 @@ const STATE = `(() => {
   return {
     readyState: document.readyState,
     width: window.innerWidth,
-    panes: panes.map(el => ({ device: device(el), visible: visible(el), src: el.querySelector('iframe').hasAttribute('src') })),
+    panes: panes.map(el => {
+      const poster = el.querySelector('.preview-poster')
+      const image = poster && [...poster.querySelectorAll('img')].find(visible)
+      return {
+        device: device(el),
+        visible: visible(el),
+        src: el.querySelector('iframe').hasAttribute('src'),
+        poster: poster ? { visible: visible(poster), image: image ? image.currentSrc.split('/').pop() : null } : null
+      }
+    }),
+    active: document.querySelector('section.preview .preview-content').dataset.active || null,
     buttons: buttons.map(el => {
       const style = getComputedStyle(el)
       const side = (top, bottom) => {
@@ -283,6 +296,12 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
     evaluate,
     state: () => evaluate(STATE),
     resize: w => send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false }),
+    // Presses Enter on the focused element, as a keyboard does.
+    async pressEnter () {
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    },
+    emulateMedia: features => send('Emulation.setEmulatedMedia', { features }),
     release () { holding = false; held.splice(0).forEach(fulfill) },
     // Waits for window load and for the expected iframe requests (the assertions
     // report any that never came), then lets SETTLE_MS pass for unexpected ones.
@@ -420,6 +439,148 @@ test('default: a tablet click before window load loads the tablet view', { skip 
     const state = await page.settle(['desktop', 'tablet'])
     assertView(page, state, 'tablet', ['desktop', 'tablet'], 'tablet clicked before load')
     console.log(`# default, tablet clicked before load: visible ${visibleDevices(state.panes)}, requests [${page.requests}]`)
+  } finally {
+    await page.close()
+  }
+})
+
+// Click activation: no iframe loads until the poster button of the shown view is
+// pressed, here with the keyboard.
+const visiblePoster = state => state.panes.find(pane => pane.visible).poster
+const RECORD_ACTIVATE = `window.previewActivations = []; document.addEventListener('preview:activate', event => window.previewActivations.push(event.target.matches('section.preview')))`
+const FOCUS_ACTIVATE = `(() => { const button = [...document.querySelectorAll('section.preview .preview-activate')].find(el => el.offsetParent); button.focus(); return document.activeElement === button })()`
+
+// The poster of the shown view must cover the box of its scaled iframe.
+const POSTER_BOXES = `(() => {
+  const pane = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent)
+  const box = el => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map(Math.round) }
+  return { iframe: box(pane.querySelector('iframe')), poster: box(pane.querySelector('.preview-poster')) }
+})()`
+
+async function assertPosterCovers (page, label) {
+  const { iframe, poster } = await page.evaluate(POSTER_BOXES)
+  poster.forEach((value, i) => assert.ok(Math.abs(value - iframe[i]) <= 1, `${label}: poster box ${poster} covers iframe box ${iframe}`))
+  console.log(`# ${label}: iframe box ${iframe}, poster box ${poster}`)
+}
+
+async function activateWithEnter (page) {
+  await page.evaluate(RECORD_ACTIVATE)
+  assert.equal(await page.evaluate(FOCUS_ACTIVATE), true, 'the visible poster button takes focus')
+  await page.pressEnter()
+}
+
+test('click at 1280px loads nothing until Enter on the poster button, then desktop only', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 1280)
+  try {
+    page.width = 1280
+    let state = await page.settle([])
+    assertView(page, state, 'desktop', [], 'before activation')
+    assert.equal(visiblePoster(state).visible, true, 'the desktop poster shows')
+    assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'the desktop poster shows')
+    await assertPosterCovers(page, 'desktop @1280')
+    assert.equal(state.active, null)
+    await activateWithEnter(page)
+    state = await page.settle(['desktop'])
+    assertView(page, state, 'desktop', ['desktop'], 'after activation')
+    assert.equal(state.active, 'true')
+    assert.equal(visiblePoster(state).visible, false, 'the poster is hidden')
+    assert.deepEqual(await page.evaluate('window.previewActivations'), [true], 'one preview:activate event on the section')
+    console.log(`# click @1280: requests before activation [], after [${page.requests}]`)
+  } finally {
+    await page.close()
+  }
+})
+
+test('click at 1280px: a device switch before activation swaps the poster and loads nothing', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 1280)
+  try {
+    page.width = 1280
+    await page.settle([])
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-tablet"]\').click()')
+    let state = await page.settle([])
+    assertView(page, state, 'tablet', [], 'tablet before activation')
+    assert.equal(visiblePoster(state).visible, true, 'the tablet poster shows')
+    assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'tablet falls back to the desktop poster')
+    await assertPosterCovers(page, 'tablet @1280')
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+    state = await page.settle([])
+    assertView(page, state, 'mobile', [], 'mobile before activation')
+    assert.match(visiblePoster(state).image, /^poster-mobile-light-/, 'mobile shows its own poster')
+    await activateWithEnter(page)
+    state = await page.settle(['mobile'])
+    assertView(page, state, 'mobile', ['mobile'], 'mobile activated')
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-tablet"]\').click()')
+    state = await page.settle(['mobile', 'tablet'])
+    assertView(page, state, 'tablet', ['mobile', 'tablet'], 'tablet after activation')
+    console.log(`# click @1280, tablet and mobile before activation: requests [${page.requests}]`)
+  } finally {
+    await page.close()
+  }
+})
+
+test('click at 400px shows the mobile poster and loads mobile on Enter', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 400)
+  try {
+    page.width = 400
+    let state = await page.settle([])
+    assertView(page, state, 'mobile', [], 'before activation')
+    await assertPosterCovers(page, 'mobile @400')
+    await activateWithEnter(page)
+    state = await page.settle(['mobile'])
+    assertView(page, state, 'mobile', ['mobile'], 'after activation')
+  } finally {
+    await page.close()
+  }
+})
+
+test('click-nocontrols loads the picked view on Enter, then the next one on resize', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click-nocontrols', 400)
+  try {
+    page.width = 400
+    let state = await page.settle([])
+    assertView(page, state, 'mobile', [], 'before activation')
+    assert.deepEqual(visiblePoster(state), { visible: true, image: null }, 'a poster without an image')
+    await page.resize(1280)
+    page.width = 1280
+    state = await page.settle([])
+    assertView(page, state, 'desktop', [], 'resized before activation')
+    await activateWithEnter(page)
+    state = await page.settle(['desktop'])
+    assertView(page, state, 'desktop', ['desktop'], 'after activation')
+    await page.resize(400)
+    page.width = 400
+    state = await page.settle(['desktop', 'mobile'])
+    assertView(page, state, 'mobile', ['desktop', 'mobile'], 'resized after activation')
+  } finally {
+    await page.close()
+  }
+})
+
+test('click posters follow the color mode', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 1280)
+  try {
+    page.width = 1280
+    await page.settle([])
+    await page.evaluate('document.documentElement.setAttribute(\'data-bs-theme\', \'light\')')
+    assert.match(visiblePoster(await page.state()).image, /^poster-desktop-light-/)
+    await page.evaluate('document.documentElement.setAttribute(\'data-bs-theme\', \'dark\')')
+    await waitFor(async () => /^poster-desktop-dark-/.test(visiblePoster(await page.state()).image || ''), 'the dark poster')
+    assert.equal(page.requests.length, 0)
+  } finally {
+    await page.close()
+  }
+})
+
+test('click posters crossfade, and not when reduced motion is preferred', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'click', 1280)
+  const transition = 'JSON.stringify([...document.querySelectorAll(\'section.preview .preview-poster\')].map(el => getComputedStyle(el).transitionProperty + \' \' + getComputedStyle(el).transitionDuration)[0])'
+  try {
+    page.width = 1280
+    await page.settle([])
+    assert.equal(JSON.parse(await page.evaluate(transition)), 'opacity, visibility 0.15s, 0s')
+    await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+    assert.match(JSON.parse(await page.evaluate(transition)), / 0s$/)
+    assert.doesNotMatch(JSON.parse(await page.evaluate(transition)), /0\.15s/)
   } finally {
     await page.close()
   }

@@ -130,4 +130,100 @@ fixtures:
       - 'preview-controls controls-bottom'
     reject:
       - 'data-controls='
+  - case: click-poster
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+      poster:
+        desktop: img/placeholder.png
+    want:
+      - 'data-activation="click"'
+      - 'preview-activate'
+      - 'Load preview'
+      - 'preview-poster"><img'
+    count:
+      ' src="https://example.org/"': 0
+      'src="https://example.org/"': 0
+      'data-src="https://example.org/"': 3
+      'class="preview-poster"': 3
+      'class="btn btn-primary preview-activate"': 3
+  - case: click-no-poster
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+    want:
+      - 'preview-poster'
+      - 'preview-activate'
+    reject:
+      - 'preview-poster"><img'
+      - 'preview-poster"><picture'
+    count:
+      'src="https://example.org/"': 0
+  - case: click-with-fallback
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      show_fallback: true
+      activation: click
+    want:
+      - 'preview-error'
+      - 'data-activation="click"'
+    reject:
+      - 'preview-activate'
+      - 'preview-poster'
+    count:
+      'src="https://example.org/"': 0
+  - case: click-no-controls
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+      controls: false
+      devices: [desktop, mobile]
+    want:
+      - 'data-activation="click"'
+      - 'data-controls="false"'
+    count:
+      'src="https://example.org/"': 0
+      'class="btn btn-primary preview-activate"': 2
+  - case: click-device-mobile
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+      device: mobile
+    want:
+      - 'data-activation="click"'
+    count:
+      'src="https://example.org/"': 0
+  - case: load-default
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: load
+      poster:
+        desktop: img/placeholder.png
+    reject:
+      - 'data-activation='
+      - 'preview-poster'
+      - 'preview-activate'
+    count:
+      'src="https://example.org/"': 1
+  - case: click-poster-per-device
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      activation: click
+      mode: true
+      poster:
+        desktop: img/poster-desktop.png
+        mobile: img/poster-mobile.png
+    count:
+      'class="preview-poster"': 3
+      'src="/img/poster-desktop-light-': 2
+      'src="/img/poster-desktop-dark-': 2
+      'src="/img/poster-mobile-light-': 1
+      'src="/img/poster-mobile-dark-': 1
 ---

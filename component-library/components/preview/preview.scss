@@ -67,6 +67,47 @@ section.preview {
         display: flex;
         justify-content: center;
         align-items: center;
+        position: relative;
+    }
+
+    // Poster over the view until the preview is activated. preview.js sizes it to the
+    // scaled iframe; before that it fills the pane. It fades out on activation and is
+    // hidden once faded, so its button leaves the tab order.
+    .preview-poster {
+        position: absolute;
+        inset: 0;
+        margin: auto;
+        max-width: 100%;
+        max-height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background-color: var(--#{$prefix}tertiary-bg);
+        border-radius: $theme-border-radius;
+        @include transition($transition-fade, visibility 0s linear .15s);
+
+        > :not(.preview-activate) {
+            position: absolute;
+            inset: 0;
+        }
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top center;
+        }
+
+        .preview-activate {
+            position: relative;
+        }
+    }
+
+    .preview-content[data-active="true"] .preview-poster {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
     }
 
     .preview-iframe {

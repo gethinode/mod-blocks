@@ -245,6 +245,11 @@
 {{- $id := partial "utilities/UniqueID.html" (dict "prefix" "preview" "page" $page) -}}
 {{- $controls := $args.controls -}}
 {{- $controlsBelow := eq $args.controlsPlacement "bottom" -}}
+{{- $click := eq $args.activation "click" -}}
+{{- $posters := $args.poster | default dict -}}
+{{/* preview.js picks and loads a view without controls once, at DOMContentLoaded, so a block
+     that Bookshop live editing renders again gets no pick. There the default view carries src. */}}
+{{- $live := site.Params.env_bookshop_live -}}
 
 {{/* Validate the offered devices: a non-empty list of known device names */}}
 {{- if not $error -}}
@@ -363,7 +368,7 @@
     {{- end -}}
 
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}>
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if and $controlsBelow $args.heading.title }} mt-3{{ end }}" data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if $click }} data-activation="click"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
@@ -372,8 +377,9 @@
                 {{- if $args.url }}
                     {{/* With controls only the active view carries a src, and the others load from data-src
                          when first shown. Without controls no view does: the script picks the view that fits
-                         the viewport and loads it. */}}
-                    <iframe data-src="{{ $args.url }}"{{ if and $isActive $controls }} src="{{ $args.url }}"{{ end }}
+                         the viewport and loads it. With click activation no view carries a src, and the
+                         script loads the shown view when the poster button is pressed. */}}
+                    <iframe data-src="{{ $args.url }}"{{ if and $isActive (not $click) (or $controls $live) }} src="{{ $args.url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ or $args.heading.title (printf "Preview of %s" $args.url) }}"
                         loading="lazy"
@@ -381,6 +387,23 @@
                         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-storage-access-by-user-activation"
                         referrerpolicy="no-referrer-when-downgrade">
                     </iframe>
+                    {{- if and $click (not $showFallback) }}
+                        {{/* The poster of the view, else the desktop poster, else a plain background */}}
+                        {{- $poster := or (index $posters $device) (index $posters "desktop") -}}
+                        <div class="preview-poster">
+                            {{- with $poster }}
+                                {{ partial "assets/image.html" (dict
+                                    "src"     .
+                                    "mode"    $args.mode
+                                    "page"    $page
+                                    "class"   "preview-poster-image"
+                                    "title"   (or $args.heading.title (printf "Preview of %s" $args.url))
+                                    "loading" "lazy"
+                                ) }}
+                            {{- end }}
+                            <button type="button" class="btn btn-primary preview-activate">{{ T "previewActivate" }}</button>
+                        </div>
+                    {{- end }}
                 {{- end }}
                 <div class="preview-error{{ if not $showFallback }} d-none{{ end }}">
                     {{- if $args.image }}

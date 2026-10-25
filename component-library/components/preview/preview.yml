@@ -27,6 +27,27 @@ arguments:
       shows the largest offered device that fits the viewport, or the smallest
       offered device when none fits, and swaps views when the viewport crosses
       a device breakpoint.
+  activation:
+    type: select
+    optional: true
+    default: load
+    comment: >-
+      When the live view loads. With load, the default view loads with the
+      page. With click, every view shows its poster with a button over it, and
+      no view loads until the button is pressed; after that, a view loads when
+      it is first shown.
+    options:
+      values:
+        - load
+        - click
+  poster:
+    type: map[string]interface {}
+    optional: true
+    comment: >-
+      Poster image per device view, shown until the preview is activated when
+      activation is click. The keys are desktop, tablet and mobile. A view
+      without a poster of its own uses the desktop poster, or a plain
+      background when there is none. The mode argument applies to posters too.
 example: |
   heading:
     title: Live Preview

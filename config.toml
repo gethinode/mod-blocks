@@ -55,6 +55,11 @@
     source = "layouts"
     target = "layouts"
 
+  # Expose the strings of the blocks
+  [[module.mounts]]
+    source = "i18n"
+    target = "i18n"
+
   # Import Bookshop Hugo module for core functionality
   [[module.imports]]
     path = "github.com/cloudcannon/bookshop/hugo/v3"

@@ -29,6 +29,11 @@ blueprint:
     - tablet
     - mobile
   controls: true
+  activation: load
+  poster:
+    desktop:
+    tablet:
+    mobile:
   image:
   mode:
   show_fallback:

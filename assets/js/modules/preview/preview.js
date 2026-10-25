@@ -20,6 +20,12 @@
  * gets its src when it is first shown. Without controls (data-controls="false")
  * no iframe carries src: the block picks the view itself at DOMContentLoaded
  * and again whenever the viewport crosses a device breakpoint.
+ *
+ * With click activation (data-activation="click") no iframe carries src and
+ * every view shows a poster. Views still switch, but none loads until the
+ * poster button is pressed: that loads the shown view, sets data-active="true"
+ * on the content, which hides the posters, and dispatches a bubbling
+ * preview:activate event on the section. After that, views load as above.
  */
 
 ;(function () {
@@ -78,6 +84,32 @@
     }
   }
 
+  /**
+   * Reports whether the block may load its views: always, unless it waits for
+   * its poster button.
+   */
+  function isActivated (container) {
+    return container.dataset.activation !== 'click' || container.dataset.active === 'true'
+  }
+
+  /**
+   * Shows the pane of the device that pickDevice chooses among the offered
+   * views, and returns it.
+   */
+  function showFittingPane (container) {
+    const offered = (container.dataset.devices || '').split(' ').filter(Boolean)
+    const device = pickDevice(offered)
+    const panes = Array.from(container.querySelectorAll(':scope > .tab-pane'))
+    const target = panes.find(pane => pane.id.endsWith(`-${device}`))
+    if (!target) return null
+    panes.forEach(pane => {
+      const active = pane === target
+      pane.classList.toggle('show', active)
+      pane.classList.toggle('active', active)
+    })
+    return target
+  }
+
   function updatePreviewScale () {
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
       const containerWidth = container.clientWidth
@@ -107,26 +139,24 @@
           scale = Math.min(containerWidth / width, containerHeight / height, 1)
         }
         iframe.style.setProperty('--preview-scale', scale)
+
+        // Cover the scaled iframe with its poster
+        const pane = iframe.closest('.tab-pane')
+        const poster = pane && pane.querySelector('.preview-poster')
+        if (poster) {
+          poster.style.width = `${width * scale}px`
+          poster.style.height = `${(parseFloat(iframe.style.height) || height) * scale}px`
+        }
       })
     })
   }
 
   function initPreviewAutoPick () {
     document.querySelectorAll('section.preview .preview-content[data-controls="false"]').forEach(container => {
-      const offered = (container.dataset.devices || '').split(' ').filter(Boolean)
-      if (offered.length === 0) return
-
-      const panes = Array.from(container.querySelectorAll(':scope > .tab-pane'))
       const show = () => {
-        const device = pickDevice(offered)
-        const target = panes.find(pane => pane.id.endsWith(`-${device}`))
+        const target = showFittingPane(container)
         if (!target) return
-        panes.forEach(pane => {
-          const active = pane === target
-          pane.classList.toggle('show', active)
-          pane.classList.toggle('active', active)
-        })
-        loadPane(target)
+        if (isActivated(container)) loadPane(target)
         updatePreviewScale()
       }
 
@@ -168,7 +198,26 @@
   document.addEventListener('shown.bs.tab', event => {
     const controls = event.target.closest('.preview-controls')
     const section = controls && controls.closest('section.preview')
-    if (section) loadPane(section.querySelector(event.target.dataset.bsTarget))
+    if (section && isActivated(section.querySelector('.preview-content'))) {
+      loadPane(section.querySelector(event.target.dataset.bsTarget))
+    }
+  })
+
+  // Load the shown view when a poster button is pressed. Listen on the
+  // document, so a block rendered after this script ran still activates.
+  document.addEventListener('click', event => {
+    const button = event.target.closest && event.target.closest('.preview-activate')
+    const container = button && button.closest('.preview-content')
+    const section = container && container.closest('section.preview')
+    if (!section) return
+
+    container.dataset.active = 'true'
+    const pane = container.dataset.controls === 'false'
+      ? showFittingPane(container)
+      : container.querySelector(':scope > .tab-pane.active')
+    loadPane(pane)
+    updatePreviewScale()
+    section.dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
   })
 
   function init () {
