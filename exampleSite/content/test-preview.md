@@ -302,15 +302,35 @@ fixtures:
           url: https://example.org/a
         - title: View B
           url: https://example.org/b
+          open-url: https://example.org/b-kebab
     want:
       - 'nav nav-pills'
+      - 'data-preview-open-url="https://example.org/b-kebab"'
     order:
       - 'Block heading'
       - 'nav nav-pills'
     count:
       'Block heading': 1
       'role="tabpanel"': 3
+      'aria-controls="preview-': 3
       'show active': 1
+  - case: items-with-fallback
+    block:
+      _bookshop_name: preview
+      show_fallback: true
+      items:
+        - title: View A
+          url: https://example.org/a
+          heading:
+            title: Heading A
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'class="preview-error"'
+      - 'Heading A'
+    reject:
+      - 'preview-items'
+      - 'data-preview-url'
   - case: items-override-url
     block:
       _bookshop_name: preview

@@ -718,7 +718,9 @@ const ITEMS_STATE = `(() => {
   return {
     selected: tabs.filter(el => el.getAttribute('aria-selected') === 'true').map(el => el.textContent.trim()),
     focused: tabs.includes(document.activeElement) ? document.activeElement.textContent.trim() : null,
-    headings: [...document.querySelectorAll('section.preview .preview-headings > .tab-pane')].filter(visible).map(el => el.textContent.trim())
+    headings: [...document.querySelectorAll('section.preview .preview-headings > .tab-pane')].filter(visible).map(el => el.textContent.trim()),
+    // The heading panes lay out as block, without the flex layout of the views.
+    display: [...new Set([...document.querySelectorAll('section.preview .preview-headings > .tab-pane.active')].map(el => getComputedStyle(el).display))]
   }
 })()`
 const clickItem = (page, n) => page.evaluate(`document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')[${n}].click()`)
@@ -733,7 +735,7 @@ test('items-click at 1280px: item tabs before activation swap heading and poster
     assert.deepEqual((await page.evaluate(ITEMS_STATE)).headings, ['Heading A'])
     assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'item A shows its poster')
     await clickItem(page, 1)
-    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: null, headings: ['Heading B'] })
+    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: null, headings: ['Heading B'], display: ['block'] })
     state = await page.settle([])
     assertView(page, state, 'desktop', [], 'item B before activation')
     assert.match(visiblePoster(state).image, /^poster-mobile-light-/, 'item B shows its poster')
@@ -764,12 +766,13 @@ test('items at 1280px: arrow keys move between the item tabs, and each switch lo
     const history = await page.evaluate('history.length')
     assert.equal(await page.evaluate('(() => { const tab = document.querySelector(\'section.preview .preview-items .active\'); tab.focus(); return document.activeElement === tab })()'), true)
     await page.pressArrow('ArrowRight')
-    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: 'View b', headings: ['Heading B'] })
+    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: 'View b', headings: ['Heading B'], display: ['block'] })
     await waitFor(() => page.urls.length > 1, 'the item B request').catch(() => {})
     await sleep(SETTLE_MS)
+    assert.equal(await page.evaluate('history.length'), history, 'the switch adds no session history entry')
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`])
     await page.pressArrow('ArrowLeft')
-    assert.deepEqual(await itemsState(page), { selected: ['View a'], focused: 'View a', headings: ['Heading A'] })
+    assert.deepEqual(await itemsState(page), { selected: ['View a'], focused: 'View a', headings: ['Heading A'], display: ['block'] })
     await waitFor(() => page.urls.length > 2, 'the item A request').catch(() => {})
     await sleep(SETTLE_MS)
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `desktop ${TARGET}a`])

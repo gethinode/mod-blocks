@@ -158,6 +158,7 @@ test('items on the same origin as the site CSP all render without a fallback', (
   assert.equal(result.status, 0, result.log)
   assert.match(result.html.same, /class="preview-error d-none"/)
   assert.doesNotMatch(result.log, /warn-preview-csp/)
+  assert.doesNotMatch(result.log, /warn-preview-items/, 'no url, so no warning that items replace it')
 })
 
 for (const [label, lines] of [['a title', ['  - url: https://example.org/a']], ['a url', ['  - title: A']]]) {
