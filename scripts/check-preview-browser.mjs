@@ -133,6 +133,7 @@ function readyPages () {
     },
     'legacy-silent': legacy('silent'),
     'fallback-portrait': ['show_fallback: true', 'image: img/poster-mobile.png', 'mode: true'],
+    'fallback-ready': { url: child('ok'), lines: ['devices: [desktop, mobile]', 'show_fallback: true', `ready_message: '${TOKEN}'`, 'load_timeout: 1'] },
     'legacy-click-hang': { url: child('hang'), lines: ['devices: [desktop, mobile]', 'load_timeout: 1', 'activation: click', 'poster:', '  desktop: img/poster-desktop.png'] },
     'legacy-503': legacy('503'),
     'legacy-refused': legacy('refused')
@@ -184,6 +185,7 @@ after(async () => {
     browser.proc.unref()
   }
   servers.forEach(server => { server.closeAllConnections(); server.close() })
+  if (framing) framing.proc.kill()
   try {
     fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   } catch (error) {
@@ -195,14 +197,62 @@ const content = path.join(tmp, 'content')
 
 // Builds the probe site into tmp/<name>, with extra hugo arguments. A build that
 // runs longer than two minutes is stopped.
-function hugo (name, args = []) {
+// The log of each build, by name.
+const buildLogs = {}
+function hugo (name, args = [], dir = content) {
   const publish = path.join(tmp, name)
   // On Windows the hugo-extended bin is a .cmd shim, which only a shell resolves.
   const shell = process.platform === 'win32'
   const quote = arg => shell ? `"${arg}"` : arg
-  const result = spawnSync('hugo', ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish), ...args.map(quote)], { encoding: 'utf8', shell, timeout: 120000 })
+  const result = spawnSync('hugo', ['-s', 'exampleSite', '--contentDir', quote(dir), '-d', quote(publish), ...args.map(quote)], { encoding: 'utf8', shell, timeout: 120000 })
   assert.equal(result.status, 0, `probe site build failed:\n${result.error || ''}${result.stderr}${result.stdout}`)
+  buildLogs[name] = result.stderr + result.stdout
   return publish
+}
+
+// Two loopback servers in a child process, which keeps answering while a build blocks
+// this one: deny sends X-Frame-Options: DENY, and allow sends a child document that posts
+// TOKEN to its parent 800ms after its DOM is ready and answers a TOKEN request after that.
+// Each counts the requests Chrome makes, told apart from those of the build by user agent,
+// and prints the counts when it reads a line.
+const FRAMING_SERVERS = `
+const http = require('node:http')
+const chrome = { deny: 0, allow: 0 }
+const child = '<!doctype html><title>allow</title><p>allow</p><script>let ready = false;' +
+  'document.addEventListener("DOMContentLoaded", () => setTimeout(() => { ready = true; parent.postMessage(${JSON.stringify(TOKEN)}, "*") }, 800));' +
+  'addEventListener("message", e => { if (ready && e.source === parent && e.data === ${JSON.stringify(TOKEN)}) e.source.postMessage(e.data, "*") })</script>'
+const listen = (name, headers, body) => new Promise(resolve => {
+  const server = http.createServer((req, res) => {
+    if (/Chrome/.test(req.headers['user-agent'] || '')) chrome[name]++
+    res.writeHead(200, { 'Content-Type': 'text/html', ...headers })
+    res.end(body)
+  })
+  server.listen(0, '127.0.0.1', () => resolve(server.address().port))
+})
+Promise.all([listen('deny', { 'X-Frame-Options': 'DENY' }, '<p>deny</p>'), listen('allow', {}, child)]).then(ports => console.log(ports.join(' ')))
+process.stdin.on('data', () => process.stdout.write(JSON.stringify(chrome) + '\\n'))
+`
+let framing
+async function startFramingServers () {
+  framing = { proc: spawn(process.execPath, ['-e', FRAMING_SERVERS], { stdio: ['pipe', 'pipe', 'inherit'] }) }
+  const [deny, allow] = await new Promise(resolve => framing.proc.stdout.once('data', data => resolve(String(data).trim().split(' '))))
+  framing.deny = `http://127.0.0.1:${deny}`
+  framing.allow = `http://127.0.0.1:${allow}`
+  framing.counts = () => new Promise(resolve => { framing.proc.stdout.once('data', data => resolve(JSON.parse(String(data)))); framing.proc.stdin.write('?\n') })
+}
+
+// A site whose build checks the headers of the framing servers: denied-ready frames the
+// deny server, allowed-ready the allow server, both with TOKEN as their ready message.
+function buildDeniedSite () {
+  const dir = path.join(tmp, 'content-denied')
+  fs.mkdirSync(dir)
+  for (const [name, url] of [['denied-ready', `${framing.deny}/x`], ['allowed-ready', `${framing.allow}/x`]]) {
+    fs.writeFileSync(path.join(dir, `${name}.md`), ['---', `title: ${name}`, 'modules: [preview]', 'content_blocks:', '  - _bookshop_name: preview',
+      `    url: ${url}`, `    ready_message: '${TOKEN}'`, '    load_timeout: 1', '    devices: [desktop, mobile]', '---', ''].join('\n'))
+  }
+  const config = path.join(tmp, 'denied.toml')
+  fs.writeFileSync(config, `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n[params.modules.framing.csp]\n  frame-src = ["${framing.deny}", "${framing.allow}"]\n`)
+  return hugo('public-denied', ['--config', `hugo.toml,${config}`], dir)
 }
 
 // A page is the lines of its one block, which also gets url: TARGET, or
@@ -527,11 +577,12 @@ const chromePath = findChrome()
 let skip = chromePath ? false : 'no Chrome found; set CHROME_PATH to run this check'
 if (!skip && typeof WebSocket === 'undefined') skip = 'this Node has no global WebSocket'
 
-let base, customFadeBase
+let base, customFadeBase, deniedBase
 if (!skip) {
   const start = Date.now()
-  servers.push(await serve(buildSite()), await serve(buildCustomFadeSite()))
-  ;[base, customFadeBase] = servers.map(server => `http://127.0.0.1:${server.address().port}`)
+  await startFramingServers()
+  servers.push(await serve(buildSite()), await serve(buildCustomFadeSite()), await serve(buildDeniedSite()))
+  ;[base, customFadeBase, deniedBase] = servers.map(server => `http://127.0.0.1:${server.address().port}`)
   console.log(`# built the probe sites in ${Date.now() - start} ms`)
   try {
     await launch(chromePath)
@@ -1588,3 +1639,88 @@ for (const height of [600, 844]) {
     }
   })
 }
+
+// A block that shows its build-time fallback has no live view to wait for: whatever its
+// ready message, its pane takes no readiness state and is not busy, its fallback alert
+// and link show, and its hidden frame makes no request. A ready message from the window
+// of that hidden frame changes nothing either.
+const FALLBACK_READINESS = `(() => {
+  const content = document.querySelector('section.preview .preview-content')
+  const pane = content.querySelector(':scope > .tab-pane.active')
+  const alert = pane.querySelector('.preview-error .alert')
+  const link = alert.querySelector('a')
+  const box = el => { const r = el.getBoundingClientRect(); return [r.width, r.height].map(Math.round) }
+  const r = link.getBoundingClientRect()
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  return {
+    readyMessage: content.dataset.readyMessage || null,
+    states: [...content.querySelectorAll(':scope > .tab-pane')].map(el => el.dataset.previewState || null),
+    busy: [...document.querySelectorAll('[aria-busy]')].map(el => el.getAttribute('aria-busy')),
+    alertInBusy: !!alert.closest('[aria-busy="true"]'),
+    alert: { role: alert.getAttribute('role'), box: box(alert), text: alert.textContent.replace(/\\s+/g, ' ').trim() },
+    link: { box: box(link), href: link.href, reached: link === hit || link.contains(hit) },
+    frame: (() => { const iframe = pane.querySelector('iframe'); return { src: iframe.getAttribute('src'), display: getComputedStyle(iframe).display } })()
+  }
+})()`
+const POST_FROM_HIDDEN = `(() => {
+  const iframe = document.querySelector('section.preview .preview-content > .tab-pane.active iframe')
+  iframe.contentWindow.eval("parent.postMessage('${TOKEN}', '*')")
+  return iframe.contentWindow.location.href
+})()`
+
+async function assertFallbackStartsNoReadiness (page, url, label) {
+  const want = state => {
+    assert.equal(state.readyMessage, TOKEN, `${label}: the block has a ready message`)
+    assert.deepEqual(state.states, [null, null], `${label}: no pane takes a readiness state`)
+    assert.deepEqual(state.busy, [], `${label}: nothing is busy`)
+    assert.equal(state.alertInBusy, false, `${label}: the alert is in no busy region`)
+    assert.equal(state.alert.role, 'alert')
+    assert.ok(state.alert.box[0] > 0 && state.alert.box[1] > 0 && state.alert.text.includes(url), `${label}: the fallback alert shows, naming ${url}: ${JSON.stringify(state.alert)}`)
+    assert.ok(state.link.box[0] > 0 && state.link.box[1] > 0 && state.link.reached, `${label}: its link shows and is reached: ${JSON.stringify(state.link)}`)
+    assert.equal(state.link.href, url)
+    assert.deepEqual(state.frame, { src: url, display: 'none' }, `${label}: the hidden frame keeps its src, as before readiness`)
+  }
+  const first = await page.evaluate(FALLBACK_READINESS)
+  want(first)
+  await sleep(1500)
+  want(await page.evaluate(FALLBACK_READINESS))
+  assert.equal(await page.evaluate(POST_FROM_HIDDEN), 'about:blank', `${label}: the hidden frame never navigated`)
+  await sleep(300)
+  want(await page.evaluate(FALLBACK_READINESS))
+  console.log(`# ${label}: ${JSON.stringify(first)}`)
+}
+
+test('fallback-ready: a block that shows its fallback by show_fallback starts no readiness, even with a ready message', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'fallback-ready', 1280)
+  try {
+    await page.settle([])
+    await assertFallbackStartsNoReadiness(page, child('ok'), 'fallback-ready')
+    assert.deepEqual(page.urls, [], 'no frame document request')
+  } finally {
+    await page.close()
+  }
+})
+
+test('denied-ready: a block whose target the build found refusing framing starts no readiness, while allowed-ready waits and is ready', { skip }, async () => {
+  assert.match(buildLogs['public-denied'], new RegExp(`URL '${framing.deny}/x' cannot be embedded because it sets 'X-Frame-Options: DENY'`))
+  assert.doesNotMatch(buildLogs['public-denied'], new RegExp(`URL '${framing.allow}/x' cannot be embedded`))
+  const before = await framing.counts()
+  const denied = await openPage(browser.cdp, deniedBase, 'denied-ready', 1280)
+  try {
+    await denied.settle([])
+    await assertFallbackStartsNoReadiness(denied, `${framing.deny}/x`, 'denied-ready')
+  } finally {
+    await denied.close()
+  }
+  const mid = await framing.counts()
+  assert.equal(mid.deny - before.deny, 0, 'the hidden frame makes no request')
+  const allowed = await openPage(browser.cdp, deniedBase, 'allowed-ready', 1280)
+  try {
+    await until(allowed, value => value.state === 'waiting', 'the live wait')
+    await assertWaiting(allowed, 'allowed-ready')
+    await assertReady(allowed, 'allowed-ready')
+  } finally {
+    await allowed.close()
+  }
+  assert.equal((await framing.counts()).allow - mid.allow, 1, 'the live view loads its frame once')
+})

@@ -108,6 +108,7 @@ const rules = {
   '.preview-controls [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-items [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab' && !!el.parent.closest('.preview-items'),
+  '.preview-error:not(.d-none)': el => el.classList.contains('preview-error') && !el.classList.contains('d-none'),
   '.preview-open, .preview-unavailable-link': el => el.classList.contains('preview-open') || el.classList.contains('preview-unavailable-link'),
   'section.preview .preview-content .preview-iframe': el => el.classList.contains('preview-iframe') && !!el.closest('.preview-content'),
   'section.preview .preview-content[data-ready-message] .preview-iframe': el => el.classList.contains('preview-iframe') &&
@@ -144,7 +145,8 @@ function cssHides (device, offered, width) {
 // the title of the first item. With panel, the items carry no headings, so
 // the content is the tab panel of every item tab, labelled by the first. Every
 // pane holds the hidden runtime failure alert, whose link opens the first URL,
-// unless the block shows its fallback.
+// unless the block shows its fallback, and the build-time fallback alert, which
+// has d-none unless the block shows its fallback.
 // With readyMessage, every iframe is inert and every pane holds a poster with a
 // waiting status, and the poster button only with click activation. timeout
 // is the data-load-timeout value, or null for none.
@@ -203,6 +205,7 @@ function buildPreview ({ devices, active, controls = true, activation = 'load', 
       link.href = items ? (items[0].openUrl || first) : first
       panes[device].append(new FakeElement({ classes: ['preview-unavailable'] }).append(new FakeElement({ classes: ['alert'] }).append(link)))
     }
+    panes[device].append(new FakeElement({ classes: ['preview-error', ...(fallback ? [] : ['d-none'])] }))
     content.append(panes[device])
     if (controls) {
       buttons[device] = new FakeElement({
@@ -873,11 +876,31 @@ test('with an IntersectionObserver, a view that is ready before it comes into vi
   assert.deepEqual(page.delays, [])
 })
 
-test('a view of a block that shows its fallback, which has no failure alert, still fails', () => {
+// A block that shows its build-time fallback has no live view to wait for, so the
+// view the script picks and loads gets no state and no deadline.
+test('a view of a block that shows its fallback gets no state or deadline', () => {
   const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', controls: false, fallback: true, items: ITEMS })
   const page = run(preview, 400)
+  assert.equal(src(preview.panes.mobile), A, 'the view still gets its src, as before')
+  assert.deepEqual(page.delays, [])
   page.elapse()
-  assert.equal(state(preview.panes.mobile), 'failed')
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: undefined })
+  assert.equal(inert(preview.panes.mobile), false)
+})
+
+test('with a ready message, a block that shows its fallback neither waits, asks nor takes a message', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN, fallback: true })
+  const page = run(preview, 1280)
+  const win = frame(preview.panes.desktop).contentWindow
+  assert.equal(src(preview.panes.desktop), URL, 'the view in the markup keeps its src')
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: undefined })
+  assert.equal(busy(preview.panes.desktop), null)
+  assert.deepEqual(win.posted, [], 'no request')
+  assert.deepEqual(page.delays, [])
+  frame(preview.panes.desktop).dispatch('load')
+  page.message(TOKEN, win)
+  assert.deepEqual(states(preview), { desktop: undefined, mobile: undefined }, 'the message adopts nothing')
+  assert.equal(busy(preview.panes.desktop), null)
 })
 
 test('with a ready message, an item switch clears the busy state of a view it hides', () => {

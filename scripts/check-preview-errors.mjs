@@ -168,7 +168,7 @@ test('items check embedding once per distinct URL, until one shows the fallback'
   const requested = [...result.log.matchAll(/Request to '([^']+)' failed/g)].map(([, url]) => url).sort()
   assert.deepEqual(requested, ['https://preview-one.invalid/a', 'https://preview-one.invalid/b', 'https://preview-three.invalid/e',
     'https://preview-two.invalid/c', 'https://preview-two.invalid/d'])
-  const csp = [...result.log.matchAll(/URL '([^']+)' allows being framed, but is not covered/g)].map(([, url]) => url)
+  const csp = [...result.log.matchAll(/URL '([^']+)' is not covered by the frame-src directive this site publishes/g)].map(([, url]) => url)
   assert.deepEqual(csp, ['https://preview-three.invalid/e'])
   assert.match(result.html.origins, /class="preview-error"/)
 })
@@ -305,7 +305,7 @@ test('a URL on this site renders when the site frame-src allows its own origin, 
   const denied = build({ local: { url: '/preview-demo/ready/', lines: [] } }, {}, '[params.modules.test.csp]\n  frame-src = ["https://example.org"]\n')
   assert.equal(denied.status, 0, denied.log)
   assert.doesNotMatch(denied.log, /Could not verify embedding restrictions/)
-  assert.match(denied.log, /URL 'http:\/\/example\.org\/preview-demo\/ready\/' allows being framed, but is not covered by the frame-src directive/)
+  assert.match(denied.log, /URL 'http:\/\/example\.org\/preview-demo\/ready\/' is not covered by the frame-src directive this site publishes/)
   assert.doesNotMatch(denied.html.local, /class="preview-error d-none"/)
 })
 

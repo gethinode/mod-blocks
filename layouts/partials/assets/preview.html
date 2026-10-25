@@ -252,10 +252,10 @@
     {{- end -}}
     {{- end -}}
 
-    {{/* A target that permits framing still renders as an empty box when this site's own CSP
-         leaves it out, so check that too. It runs last, and only for a target that would
-         otherwise have loaded — telling an author to allow a URL that refuses to be framed at
-         all would send them after a fix that cannot work. */}}
+    {{/* A target whose headers do not refuse framing, or were not checked, still renders as an
+         empty box when this site's own CSP leaves it out, so check that too. It runs last, and
+         only for a target that would otherwise have loaded — telling an author to allow a URL
+         whose headers refuse to be framed would send them after a fix that cannot work. */}}
     {{- if not $showFallback -}}
         {{- if not (partial "inline/preview-permitted-by-site.html" (dict "url" $url "origin" $origin)) -}}
             {{- $showFallback = true -}}
@@ -264,8 +264,8 @@
                 "warnid"  "warn-preview-csp"
                 "msg"     "iframe blocked by this site's own CSP"
                 "details" (slice
-                    (printf "URL '%s' allows being framed, but is not covered by the frame-src directive this site publishes, so the browser refuses the iframe; showing fallback." $url)
-                    "Add its host to a 'frame-src' entry under [modules.<name>.csp] to render it."
+                    (printf "URL '%s' is not covered by the frame-src directive this site publishes, so the browser refuses the iframe; showing fallback." $url)
+                    "Add its host to a 'frame-src' entry under [modules.<name>.csp] so that this site permits it."
                 )
                 "file"    $file
             ) -}}

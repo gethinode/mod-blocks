@@ -180,21 +180,27 @@
 
   /**
    * Creates the record of an iframe in a view pane, which belongs to it alone,
-   * so a copy that replaces it starts from nothing.
+   * so a copy that replaces it starts from nothing. A block that shows its
+   * build-time fallback, whose fallback alert lacks d-none, has no live view to
+   * wait for, so its iframes get no record.
    */
   function track (iframe) {
     const pane = iframe.closest('.tab-pane')
-    const record = { iframe, pane, container: pane.closest('.preview-content'), state: null, timer: null, observer: null }
+    const container = pane.closest('.preview-content')
+    if (container.querySelector('.preview-error:not(.d-none)')) return null
+    const record = { iframe, pane, container, state: null, timer: null, observer: null }
     frames.set(iframe, record)
     return record
   }
 
   /**
    * Watches the navigation of an iframe in a view pane, before the script gives
-   * it src or, for the iframe the markup gives src, at initialization.
+   * it src or, for the iframe the markup gives src, at initialization. Returns
+   * null for an iframe that gets no record.
    */
   function watch (iframe) {
     const record = track(iframe)
+    if (!record) return null
     iframe.addEventListener('load', () => {
       if (readyMessage(record.container)) askReady(record); else markReady(record)
     })
@@ -227,7 +233,8 @@
       if (!iframe.hasAttribute('src') || !isActivated(container)) return
       const message = readyMessage(container)
       if (message === '' || event.data !== message) return
-      markReady(frames.get(iframe) || track(iframe))
+      const record = frames.get(iframe) || track(iframe)
+      if (record) markReady(record)
     })
   })
 
@@ -424,7 +431,8 @@
    */
   function initPreviewReady () {
     document.querySelectorAll('section.preview .preview-content[data-ready-message] .preview-iframe').forEach(iframe => {
-      if (iframe.hasAttribute('src')) askReady(watch(iframe))
+      const record = iframe.hasAttribute('src') && watch(iframe)
+      if (record) askReady(record)
     })
   }
 
