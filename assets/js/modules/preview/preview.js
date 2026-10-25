@@ -47,9 +47,9 @@
  * seconds, 15 when that is not a positive number, which starts when the iframe
  * first intersects the viewport, or at once without IntersectionObserver. The
  * pane carries data-preview-state: waiting, ready or failed. When the deadline
- * passes first, the pane fails: its poster shows again, the iframe is hidden
- * and inert, and the pane shows its alert, whose link opens the shown item.
- * Showing an item resets every pane.
+ * passes first, the pane fails: its poster, if any, shows again, the iframe is
+ * hidden and inert, and the pane shows its alert, whose link opens the shown
+ * item. Showing an item resets every pane.
  *
  * Without data-ready-message, the load event of the iframe makes the pane
  * ready. Chrome fires load for an error status and a refused connection too,

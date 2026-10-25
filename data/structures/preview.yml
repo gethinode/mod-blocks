@@ -95,9 +95,9 @@ arguments:
     optional: true
     default: 15
     comment: >-
-      Seconds a view that the script loads may take before the view shows its
-      poster again with an alert and a link that opens the shown item in a new
-      tab. The time counts from when the frame first comes into view. Without
+      Seconds a view that the script loads may take before the view shows an
+      alert with a link that opens the shown item in a new tab, over its poster
+      when it has one. The time counts from when the frame first comes into view. Without
       ready-message, the load event of the frame ends the wait. Chrome fires
       that event for an error status and a refused connection too, so it
       catches a target that does not answer, not one that answers with an
