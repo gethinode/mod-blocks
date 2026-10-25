@@ -12,13 +12,14 @@
  *
  * Uses hardcoded device dimensions because hidden Bootstrap tab panes
  * return clientWidth/clientHeight = 0.
- * Also switches to the next available device when the active panel is
- * hidden by a viewport-width breakpoint.
+ * Also switches to the largest visible device that fits when the active panel
+ * is hidden by a viewport-width breakpoint.
  *
- * Only the active view loads: every iframe carries its URL in data-src, and
- * only the initially active one also carries src. Another view gets its src
- * when it is first shown. Without controls (data-controls="false") the block
- * picks the view itself, on load and on resize.
+ * Only the active view loads: every iframe carries its URL in data-src. With
+ * controls only the initially active one also carries src, and another view
+ * gets its src when it is first shown. Without controls (data-controls="false")
+ * no iframe carries src: the block picks the view itself at DOMContentLoaded
+ * and again whenever the viewport crosses a device breakpoint.
  */
 
 ;(function () {
@@ -30,23 +31,39 @@
     'preview-mobile': { width: 402, height: 874 }
   }
 
-  // Minimum viewport width at which each device view is shown. These mirror the
-  // max-width media queries that hide the desktop (<1024px) and tablet (<640px)
-  // panes and buttons in preview.scss; keep both in step.
-  const PREVIEW_DEVICE_MIN_WIDTH = {
-    desktop: 1024,
-    tablet: 640,
-    mobile: 0
+  // Devices from largest to smallest.
+  const PREVIEW_DEVICES = ['desktop', 'tablet', 'mobile']
+
+  // The media query below which each device view does not fit. These are the
+  // max-width media queries that hide the desktop and tablet panes and buttons in
+  // preview.scss; keep both in step. Mobile always fits.
+  const PREVIEW_DEVICE_TOO_NARROW = {
+    desktop: '(max-width: 1023px)',
+    tablet: '(max-width: 639px)'
+  }
+
+  function deviceFits (device) {
+    const query = PREVIEW_DEVICE_TOO_NARROW[device]
+    return !query || !window.matchMedia(query).matches
   }
 
   /**
    * Returns the largest offered device whose breakpoint fits the viewport,
    * or the smallest offered device when none fits.
    */
-  function pickDevice (viewportWidth, offered) {
-    const bySize = ['desktop', 'tablet', 'mobile'].filter(device => offered.includes(device))
-    const fitting = bySize.find(device => viewportWidth >= PREVIEW_DEVICE_MIN_WIDTH[device])
-    return fitting || bySize[bySize.length - 1]
+  function pickDevice (offered) {
+    const bySize = PREVIEW_DEVICES.filter(device => offered.includes(device))
+    return bySize.find(deviceFits) || bySize[bySize.length - 1]
+  }
+
+  /**
+   * Calls back whenever the viewport crosses a device breakpoint. The media
+   * query change fires as the stylesheet's rules flip, with no debounce gap.
+   */
+  function onBreakpointChange (callback) {
+    Object.values(PREVIEW_DEVICE_TOO_NARROW).forEach(query => {
+      window.matchMedia(query).addEventListener('change', callback)
+    })
   }
 
   /**
@@ -100,7 +117,7 @@
 
       const panes = Array.from(container.querySelectorAll(':scope > .tab-pane'))
       const show = () => {
-        const device = pickDevice(window.innerWidth, offered)
+        const device = pickDevice(offered)
         const target = panes.find(pane => pane.id.endsWith(`-${device}`))
         if (!target) return
         panes.forEach(pane => {
@@ -112,74 +129,60 @@
         updatePreviewScale()
       }
 
-      let resizeTimer
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer)
-        resizeTimer = setTimeout(show, 150)
-      })
-
+      onBreakpointChange(show)
       show()
     })
   }
 
   function initPreviewAutoSwitch () {
-    const previewSections = document.querySelectorAll('section.preview')
-
-    previewSections.forEach(section => {
-      // Load a view when its tab is first shown
-      section.querySelectorAll('.preview-controls [data-bs-toggle="tab"]').forEach(button => {
-        button.addEventListener('shown.bs.tab', event => {
-          loadPane(section.querySelector(event.target.dataset.bsTarget))
-        })
-      })
-
-      const buttons = section.querySelectorAll('.preview-controls .btn-group .btn')
-
+    document.querySelectorAll('section.preview').forEach(section => {
+      const buttons = Array.from(section.querySelectorAll('.preview-controls .btn-group .btn'))
       if (buttons.length === 0) return
 
+      const isHidden = button => window.getComputedStyle(button).display === 'none'
+      const deviceOf = button => PREVIEW_DEVICES.find(device => button.dataset.bsTarget.endsWith(`-${device}`))
+
       /**
-           * Check if active button is hidden and switch to next available
-           */
+       * When the stylesheet hides the active button, switch to the device that
+       * pickDevice chooses among the visible buttons
+       */
       const checkAndSwitchDevice = () => {
-        // Find currently active button
-        const activeButton = Array.from(buttons).find(btn => btn.classList.contains('active'))
+        const activeButton = buttons.find(button => button.classList.contains('active'))
+        if (!activeButton || !isHidden(activeButton)) return
 
-        if (!activeButton) return
-
-        // Check if active button is hidden by CSS
-        const isHidden = window.getComputedStyle(activeButton).display === 'none'
-
-        if (isHidden) {
-          // Find all visible buttons
-          const visibleButtons = Array.from(buttons).filter(btn =>
-            window.getComputedStyle(btn).display !== 'none'
-          )
-
-          if (visibleButtons.length > 0) {
-            // Switch to first visible button (desktop -> tablet -> mobile priority)
-            visibleButtons[0].click()
-          }
-        }
+        const visibleButtons = buttons.filter(button => !isHidden(button))
+        const device = pickDevice(visibleButtons.map(deviceOf))
+        const target = visibleButtons.find(button => deviceOf(button) === device)
+        if (target) target.click()
       }
 
-      // Debounced resize handler (avoid excessive checks)
-      let resizeTimer
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimer)
-        resizeTimer = setTimeout(checkAndSwitchDevice, 150)
-      })
-
-      // Initial check on page load
+      onBreakpointChange(checkAndSwitchDevice)
       checkAndSwitchDevice()
     })
   }
 
-  // Initialize on load (resize handler is set up inside initPreviewAutoSwitch)
-  window.addEventListener('load', () => {
+  // Load a view when its tab is first shown. Bootstrap's tab plugin is live
+  // before window load, so listen from the start, on the document, where
+  // shown.bs.tab bubbles to.
+  document.addEventListener('shown.bs.tab', event => {
+    const controls = event.target.closest('.preview-controls')
+    const section = controls && controls.closest('section.preview')
+    if (section) loadPane(section.querySelector(event.target.dataset.bsTarget))
+  })
+
+  function init () {
     updatePreviewScale()
     initPreviewAutoPick()
     initPreviewAutoSwitch()
-  })
+  }
 
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init)
+  } else {
+    init()
+  }
+
+  // Images and fonts that finish after DOMContentLoaded can still move the layout
+  window.addEventListener('load', () => { updatePreviewScale() })
   window.addEventListener('resize', () => { updatePreviewScale() })
 }())

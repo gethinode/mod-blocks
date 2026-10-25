@@ -27,6 +27,7 @@ fixtures:
       'src="https://example.org/" class="preview-iframe preview-desktop"': 1
       'src="https://example.org/"': 1
       'data-src="https://example.org/"': 3
+      'data-devices="desktop tablet mobile"': 2
   - case: device-mobile-active
     block:
       _bookshop_name: preview
@@ -52,6 +53,20 @@ fixtures:
     count:
       'data-src="https://example.org/"': 2
       'data-bs-toggle="tab"': 2
+      'data-devices="desktop mobile"': 2
+  - case: devices-duplicate
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      devices: [mobile, desktop, mobile]
+    want:
+      - 'data-devices="mobile desktop"'
+    count:
+      'data-src="https://example.org/"': 2
+      'data-bs-toggle="tab"': 2
+      'show active': 1
+      'src="https://example.org/"': 1
+      'src="https://example.org/" class="preview-iframe preview-desktop"': 1
   - case: devices-excludes-default
     block:
       _bookshop_name: preview
@@ -89,6 +104,9 @@ fixtures:
       - 'preview-controls'
       - 'data-bs-toggle'
       - 'role="tabpanel"'
+    count:
+      'src="https://example.org/"': 0
+      'data-src="https://example.org/"': 3
   - case: controls-false-bottom
     block:
       _bookshop_name: preview
@@ -99,6 +117,9 @@ fixtures:
       - 'data-controls="false"'
     reject:
       - 'preview-controls'
+    count:
+      'src="https://example.org/"': 0
+      'data-src="https://example.org/"': 3
   - case: controls-true-bottom
     block:
       _bookshop_name: preview

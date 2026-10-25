@@ -25,6 +25,9 @@ blueprint:
   url:
   device: desktop
   devices:
+    - desktop
+    - tablet
+    - mobile
   controls: true
   image:
   mode:

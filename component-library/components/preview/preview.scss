@@ -99,18 +99,22 @@ section.preview {
         }
     }
 
-    // Responsive visibility: hide panels based on WIDTH only
-    // Desktop panel: only visible on screens ≥1024px (post-scale breakpoint)
-    .preview-controls .btn-group .btn[data-bs-target*="desktop"],
-    .tab-pane[id*="desktop"] {
+    // Responsive visibility: hide panels based on WIDTH only, and only when a smaller
+    // device is offered (data-devices), so the smallest offered panel always shows.
+    // preview.js picks the view with these same media queries; keep both in step.
+    // Desktop panel: visible on screens ≥1024px (post-scale breakpoint)
+    .preview-controls[data-devices~="tablet"] .btn-group .btn[data-bs-target*="desktop"],
+    .preview-controls[data-devices~="mobile"] .btn-group .btn[data-bs-target*="desktop"],
+    .preview-content[data-devices~="tablet"] > .tab-pane[id*="desktop"],
+    .preview-content[data-devices~="mobile"] > .tab-pane[id*="desktop"] {
         @media (max-width: 1023px) {
             display: none !important;
         }
     }
 
-    // Tablet panel: only visible on screens ≥640px (post-scale breakpoint)
-    .preview-controls .btn-group .btn[data-bs-target*="tablet"],
-    .tab-pane[id*="tablet"] {
+    // Tablet panel: visible on screens ≥640px (post-scale breakpoint)
+    .preview-controls[data-devices~="mobile"] .btn-group .btn[data-bs-target*="tablet"],
+    .preview-content[data-devices~="mobile"] > .tab-pane[id*="tablet"] {
         @media (max-width: 639px) {
             display: none !important;
         }
