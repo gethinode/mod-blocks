@@ -160,9 +160,7 @@
    */
   function startDeadline (record) {
     const start = () => {
-      record.timer = setTimeout(() => {
-        if (frames.get(record.iframe) === record && record.state === 'waiting') setState(record, 'failed')
-      }, loadTimeout(record.container))
+      record.timer = setTimeout(() => setState(record, 'failed'), loadTimeout(record.container))
     }
     if (typeof IntersectionObserver === 'undefined') {
       start()
@@ -177,7 +175,6 @@
   }
 
   function markReady (record) {
-    if (record.state === 'ready') return
     stopDeadline(record)
     setState(record, 'ready')
   }
@@ -205,7 +202,6 @@
   function watch (iframe) {
     const record = track(iframe)
     iframe.addEventListener('load', () => {
-      if (frames.get(iframe) !== record) return
       if (readyMessage(record.container)) askReady(record); else markReady(record)
     })
     setState(record, 'waiting')
@@ -214,8 +210,9 @@
   }
 
   /**
-   * Forgets the navigation of the pane's iframe and resets the pane. The
-   * iframe stays inert while a ready message is still to come.
+   * Forgets the navigation of the pane's iframe and resets the pane, before an
+   * item switch replaces or reloads the iframe. The iframe stays inert while a
+   * ready message is still to come.
    */
   function forget (pane, iframe) {
     const record = frames.get(iframe)
@@ -430,8 +427,7 @@
    */
   function initPreviewReady () {
     document.querySelectorAll('section.preview .preview-content[data-ready-message] .preview-iframe').forEach(iframe => {
-      if (!iframe.hasAttribute('src') || frames.has(iframe)) return
-      askReady(watch(iframe))
+      if (iframe.hasAttribute('src')) askReady(watch(iframe))
     })
   }
 

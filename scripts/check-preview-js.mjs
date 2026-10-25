@@ -879,3 +879,14 @@ test('a view of a block that shows its fallback, which has no failure alert, sti
   page.elapse()
   assert.equal(state(preview.panes.mobile), 'failed')
 })
+
+test('with a ready message, an item switch clears the busy state of a view it hides', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN, items: ITEMS })
+  run(preview, 1280)
+  preview.buttons.mobile.click()
+  preview.buttons.desktop.click()
+  assert.equal(busy(preview.panes.mobile), 'true')
+  preview.itemButtons[1].click()
+  assert.equal(busy(preview.panes.mobile), null)
+  assert.equal(state(preview.panes.mobile), undefined)
+})

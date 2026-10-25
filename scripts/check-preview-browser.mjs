@@ -99,9 +99,13 @@ const PAGES = {
 }
 
 // The readiness probe pages. Each block waits for TOKEN, unless it is a legacy
-// one, and gives up after two seconds, or one for the legacy pages.
+// one, and gives up after two seconds, four for ready-phone, or one for the
+// legacy pages.
 function readyPages () {
-  const ready = (name, ...lines) => ({ url: child(name), lines: ['devices: [desktop, mobile]', `ready_message: '${TOKEN}'`, 'load_timeout: 2', ...lines] })
+  const ready = (name, ...lines) => ({
+    url: child(name),
+    lines: ['devices: [desktop, mobile]', `ready_message: '${TOKEN}'`, ...(lines.some(line => line.startsWith('load_timeout')) ? [] : ['load_timeout: 2']), ...lines]
+  })
   const legacy = name => ({ url: child(name), lines: ['devices: [desktop, mobile]', 'load_timeout: 1'] })
   return {
     'ready-slow': ready('slow'),
@@ -113,7 +117,7 @@ function readyPages () {
     'ready-reply': ready('reply'),
     'ready-announce': ready('announce'),
     'ready-wrong': ready('wrong'),
-    'ready-phone': ready('phone'),
+    'ready-phone': ready('phone', 'load_timeout: 4'),
     'ready-items-click': {
       url: null,
       lines: ['devices: [desktop, mobile]', `ready_message: '${TOKEN}'`, 'load_timeout: 2', 'activation: click', 'mode: true', 'open_link: true',
@@ -128,6 +132,7 @@ function readyPages () {
         '  - title: View b', `    url: ${child('hang')}`, `    open_url: ${TARGET}b-open`]
     },
     'legacy-silent': legacy('silent'),
+    'legacy-click-hang': { url: child('hang'), lines: ['devices: [desktop, mobile]', 'load_timeout: 1', 'activation: click', 'poster:', '  desktop: img/poster-desktop.png'] },
     'legacy-503': legacy('503'),
     'legacy-refused': legacy('refused')
   }
@@ -1004,6 +1009,9 @@ const READY_STATE = `(() => {
     poster: shows(pane.querySelector('.preview-poster')),
     hasPoster: !!pane.querySelector('.preview-poster'),
     waiting: shows(status) ? status.textContent.trim() : null,
+    // The status sits in the middle of the poster, less than half its height.
+    statusFits: !status || status.getBoundingClientRect().height < pane.querySelector('.preview-poster').getBoundingClientRect().height / 2,
+    button: shows(pane.querySelector('.preview-activate')),
     alert: shows(alert) ? { text: alert.textContent.replace(/\\s+/g, ' ').trim(), role: alert.querySelector('[role]').getAttribute('role'), href: link.href, name: link.textContent.trim() } : null,
     focus: document.activeElement === document.body ? 'body' : document.activeElement.className || document.activeElement.tagName
   }
@@ -1042,7 +1050,7 @@ async function settleTo (page, want, label) {
 // The shown view waits behind its poster: busy, with its status, and an iframe
 // that neither shows nor takes focus.
 async function assertWaiting (page, label) {
-  await settleTo(page, { state: 'waiting', busy: 'true', inert: true, iframe: false, poster: true, waiting: WAITING, alert: null }, `${label}: waiting`)
+  await settleTo(page, { state: 'waiting', busy: 'true', inert: true, iframe: false, poster: true, waiting: WAITING, statusFits: true, button: false, alert: null }, `${label}: waiting`)
   assert.equal(await page.evaluate(IFRAME_FOCUS), false, `${label}: the waiting iframe cannot take focus`)
 }
 
@@ -1328,6 +1336,19 @@ test('legacy-items: the copy that replaces a loaded iframe on an item switch fai
     await clickItem(page, 0)
     await until(page, value => value.state === 'ready', 'item a loads')
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${child('hang')}`, `desktop ${TARGET}a`])
+  } finally {
+    await page.close()
+  }
+})
+
+test('legacy-click-hang: a view that fails after activation shows its poster again, without its button', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'legacy-click-hang', 1280)
+  try {
+    await page.settle([])
+    await activateWithEnter(page)
+    await until(page, value => value.state === 'waiting' && !value.poster, 'the poster to fade on activation')
+    const state = await assertFailed(page, child('hang'), 'legacy-click-hang')
+    assert.deepEqual({ poster: state.poster, button: state.button }, { poster: true, button: false })
   } finally {
     await page.close()
   }
