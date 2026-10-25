@@ -43,7 +43,18 @@ const PAGES = {
   'tablet-mobile': ['devices: [tablet, mobile]'],
   tablet: ['devices: [tablet]'],
   click: ['activation: click', 'mode: true', 'poster:', '  desktop: img/poster-desktop.png', '  mobile: img/poster-mobile.png'],
-  'click-nocontrols': ['devices: [desktop, mobile]', 'controls: false', 'activation: click']
+  'click-nocontrols': ['devices: [desktop, mobile]', 'controls: false', 'activation: click'],
+  // A page whose lines start with items: gets no url of its own.
+  items: ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B')],
+  'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
+    'activation: click', 'mode: true']
+}
+
+// One item of a page, viewing TARGET followed by its name, with a heading and,
+// when given, a desktop poster.
+function item (name, title, poster) {
+  return [`  - title: View ${name}`, `    url: ${TARGET}${name}`, '    heading:', `      title: ${title}`,
+    ...(poster ? ['    poster:', `      desktop: ${poster}`] : [])]
 }
 
 function findChrome () {
@@ -118,7 +129,7 @@ function buildSite () {
       ...lines.map(line => `    ${line}`),
       '---',
       ''
-    ].join('\n'))
+    ].join('\n').replace(`    url: ${TARGET}\n    items:`, '    items:'))
   }
   return hugo('public')
 }
@@ -277,6 +288,8 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
   const send = (method, params) => cdp.send(method, params, sessionId)
   const requests = []
+  // Each iframe request as its view and URL, in the order they came.
+  const urls = []
   const held = []
   let holding = hold
   const fulfill = requestId => send('Fetch.fulfillRequest', {
@@ -300,6 +313,7 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
       owner = (classes.find(cls => cls.startsWith('preview-') && cls !== 'preview-iframe') || 'unknown').replace('preview-', '')
     } catch {}
     requests.push(owner)
+    urls.push(`${owner} ${msg.params.request.url}`)
     fulfill(requestId)
   })
   await send('Page.enable')
@@ -322,6 +336,7 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
   const evaluate = async expression => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result.value
   return {
     requests,
+    urls,
     evaluate,
     state: () => evaluate(STATE),
     resize: w => send('Emulation.setDeviceMetricsOverride', { width: w, height: 900, deviceScaleFactor: 1, mobile: false }),
@@ -329,6 +344,12 @@ async function openPage (cdp, base, name, width, { hold = false } = {}) {
     async pressEnter () {
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    },
+    // Presses an arrow key on the focused element.
+    async pressArrow (key) {
+      const windowsVirtualKeyCode = { ArrowLeft: 37, ArrowRight: 39 }[key]
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode })
     },
     emulateMedia: features => send('Emulation.setEmulatedMedia', { features }),
     release () { holding = false; held.splice(0).forEach(fulfill) },
@@ -689,3 +710,72 @@ for (const [fade, site, ms] of FADES) {
     }
   })
 }
+
+// Items: the item tabs, the visible item heading, and the item tab that has focus.
+const ITEMS_STATE = `(() => {
+  const visible = el => el.getBoundingClientRect().height > 0 && getComputedStyle(el).opacity !== '0'
+  const tabs = [...document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')]
+  return {
+    selected: tabs.filter(el => el.getAttribute('aria-selected') === 'true').map(el => el.textContent.trim()),
+    focused: tabs.includes(document.activeElement) ? document.activeElement.textContent.trim() : null,
+    headings: [...document.querySelectorAll('section.preview .preview-headings > .tab-pane')].filter(visible).map(el => el.textContent.trim())
+  }
+})()`
+const clickItem = (page, n) => page.evaluate(`document.querySelectorAll('section.preview .preview-items [data-bs-toggle="tab"]')[${n}].click()`)
+const itemsState = async page => { await sleep(SETTLE_MS); return page.evaluate(ITEMS_STATE) }
+
+test('items-click at 1280px: item tabs before activation swap heading and poster and load nothing, after it the shown view only', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'items-click', 1280)
+  try {
+    page.width = 1280
+    let state = await page.settle([])
+    assertView(page, state, 'desktop', [], 'before activation')
+    assert.deepEqual((await page.evaluate(ITEMS_STATE)).headings, ['Heading A'])
+    assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'item A shows its poster')
+    await clickItem(page, 1)
+    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: null, headings: ['Heading B'] })
+    state = await page.settle([])
+    assertView(page, state, 'desktop', [], 'item B before activation')
+    assert.match(visiblePoster(state).image, /^poster-mobile-light-/, 'item B shows its poster')
+    await assertPosterCovers(page, 'item B poster @1280')
+    await activateWithEnter(page)
+    state = await page.settle(['desktop'])
+    assert.deepEqual(page.urls, [`desktop ${TARGET}b`], 'activation loads the shown view with the item URL')
+    await clickItem(page, 0)
+    await waitFor(() => page.urls.length > 1, 'the item A request').catch(() => {})
+    state = await page.settle([])
+    assert.deepEqual(page.urls, [`desktop ${TARGET}b`, `desktop ${TARGET}a`], 'one request, for the shown view only')
+    assert.deepEqual((await page.evaluate(ITEMS_STATE)).headings, ['Heading A'])
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-tablet"]\').click()')
+    state = await page.settle(['desktop', 'tablet'])
+    assert.deepEqual(page.urls, [`desktop ${TARGET}b`, `desktop ${TARGET}a`, `tablet ${TARGET}a`])
+    console.log(`# items-click @1280: requests [${page.urls}]`)
+  } finally {
+    await page.close()
+  }
+})
+
+test('items at 1280px: arrow keys move between the item tabs, and each switch loads the shown view once', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'items', 1280)
+  try {
+    page.width = 1280
+    await page.settle(['desktop'])
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+    const history = await page.evaluate('history.length')
+    assert.equal(await page.evaluate('(() => { const tab = document.querySelector(\'section.preview .preview-items .active\'); tab.focus(); return document.activeElement === tab })()'), true)
+    await page.pressArrow('ArrowRight')
+    assert.deepEqual(await itemsState(page), { selected: ['View b'], focused: 'View b', headings: ['Heading B'] })
+    await waitFor(() => page.urls.length > 1, 'the item B request').catch(() => {})
+    await sleep(SETTLE_MS)
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`])
+    await page.pressArrow('ArrowLeft')
+    assert.deepEqual(await itemsState(page), { selected: ['View a'], focused: 'View a', headings: ['Heading A'] })
+    await waitFor(() => page.urls.length > 2, 'the item A request').catch(() => {})
+    await sleep(SETTLE_MS)
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `desktop ${TARGET}a`])
+    assert.equal(await page.evaluate('history.length'), history, 'the switches add no session history entry')
+    console.log(`# items @1280 with arrow keys: requests [${page.urls}]`)
+  } finally {
+    await page.close()
+  }
+})

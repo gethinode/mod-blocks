@@ -13,7 +13,9 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-// pages maps a page name to the extra YAML lines of its one preview block. env adds
+// pages maps a page name to the extra YAML lines of its one preview block, which
+// also gets url: https://example.org/, or to { url, lines } to give it another url,
+// or none when url is null. env adds
 // environment variables to the build, config adds TOML that overrides the site
 // config, and html holds each built page. A build that runs longer than two
 // minutes is stopped.
@@ -21,14 +23,15 @@ function build (pages, env = {}, config = '') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-errors-'))
   const content = path.join(dir, 'content')
   fs.mkdirSync(content)
-  for (const [name, lines] of Object.entries(pages)) {
+  for (const [name, page] of Object.entries(pages)) {
+    const { url = 'https://example.org/', lines } = Array.isArray(page) ? { lines: page } : page
     fs.writeFileSync(path.join(content, `${name}.md`), [
       '---',
       `title: ${name}`,
       'modules: [preview]',
       'content_blocks:',
       '  - _bookshop_name: preview',
-      '    url: https://example.org/',
+      ...(url === null ? [] : [`    url: ${url}`]),
       ...lines.map(line => `    ${line}`),
       '---',
       ''
@@ -116,5 +119,51 @@ for (const [lang, label] of [['de', 'Vorschau laden'], ['fr', 'Charger l\'aperç
     assert.equal(result.status, 0, result.log)
     const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, text]) => text.trim().replaceAll('&#39;', "'"))
     assert.deepEqual(labels, [label, label, label])
+  })
+}
+
+const item = (title, url, ...lines) => [`  - title: ${title}`, `    url: ${url}`, ...lines.map(line => `    ${line}`)]
+
+test('items replace url with a warn-preview-items warning', () => {
+  const result = build({ both: ['items:', ...item('A', 'https://example.org/a'), ...item('B', 'https://example.org/b')] })
+  assert.equal(result.status, 0, result.log)
+  assert.equal(result.log.match(/partial \[assets\/preview\.html\] - Both url and items: both\.md/g)?.length, 1, result.log)
+  assert.match(result.log, /Items replace url 'https:\/\/example\.org\/'; showing 'https:\/\/example\.org\/a' first/)
+  assert.match(result.log, /ignoreLogs = \['warn-preview-items'\]/)
+  assert.equal((result.html.both.match(/ data-src="https:\/\/example\.org\/a"/g) || []).length, 3)
+  assert.doesNotMatch(result.html.both, / data-src="https:\/\/example\.org\/"/)
+})
+
+test('items check embedding once per distinct origin, until one shows the fallback', () => {
+  // A host under .invalid never resolves, so each check of it logs a warning that
+  // names the URL it requested. The site CSP covers the first two hosts only.
+  const result = build({
+    origins: {
+      url: null,
+      lines: ['items:', ...item('A', 'https://preview-one.invalid/a'), ...item('B', 'https://preview-one.invalid/b'),
+        ...item('C', 'https://preview-two.invalid/c'), ...item('D', 'https://preview-two.invalid/d'),
+        ...item('E', 'https://preview-three.invalid/e'), ...item('F', 'https://preview-four.invalid/f')]
+    }
+  }, {}, '[params.modules.items.csp]\n  frame-src = ["https://preview-one.invalid", "https://preview-two.invalid"]\n')
+  assert.equal(result.status, 0, result.log)
+  const requested = [...result.log.matchAll(/Request to '([^']+)' failed/g)].map(([, url]) => url).sort()
+  assert.deepEqual(requested, ['https://preview-one.invalid/a', 'https://preview-three.invalid/e', 'https://preview-two.invalid/c'])
+  const csp = [...result.log.matchAll(/URL '([^']+)' allows being framed, but is not covered/g)].map(([, url]) => url)
+  assert.deepEqual(csp, ['https://preview-three.invalid/e'])
+  assert.match(result.html.origins, /class="preview-error"/)
+})
+
+test('items on the same origin as the site CSP all render without a fallback', () => {
+  const result = build({ same: { url: null, lines: ['items:', ...item('A', 'https://example.org/a'), ...item('B', 'https://example.org/b')] } })
+  assert.equal(result.status, 0, result.log)
+  assert.match(result.html.same, /class="preview-error d-none"/)
+  assert.doesNotMatch(result.log, /warn-preview-csp/)
+})
+
+for (const [label, lines] of [['a title', ['  - url: https://example.org/a']], ['a url', ['  - title: A']]]) {
+  test(`an item without ${label} fails the build`, () => {
+    const result = build({ _index: { url: null, lines: ['items:', ...lines] } })
+    assert.notEqual(result.status, 0, 'build succeeded')
+    assert.match(result.log, /Invalid argument 'items'/)
   })
 }

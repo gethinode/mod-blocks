@@ -46,6 +46,18 @@
 {{ end }}
 
 {{ if not $error }}
+	{{/* Items take the open-url key of the partial from either key format */}}
+	{{ $items := slice }}
+	{{ range .items }}
+		{{ $items = $items | append (dict
+			"title"    .title
+			"url"      .url
+			"open-url" (or .open_url (index . "open-url"))
+			"poster"   .poster
+			"heading"  .heading
+		) }}
+	{{ end }}
+
 	{{/* Main code */}}
 	{{ $raw := partial "assets/preview.html" (dict
 		"page"               $page
@@ -57,6 +69,7 @@
 		"controls-placement" (or .controls_placement (index . "controls-placement"))
 		"activation"         .activation
 		"poster"             .poster
+		"items"              (cond (gt (len $items) 0) $items nil)
 		"desktop-responsive" (or .desktop_responsive (index . "desktop-responsive"))
 		"heading"            .heading
 		"image"              .image

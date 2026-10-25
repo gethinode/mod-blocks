@@ -24,6 +24,8 @@
       count   map of needle to the exact number of times it occurs. A needle counts only where
               it starts the output or follows whitespace, so `src="x"` does not count the
               tail of `data-src="x"`.
+      order   substrings the rendered output must contain in this order, each found after
+              the end of the one before it.
 */ -}}
 {{- $fixtures := .Params.fixtures | default slice -}}
 {{- $fail := 0 -}}
@@ -73,6 +75,15 @@ FAIL no fixtures
         {{- if ne $got (int $want) -}}
             {{- $errs = $errs | append (printf "count %q: want %v got %d" $needle $want $got) -}}
         {{- end -}}
+    {{- end -}}
+    {{- $rest := $html -}}
+    {{- range $f.order -}}
+        {{- $parts := split $rest . -}}
+        {{- if lt (len $parts) 2 -}}
+            {{- $errs = $errs | append (printf "order %q" .) -}}
+            {{- break -}}
+        {{- end -}}
+        {{- $rest = strings.TrimPrefix (printf "%s%s" (index $parts 0) .) $rest -}}
     {{- end -}}
     {{- if $errs }}
 FAIL {{ $case }}: {{ delimit $errs "; " }}

@@ -34,6 +34,18 @@ blueprint:
     desktop:
     tablet:
     mobile:
+  items:
+    - title:
+      url:
+      open_url:
+      poster:
+        desktop:
+        tablet:
+        mobile:
+      heading:
+        preheading:
+        title:
+        content:
   image:
   mode:
   show_fallback:

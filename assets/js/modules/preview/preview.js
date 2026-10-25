@@ -29,6 +29,16 @@
  * without controls, sets data-active="true" on the content, which hides the
  * posters, and dispatches a bubbling preview:activate event on the section.
  * After that, views load as above.
+ *
+ * With items, a tab per item sits above the frame, and every iframe starts with
+ * the URL of the first item in data-src. Showing an item tab gives every iframe
+ * the item URL in data-src, and loads it in the shown view when the block may
+ * load its views; another view drops the URL it loaded, so it loads the item
+ * URL when it is next shown. An iframe that has loaded is replaced by a copy
+ * without src first, so a switch adds no entry to the session history. It also shows the poster image of the item in every
+ * poster, points every .preview-open link at the open URL of the item, and
+ * dispatches a bubbling preview:item event on the section, with the index of the
+ * item in its detail.
  */
 
 ;(function () {
@@ -113,6 +123,34 @@
     return target
   }
 
+  /**
+   * Shows the views of the item whose tab is shown.
+   */
+  function showItem (section, tab) {
+    const index = Array.from(tab.closest('.preview-items').querySelectorAll('[data-bs-toggle="tab"]')).indexOf(tab)
+    const url = tab.dataset.previewUrl
+    const container = section.querySelector('.preview-content')
+    const activated = isActivated(container)
+    container.querySelectorAll(':scope > .tab-pane').forEach(pane => {
+      let iframe = pane.querySelector('iframe[data-src]')
+      if (iframe) {
+        if (iframe.hasAttribute('src')) {
+          const copy = iframe.cloneNode(false)
+          copy.removeAttribute('src')
+          iframe.replaceWith(copy)
+          iframe = copy
+        }
+        iframe.dataset.src = url
+        if (activated && pane.classList.contains('active')) iframe.src = url
+      }
+      pane.querySelectorAll('.preview-poster-item').forEach(image => {
+        image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
+      })
+    })
+    section.querySelectorAll('.preview-open').forEach(link => { link.href = tab.dataset.previewOpenUrl })
+    section.dispatchEvent(new CustomEvent('preview:item', { bubbles: true, detail: { index } }))
+  }
+
   function updatePreviewScale () {
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
       const containerWidth = container.clientWidth
@@ -195,13 +233,15 @@
     })
   }
 
-  // Load a view when its tab is first shown. Bootstrap's tab plugin is live
-  // before window load, so listen from the start, on the document, where
-  // shown.bs.tab bubbles to.
+  // Load a view when its tab is first shown, and show an item when its tab is.
+  // Bootstrap's tab plugin is live before window load, so listen from the
+  // start, on the document, where shown.bs.tab bubbles to.
   document.addEventListener('shown.bs.tab', event => {
-    const controls = event.target.closest('.preview-controls')
-    const section = controls && controls.closest('section.preview')
-    if (section && isActivated(section.querySelector('.preview-content'))) {
+    const section = event.target.closest('section.preview')
+    if (!section) return
+    if (event.target.closest('.preview-items')) {
+      showItem(section, event.target)
+    } else if (event.target.closest('.preview-controls') && isActivated(section.querySelector('.preview-content'))) {
       loadPane(section.querySelector(event.target.dataset.bsTarget))
     }
   })

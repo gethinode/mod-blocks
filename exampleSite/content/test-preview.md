@@ -225,4 +225,159 @@ fixtures:
       'src="/img/poster-desktop-dark-': 2
       'src="/img/poster-mobile-light-': 1
       'src="/img/poster-mobile-dark-': 1
+  - case: items-basic
+    block:
+      _bookshop_name: preview
+      heading:
+        title: Block heading
+      items:
+        - title: View A
+          url: https://example.org/a
+          heading:
+            title: Heading A
+        - title: View B
+          url: https://example.org/b
+          open_url: https://example.org/b-open
+          heading:
+            title: Heading B
+    want:
+      - 'nav nav-pills justify-content-center'
+      - 'data-preview-url="https://example.org/a"'
+      - '-item-1"'
+      - 'data-preview-open-url="https://example.org/b-open"'
+      - 'role="tablist"'
+    reject:
+      - 'Block heading </h'
+    order:
+      - 'class="tab-pane fade show active" id="preview-'
+      - '-item-0" role="tabpanel"'
+      - 'Heading A'
+      - '-item-1" role="tabpanel"'
+      - 'Heading B'
+      - 'nav nav-pills'
+      - 'data-bs-target="#preview-'
+      - '-item-0" data-preview-url="https://example.org/a" data-preview-open-url="https://example.org/a"'
+      - '>View A</button>'
+      - 'data-bs-target="#preview-'
+      - '-item-1" data-preview-url="https://example.org/b" data-preview-open-url="https://example.org/b-open"'
+      - '>View B</button>'
+      - 'preview-controls'
+      - 'preview-content'
+    count:
+      'data-src="https://example.org/a"': 3
+      'data-src="https://example.org/b"': 0
+      'src="https://example.org/a"': 1
+      'show active': 2
+      'class="nav-link active"': 1
+      'class="nav-link"': 1
+      'role="tabpanel"': 5
+      'data-bs-toggle="tab"': 5
+  - case: items-heading-fallback
+    block:
+      _bookshop_name: preview
+      heading:
+        title: Block heading
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+          heading:
+            title: Heading B
+    order:
+      - '-item-0" role="tabpanel"'
+      - 'Block heading'
+      - '-item-1" role="tabpanel"'
+      - 'Heading B'
+      - 'nav nav-pills'
+    count:
+      'Block heading': 1
+  - case: items-no-headings
+    block:
+      _bookshop_name: preview
+      heading:
+        title: Block heading
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'nav nav-pills'
+    order:
+      - 'Block heading'
+      - 'nav nav-pills'
+    count:
+      'Block heading': 1
+      'role="tabpanel"': 3
+      'show active': 1
+  - case: items-override-url
+    block:
+      _bookshop_name: preview
+      url: https://example.org/
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'data-src="https://example.org/a"'
+    count:
+      'data-src="https://example.org/a"': 3
+      'data-src="https://example.org/"': 0
+  - case: items-posters
+    block:
+      _bookshop_name: preview
+      activation: click
+      mode: true
+      devices: [desktop, mobile]
+      poster:
+        desktop: img/poster-desktop.png
+      items:
+        - title: View A
+          url: https://example.org/a
+          poster:
+            mobile: img/poster-mobile.png
+        - title: View B
+          url: https://example.org/b
+          poster:
+            desktop: img/poster-mobile.png
+    order:
+      - 'preview-desktop'
+      - 'class="preview-poster-item" data-preview-item="0"><div class="d-none-dark"><img'
+      - 'src="/img/poster-desktop-light-'
+      - 'class="preview-poster-item d-none" data-preview-item="1"><div class="d-none-dark"><img'
+      - 'src="/img/poster-mobile-light-'
+      - 'preview-mobile'
+      - 'class="preview-poster-item" data-preview-item="0"><div class="d-none-dark"><img'
+      - 'src="/img/poster-mobile-light-'
+      - 'class="preview-poster-item d-none" data-preview-item="1"><div class="d-none-dark"><img'
+      - 'src="/img/poster-mobile-light-'
+    count:
+      'src="https://example.org/a"': 0
+      'class="preview-poster"': 2
+      'class="preview-poster-item"': 2
+      'class="preview-poster-item d-none"': 2
+      'src="/img/poster-desktop-light-': 1
+      'src="/img/poster-desktop-dark-': 1
+      'src="/img/poster-mobile-light-': 3
+      'src="/img/poster-mobile-dark-': 3
+  - case: items-load-no-controls
+    block:
+      _bookshop_name: preview
+      controls: false
+      items:
+        - title: View A
+          url: https://example.org/a
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'nav nav-pills'
+      - 'data-controls="false"'
+    reject:
+      - 'preview-controls'
+      - 'preview-poster'
+    count:
+      'src="https://example.org/a"': 0
+      'data-src="https://example.org/a"': 3
 ---

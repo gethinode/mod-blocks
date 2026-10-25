@@ -61,7 +61,7 @@ section.preview {
         border-radius: $theme-border-radius;
     }
 
-    .tab-pane.show {
+    .preview-content > .tab-pane.show {
         // Full height with flex layout for iframes (only apply to active/visible panes)
         height: 100%;
         display: flex;
@@ -89,6 +89,12 @@ section.preview {
         transition-property: opacity, visibility;
 
         > :not(.preview-activate) {
+            position: absolute;
+            inset: 0;
+        }
+
+        // With items, each item wraps its image the same way
+        .preview-poster-item > * {
             position: absolute;
             inset: 0;
         }
@@ -279,7 +285,7 @@ section.preview {
 
         // Keep the active tab pane visible at all viewport widths — responsive hiding
         // rules use !important but this selector has higher specificity, so it wins.
-        .tab-pane.show.active {
+        .preview-content > .tab-pane.show.active {
             display: flex !important;
         }
     }

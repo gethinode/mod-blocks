@@ -39,6 +39,18 @@ class FakeElement {
   }
 
   hasAttribute (name) { return name in this.attrs }
+  removeAttribute (name) { delete this.attrs[name] }
+  // A shallow copy: the same classes, data and attributes, without children,
+  // listeners or the count of src sets.
+  cloneNode () {
+    return new FakeElement({ id: this.id, classes: [...this.classList.set], dataset: { ...this.dataset }, attrs: this.attrs, device: this.device })
+  }
+
+  replaceWith (other) {
+    other.parent = this.parent
+    this.parent.children[this.parent.children.indexOf(this)] = other
+    this.parent = null
+  }
   get src () { return this.attrs.src }
   set src (value) { this.attrs.src = value; this.srcSets = (this.srcSets || 0) + 1 }
   addEventListener (type, fn) { (this.listeners[type] ||= []).push(fn) }
@@ -76,6 +88,10 @@ const rules = {
   '.preview-content': el => el.classList.contains('preview-content'),
   '.preview-activate': el => el.classList.contains('preview-activate'),
   '.preview-poster': el => el.classList.contains('preview-poster'),
+  '.preview-poster-item': el => el.classList.contains('preview-poster-item'),
+  '.preview-items': el => el.classList.contains('preview-items'),
+  '.preview-open': el => el.classList.contains('preview-open'),
+  '[data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
   '.tab-pane': el => el.classList.contains('tab-pane'),
   'section.preview .preview-content[data-controls="false"]': el => el.classList.contains('preview-content') && el.dataset.controls === 'false',
   '.preview-iframe': el => el.classList.contains('preview-iframe'),
@@ -108,8 +124,10 @@ function cssHides (device, offered, width) {
 // Builds a preview section as preview.html renders it outside Bookshop live
 // editing: without controls no iframe carries src, with controls only the active
 // one does. With click activation no iframe carries src, and every pane holds a
-// poster with its button.
-function buildPreview ({ devices, active, controls = true, activation = 'load' }) {
+// poster with its button. With items, a heading pane and an item tab render per
+// item, every iframe starts with the URL of the first item, every poster holds
+// one image per item, and an open link follows the frame.
+function buildPreview ({ devices, active, controls = true, activation = 'load', items }) {
   const click = activation === 'click'
   const id = 'preview-1'
   const section = new FakeElement({ classes: ['preview'] })
@@ -119,15 +137,34 @@ function buildPreview ({ devices, active, controls = true, activation = 'load' }
   const content = new FakeElement({ classes: ['tab-content', 'preview-content'], dataset })
   const panes = {}
   const buttons = {}
+  const first = items ? items[0].url : URL
+  const itemButtons = []
+  const headings = []
+  if (items) {
+    const headingContent = new FakeElement({ classes: ['tab-content', 'preview-headings'] })
+    const nav = new FakeElement({ classes: ['nav', 'nav-pills', 'preview-items'] })
+    items.forEach(({ url, openUrl = url }, n) => {
+      headings.push(new FakeElement({ id: `${id}-item-${n}`, classes: ['tab-pane', 'fade', ...(n === 0 ? ['show', 'active'] : [])] }))
+      itemButtons.push(new FakeElement({
+        classes: ['nav-link', ...(n === 0 ? ['active'] : [])],
+        dataset: { bsTarget: `#${id}-item-${n}`, previewUrl: url, previewOpenUrl: openUrl },
+        attrs: { 'data-bs-toggle': 'tab' }
+      }))
+    })
+    section.append(headingContent.append(...headings), nav.append(...itemButtons))
+  }
   for (const device of devices) {
     const isActive = device === active
     const iframe = new FakeElement({
       classes: ['preview-iframe', `preview-${device}`],
-      dataset: { src: URL },
-      attrs: isActive && controls && !click ? { src: URL } : {}
+      dataset: { src: first },
+      attrs: isActive && controls && !click ? { src: first } : {}
     })
     panes[device] = new FakeElement({ id: `${id}-${device}`, classes: ['tab-pane', 'fade', ...(isActive ? ['show', 'active'] : [])], device }).append(iframe)
-    if (click) panes[device].append(new FakeElement({ classes: ['preview-poster'] }).append(new FakeElement({ classes: ['btn', 'preview-activate'] })))
+    if (click) {
+      const posterItems = (items || []).map((item, n) => new FakeElement({ classes: ['preview-poster-item', ...(n > 0 ? ['d-none'] : [])], dataset: { previewItem: String(n) } }))
+      panes[device].append(new FakeElement({ classes: ['preview-poster'] }).append(...posterItems, new FakeElement({ classes: ['btn', 'preview-activate'] })))
+    }
     content.append(panes[device])
     if (controls) {
       buttons[device] = new FakeElement({
@@ -140,8 +177,13 @@ function buildPreview ({ devices, active, controls = true, activation = 'load' }
   }
   if (controls) section.append(new FakeElement({ classes: ['preview-controls'] }).append(...Object.values(buttons)))
   section.append(content)
-  const activate = device => panes[device].children[1].children[0].click()
-  return { section, content, panes, buttons, devices, activate }
+  const open = new FakeElement({ classes: ['preview-open'] })
+  if (items) {
+    open.href = first
+    section.append(open)
+  }
+  const activate = device => panes[device].children[1].children.find(el => el.classList.contains('preview-activate')).click()
+  return { section, content, panes, buttons, devices, activate, itemButtons, headings, open }
 }
 
 // Loads preview.js into a fresh context with the given viewport width. `until`
@@ -180,11 +222,14 @@ function run (preview, width, { until = 'load', readyState = 'loading' } = {}) {
 
   // Bootstrap's tab plugin: registered after preview.js, as the deferred core
   // bundle is. A click activates the button and its pane, then fires shown.bs.tab.
+  // An item tab swaps the heading panes the same way.
   document.addEventListener('click', ({ target }) => {
     if (target.attrs['data-bs-toggle'] !== 'tab') return
-    Object.values(preview.buttons).forEach(btn => btn.classList.toggle('active', btn === target))
+    const isItem = preview.itemButtons.includes(target)
+    const [tabs, targets] = isItem ? [preview.itemButtons, preview.headings] : [Object.values(preview.buttons), Object.values(preview.panes)]
+    tabs.forEach(btn => btn.classList.toggle('active', btn === target))
     const pane = document.querySelector(target.dataset.bsTarget)
-    Object.values(preview.panes).forEach(p => { p.classList.toggle('show', p === pane); p.classList.toggle('active', p === pane) })
+    targets.forEach(p => { p.classList.toggle('show', p === pane); p.classList.toggle('active', p === pane) })
     target.dispatch('shown.bs.tab')
   })
 
@@ -430,4 +475,88 @@ test('a poster button outside a preview block is left alone', () => {
   page.document.append(stray)
   assert.doesNotThrow(() => stray.click())
   assert.deepEqual(loaded(preview), [])
+})
+
+const A = 'https://example.org/a'
+const B = 'https://example.org/b'
+const ITEMS = [{ url: A }, { url: B, openUrl: 'https://example.org/b-open' }]
+const dataSrcs = preview => Object.values(preview.panes).map(pane => pane.children[0].dataset.src)
+const srcs = preview => Object.fromEntries(Object.entries(preview.panes).map(([device, pane]) => [device, src(pane)]))
+// The item each poster shows: the index of its one poster image without d-none.
+const posterItems = preview => Object.values(preview.panes).map(pane => pane.children[1].children
+  .filter(el => el.classList.contains('preview-poster-item') && !el.classList.contains('d-none'))
+  .map(el => el.dataset.previewItem).join(','))
+function recordItems (page) {
+  const events = []
+  page.document.addEventListener('preview:item', event => events.push(event))
+  return events
+}
+
+test('with items and click activation, an item tab before activation swaps URL and posters and loads nothing', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click', items: ITEMS })
+  const page = run(preview, 1280)
+  const events = recordItems(page)
+  assert.deepEqual(posterItems(preview), ['0', '0', '0'])
+  preview.itemButtons[1].click()
+  assert.deepEqual(dataSrcs(preview), [B, B, B])
+  assert.deepEqual(loaded(preview), [])
+  assert.deepEqual(posterItems(preview), ['1', '1', '1'])
+  assert.equal(preview.open.href, 'https://example.org/b-open')
+  assert.equal(events.length, 1, 'one preview:item event')
+  assert.equal(events[0].target, preview.section, 'dispatched on the section')
+  assert.equal(events[0].bubbles, true)
+  assert.equal(events[0].detail.index, 1)
+  preview.itemButtons[0].click()
+  assert.deepEqual(dataSrcs(preview), [A, A, A])
+  assert.deepEqual(posterItems(preview), ['0', '0', '0'])
+  assert.equal(preview.open.href, A, 'the open link falls back to the item URL')
+  assert.deepEqual(events.map(event => event.detail.index), [1, 0])
+  preview.activate('desktop')
+  assert.deepEqual(srcs(preview), { desktop: A, tablet: undefined, mobile: undefined })
+})
+
+test('with items and click activation, an item tab after activation loads the shown view only', () => {
+  const preview = buildPreview({ devices: ['desktop', 'tablet', 'mobile'], active: 'desktop', activation: 'click', items: ITEMS })
+  run(preview, 1280)
+  preview.activate('desktop')
+  preview.buttons.tablet.click()
+  assert.deepEqual(srcs(preview), { desktop: A, tablet: A, mobile: undefined })
+  const before = Object.values(preview.panes).map(pane => pane.children[0])
+  preview.itemButtons[1].click()
+  assert.deepEqual(dataSrcs(preview), [B, B, B])
+  assert.deepEqual(srcs(preview), { desktop: undefined, tablet: B, mobile: undefined }, 'the hidden view drops the old URL')
+  const after = Object.values(preview.panes).map(pane => pane.children[0])
+  assert.deepEqual(after.map((iframe, i) => iframe !== before[i]), [true, true, false], 'the iframes that had loaded are replaced')
+  assert.equal(before[0].attrs.src, A, 'the replaced iframe is left as it was')
+  assert.equal(preview.panes.tablet.children[0].srcSets, 1, 'the new tablet iframe loads once')
+  assert.deepEqual(after[0].classList.set, before[0].classList.set, 'the copy keeps the classes')
+  preview.buttons.desktop.click()
+  assert.deepEqual(srcs(preview), { desktop: B, tablet: B, mobile: undefined }, 'a view shown later loads the item URL')
+})
+
+test('with items and load activation, an item tab loads the shown view at once', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', items: ITEMS })
+  run(preview, 1280)
+  assert.deepEqual(srcs(preview), { desktop: A, mobile: undefined })
+  preview.itemButtons[1].click()
+  assert.deepEqual(srcs(preview), { desktop: B, mobile: undefined })
+  preview.buttons.mobile.click()
+  assert.deepEqual(srcs(preview), { desktop: B, mobile: B })
+})
+
+test('with items and no controls, an item tab loads the picked view', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', controls: false, items: ITEMS })
+  const page = run(preview, 400)
+  assert.deepEqual(srcs(preview), { desktop: undefined, mobile: A })
+  preview.itemButtons[1].click()
+  assert.deepEqual(srcs(preview), { desktop: undefined, mobile: B })
+  page.resize(1280)
+  assert.deepEqual(srcs(preview), { desktop: B, mobile: B }, 'a view shown later loads the item URL')
+})
+
+test('an item tab does not load a heading pane as a view', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', items: ITEMS })
+  run(preview, 1280)
+  assert.doesNotThrow(() => preview.itemButtons[1].click())
+  assert.deepEqual(preview.headings.map(isShown), [false, true])
 })

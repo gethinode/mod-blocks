@@ -58,6 +58,23 @@ arguments:
       are desktop, tablet and mobile. A view without a poster of its own uses
       the desktop poster, or a plain background when there is none. The mode
       argument applies to posters too.
+  items:
+    type:
+      - slice
+      - '[]map[string]interface {}'
+    optional: true
+    comment: >-
+      Views to switch between as tabs above the frame, each with a title and a
+      url, both required, and an optional open-url, poster and heading. The
+      first item shows first, and items replace url, with a warning when both
+      are set. Switching tabs keeps the shown device, and once the block may
+      load its views, loads the item url in the shown view only. open-url
+      defaults to url. An item poster falls back from the view to the desktop
+      poster of the item, then to the block poster. When an item has a
+      heading, each tab shows the heading of its item, or the block heading
+      when its item has none, in place of the block heading. The embedding
+      checks run once per origin of the items, and the first origin that
+      cannot be framed shows the fallback.
   controls-placement:
     optional: true
   desktop-responsive:
