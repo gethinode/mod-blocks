@@ -890,3 +890,37 @@ test('with a ready message, an item switch clears the busy state of a view it hi
   assert.equal(busy(preview.panes.mobile), null)
   assert.equal(state(preview.panes.mobile), undefined)
 })
+
+// An iframe without src holds a same-origin about:blank window, which a script
+// can post from. Before a navigation starts, the ready message from it changes
+// nothing: no state, busy state or deadline, and the iframe stays inert.
+test('with a ready message, the message from the window of an iframe without src changes nothing', () => {
+  const preview = buildPreview({ devices: ['desktop', 'mobile'], active: 'desktop', readyMessage: TOKEN })
+  const page = run(preview, 1280)
+  page.message(TOKEN, frame(preview.panes.mobile).contentWindow)
+  assert.deepEqual(states(preview), { desktop: 'waiting', mobile: undefined })
+  assert.equal(busy(preview.panes.mobile), null)
+  assert.equal(inert(preview.panes.mobile), true)
+  assert.deepEqual(page.delays, [15000], 'no deadline starts or ends')
+  preview.buttons.mobile.click()
+  assert.equal(state(preview.panes.mobile), 'waiting', 'the later navigation still waits')
+  page.message(TOKEN, frame(preview.panes.mobile).contentWindow)
+  assert.equal(state(preview.panes.mobile), 'ready')
+})
+
+test('with a ready message and click activation, a message before activation changes nothing, even from an iframe with src', () => {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', readyMessage: TOKEN, activation: 'click' })
+  const page = run(preview, 1280)
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.equal(state(preview.panes.desktop), undefined, 'without src')
+  frame(preview.panes.desktop).setAttribute('src', URL)
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.equal(state(preview.panes.desktop), undefined, 'with src set by another script before activation')
+  assert.equal(inert(preview.panes.desktop), true)
+  assert.deepEqual(page.delays, [])
+  frame(preview.panes.desktop).removeAttribute('src')
+  preview.activate('desktop')
+  assert.equal(state(preview.panes.desktop), 'waiting')
+  page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
+  assert.equal(state(preview.panes.desktop), 'ready')
+})

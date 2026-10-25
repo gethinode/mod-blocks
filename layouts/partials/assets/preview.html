@@ -205,13 +205,18 @@
 {{- end -}}
 
 {{/* Inline partial — runs the build-time framing checks for one URL and reports whether the
-     preview must show its fallback. */}}
+     preview must show its fallback. A URL without a host is a page of this site, which the
+     build cannot request: it skips the header checks and resolves the URL against the base
+     URL of the site for the frame-src check. */}}
 {{- define "_partials/inline/preview-framing.html" -}}
     {{- $url := .url -}}
     {{- $origin := .origin -}}
     {{- $file := .file -}}
     {{- $showFallback := false -}}
 
+    {{- if not (urls.Parse $url).Host -}}
+        {{- $url = absURL $url -}}
+    {{- else -}}
     {{- $options := dict "responseHeaders" (slice "X-Frame-Options" "Content-Security-Policy") -}}
     {{- $response := try (resources.GetRemote $url (merge $options (dict "method" "HEAD"))) -}}
     {{- if $response.Err -}}
@@ -244,6 +249,7 @@
                 "file"    $file
             ) -}}
         {{- end -}}
+    {{- end -}}
     {{- end -}}
 
     {{/* A target that permits framing still renders as an empty box when this site's own CSP

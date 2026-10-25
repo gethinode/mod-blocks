@@ -367,10 +367,12 @@ section.preview {
 
     // Responsive behavior for small screens
     @media (max-width: 639px) {
-        // The 400px minimum height passes 80svh on a viewport under 500px tall; cap it so
-        // the page keeps a fifth of the small viewport to scroll with
+        // Keep a fifth of the small viewport to scroll the page with: the 400px minimum
+        // height passes 80svh on a viewport under 500px tall, and the height above passes
+        // it on a tall phone when the site has no navbar or device controls
         .preview-content {
             min-height: min(400px, 80svh);
+            max-height: 80svh;
         }
 
         .preview-controls {

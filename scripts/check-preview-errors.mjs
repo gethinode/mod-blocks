@@ -294,3 +294,17 @@ test('a URL on the same host with another port or scheme is checked again', () =
   assert.match(result.log, new RegExp(`Request to '${HTTPS}/s/a' failed`))
   assert.deepEqual(alerts(result.html.scheme), Array(3).fill([`${HTTPS}/s/a`, `${HTTPS}/s/a`]))
 })
+
+// A URL without a host is a page of this site: the build makes no request for
+// its headers and checks it against the frame-src of the site as its own origin.
+test('a URL on this site renders when the site frame-src allows its own origin, and shows the fallback when not', () => {
+  const allowed = build({ local: { url: '/preview-demo/ready/', lines: [] } })
+  assert.equal(allowed.status, 0, allowed.log)
+  assert.doesNotMatch(allowed.log, /Could not verify embedding restrictions|iframe blocked by this site's own CSP/)
+  assert.match(allowed.html.local, /class="preview-error d-none"/)
+  const denied = build({ local: { url: '/preview-demo/ready/', lines: [] } }, {}, '[params.modules.test.csp]\n  frame-src = ["https://example.org"]\n')
+  assert.equal(denied.status, 0, denied.log)
+  assert.doesNotMatch(denied.log, /Could not verify embedding restrictions/)
+  assert.match(denied.log, /URL 'http:\/\/example\.org\/preview-demo\/ready\/' allows being framed, but is not covered by the frame-src directive/)
+  assert.doesNotMatch(denied.html.local, /class="preview-error d-none"/)
+})

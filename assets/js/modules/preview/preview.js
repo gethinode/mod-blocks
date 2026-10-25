@@ -215,11 +215,15 @@
   }
 
   // Makes a pane ready when the window of its current iframe posts the ready
-  // message of its block. Listen from the start, before any navigation.
+  // message of its block. Listen from the start, before any navigation. Only an
+  // iframe with src in a block that may load its views counts: one without src
+  // holds a same-origin about:blank window that a script can post from.
   window.addEventListener('message', event => {
     document.querySelectorAll('section.preview .preview-content .preview-iframe').forEach(iframe => {
       if (iframe.contentWindow !== event.source) return
-      const message = readyMessage(iframe.closest('.preview-content'))
+      const container = iframe.closest('.preview-content')
+      if (!iframe.hasAttribute('src') || !isActivated(container)) return
+      const message = readyMessage(container)
       if (message === '' || event.data !== message) return
       markReady(frames.get(iframe) || track(iframe))
     })

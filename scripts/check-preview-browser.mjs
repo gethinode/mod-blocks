@@ -208,6 +208,9 @@ function hugo (name, args = []) {
 // { url, lines } to give it another url, or none when url is null.
 function buildSite () {
   fs.mkdirSync(content)
+  // The readiness demo page of the exampleSite, as it is.
+  fs.mkdirSync(path.join(content, 'components'))
+  fs.copyFileSync(path.join('exampleSite', 'content', 'components', 'preview-ready.md'), path.join(content, 'components', 'preview-ready.md'))
   for (const [name, page] of Object.entries(PAGES)) {
     const { url = TARGET, lines } = Array.isArray(page) ? { lines: page } : page
     fs.writeFileSync(path.join(content, `${name}.md`), [
@@ -1410,3 +1413,112 @@ for (const height of [844, 600, 480]) {
     }
   })
 }
+
+// An iframe without src holds a same-origin about:blank window. A script that
+// runs in it and posts the ready message to this page changes nothing before
+// a navigation: before click activation, and in a view that has not loaded.
+const POST_FROM = device => `(() => {
+  const iframe = document.querySelector('section.preview .preview-content > [id$="-${device}"] iframe')
+  if (iframe.hasAttribute('src')) return 'has src'
+  iframe.contentWindow.eval("parent.postMessage('${TOKEN}', '*')")
+  return iframe.contentWindow.location.href
+})()`
+const paneOf = device => `(() => { const pane = document.querySelector('section.preview .preview-content > [id$="-${device}"]'); return { state: pane.dataset.previewState || null, busy: pane.getAttribute('aria-busy'), inert: pane.querySelector('iframe').inert } })()`
+
+test('ready-items-click: the ready message from an iframe window without src changes nothing before activation', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-items-click', 1280)
+  try {
+    await page.settle([])
+    assert.equal(await page.evaluate(POST_FROM('desktop')), 'about:blank')
+    await sleep(300)
+    const state = await readyState(page)
+    assert.deepEqual({ state: state.state, busy: state.busy, inert: state.inert, poster: state.poster, button: state.button, waiting: state.waiting },
+      { state: null, busy: null, inert: true, poster: true, button: true, waiting: null })
+    assert.deepEqual(page.urls, [])
+    await activateWithEnter(page)
+    await assertWaiting(page, 'after activation')
+    await assertReady(page, 'after activation')
+  } finally {
+    await page.close()
+  }
+})
+
+test('ready-silent: the ready message from the window of a view that has not loaded changes nothing', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'ready-silent', 1280)
+  try {
+    await until(page, value => value.state === 'waiting', 'the desktop wait')
+    assert.equal(await page.evaluate(POST_FROM('mobile')), 'about:blank')
+    await sleep(300)
+    assert.deepEqual(await page.evaluate(paneOf('mobile')), { state: null, busy: null, inert: true })
+    await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
+    await assertWaiting(page, 'mobile after it loads')
+  } finally {
+    await page.close()
+  }
+})
+
+// A site without a navbar or device controls, and with a tall section, makes the
+// height of the content reach past 80svh on a phone in portrait, which the
+// stylesheet caps. Hinode declares these variables on .main.
+const NO_CHROME = `(() => {
+  const style = document.createElement('style')
+  style.textContent = '.main { --navbar-height: 0px; --max-section-height: 2000px } section.preview { --preview-controls-height: 0px }'
+  document.head.append(style)
+  window.dispatchEvent(new Event('resize'))
+})()`
+
+test('nocontrols at 600x1080px without a navbar: the mobile frame stays within 80% of the viewport height', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'nocontrols', 600, { height: 1080 })
+  try {
+    page.width = 600
+    await page.settle(['mobile'])
+    await page.evaluate(NO_CHROME)
+    await sleep(200)
+    const boxes = await page.evaluate(PHONE_BOXES)
+    const vars = await page.evaluate('(() => { const s = getComputedStyle(document.querySelector(\'section.preview\')); return [s.getPropertyValue(\'--navbar-height\'), s.getPropertyValue(\'--preview-controls-height\'), s.getPropertyValue(\'--max-section-height\')].map(v => v.trim()) })()')
+    assert.deepEqual(vars, ['0px', '0px', '2000px'], 'the layout has no navbar or controls and a tall section')
+    assert.ok(boxes.content[1] > 0 && boxes.frame[0] > 0 && boxes.frame[1] > 0 && boxes.frameInside, `nonzero boxes: ${JSON.stringify(boxes)}`)
+    assert.ok(boxes.scrollWidth <= 600, `no horizontal scroll: ${boxes.scrollWidth}`)
+    assert.ok(boxes.content[1] <= Math.ceil(1080 * 0.8), `the content is at most 80% of the viewport height: ${boxes.content[1]} of 1080`)
+    assert.ok(boxes.frame[1] <= Math.ceil(1080 * 0.8), `the frame is at most 80% of the viewport height: ${boxes.frame[1]} of 1080`)
+    assert.ok(boxes.scrolls && boxes.above > 0 && boxes.below > 0, `page scroll reaches past the frame: ${JSON.stringify(boxes)}`)
+    console.log(`# nocontrols @600x1080 without navbar: ${JSON.stringify(boxes)}`)
+  } finally {
+    await page.close()
+  }
+})
+
+// The readiness demo page of the exampleSite frames its own demo pages: Ready
+// posts example:ready and answers a request, Silent never posts it.
+test('components/preview-ready: the Ready tab shows its view, the Silent tab fails with a link to its page', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'components/preview-ready', 1280)
+  try {
+    await page.settle([])
+    assert.equal(await page.evaluate('document.querySelectorAll(\'section.preview iframe[src]\').length'), 0, 'nothing loads before the button')
+    assert.equal(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-error\')].some(el => el.offsetParent)'), false, 'the site frame-src allows the demo pages')
+    await activateWithEnter(page)
+    await assertWaiting(page, 'Ready')
+    await assertReady(page, 'Ready')
+    // The Ready page answers a request with the ready message, and nothing else.
+    const replies = await page.evaluate(`new Promise(resolve => {
+      const win = [...document.querySelectorAll('section.preview .preview-content > .tab-pane')].find(el => el.offsetParent).querySelector('iframe').contentWindow
+      const got = []
+      window.addEventListener('message', event => { if (event.source === win) got.push(event.data) })
+      win.postMessage('other', '*')
+      win.postMessage('example:ready', '*')
+      setTimeout(() => resolve(got), 500)
+    })`)
+    assert.deepEqual(replies, ['example:ready'], 'one reply, to the matching request')
+    assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/ready/`])
+    await clickItem(page, 1)
+    await assertWaiting(page, 'Silent')
+    await sleep(3000)
+    await assertWaiting(page, 'Silent before its deadline')
+    await assertFailed(page, `${base}/preview-demo/silent/`, 'Silent')
+    assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/silent/`])
+    await clickItem(page, 0)
+    await assertReady(page, 'Ready again')
+  } finally {
+    await page.close()
+  }
+})

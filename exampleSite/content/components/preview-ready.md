@@ -12,10 +12,11 @@ content_blocks:
       content: >-
         After the button over the poster is pressed, the view stays behind its
         poster with a waiting status until the framed page posts the message
-        example:ready to this page. The pages framed here never post it, so
-        after five seconds the view shows its poster again, with an alert and a
-        link that opens the shown tab in a new tab. Each tab and each device
-        view waits on its own.
+        example:ready to this page. The Ready tab frames a demo page that posts
+        it, and answers when the preview asks for it. The Silent tab frames a
+        demo page that never posts it, so after five seconds that view shows
+        its poster again, with an alert and a link that opens the page in a new
+        tab. Each tab and each device view waits on its own.
     activation: click
     mode: true
     ready_message: example:ready
@@ -25,11 +26,10 @@ content_blocks:
       desktop: img/poster-desktop.png
       mobile: img/poster-mobile.png
     items:
-      - title: Home
-        url: https://example.org/
-      - title: About
-        url: https://example.org/about
-        open_url: https://example.org/
+      - title: Ready
+        url: /preview-demo/ready/
+      - title: Silent
+        url: /preview-demo/silent/
     links:
       - title: About Hinode
         url: https://gethinode.com/

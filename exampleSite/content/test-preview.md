@@ -621,4 +621,14 @@ fixtures:
       - 'preview-poster'
       - 'preview-waiting'
       - 'preview-unavailable'
+  - case: url-on-this-site
+    block:
+      _bookshop_name: preview
+      url: /preview-demo/ready/
+      ready_message: 'example:ready'
+    want:
+      - 'data-src="/preview-demo/ready/"'
+      - 'class="preview-error d-none"'
+    reject:
+      - 'class="preview-error"'
 ---
