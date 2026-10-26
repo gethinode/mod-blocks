@@ -15,3 +15,11 @@ content_blocks:
     show_fallback: true
     image: /img/placeholder.png
 ---
+
+Explore focused examples:
+
+- [Choose device views](/components/preview-devices/)
+- [Load on click](/components/preview-click/)
+- [Switch between items](/components/preview-items/)
+- [Wait for readiness](/components/preview-ready/)
+- [Basic preview](/components/preview/)
