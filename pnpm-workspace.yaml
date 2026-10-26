@@ -6,3 +6,11 @@ allowBuilds:
   # add more only when a postinstall failure is investigated and trusted
 minimumReleaseAgeExclude:
   - "@gethinode/*"
+
+# Remove once hugo-extended adopts the ZIP extraction security fixes.
+overrides:
+  adm-zip: "^0.6.1"
+  # Bookshop pins an affected LiquidJS release and an older esbuild minor.
+  # Scope the compiler replacement to the Hugo engine; its config API is compatible.
+  liquidjs@10: "^10.27.2"
+  "@bookshop/hugo-engine>esbuild": "^0.28.2"
