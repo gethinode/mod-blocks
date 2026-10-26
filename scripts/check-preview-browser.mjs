@@ -2059,3 +2059,19 @@ for (const width of [390, 1440]) {
     } finally { await page.close() }
   })
 }
+
+for (const [width, height] of [[390, 600], [390, 844], [1023, 900], [1920, 1080]]) {
+  test(`window measured viewport preserves 16:10 under theme padding at ${width}x${height}`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-visible', width, { height, beforeScript: CONTROL_IDLE })
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW)
+      const b = await page.evaluate(WINDOW_BOX)
+      assert.ok(Math.abs(b.viewport.width / b.viewport.height - 1.6) < 0.002,
+        `actual viewport ${b.viewport.width}x${b.viewport.height} must keep the native ratio`)
+      const poster = await page.evaluate(`(() => { const b = document.querySelector('.preview-poster').getBoundingClientRect(); return { width: b.width, height: b.height } })()`)
+      assert.ok(Math.abs(poster.width - b.viewport.width) < 1 && Math.abs(poster.height - b.viewport.height) < 1,
+        'the static poster covers the actual native viewport without bands')
+      if (width < 1024) assert.equal(page.requests.length, 0)
+    } finally { await page.close() }
+  })
+}

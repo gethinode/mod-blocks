@@ -462,7 +462,7 @@
     const availableHeight = window.innerHeight - navigationHeight - 48 - bar.getBoundingClientRect().height - 2
     const fittedWidth = Math.max(3, Math.min(win.parentElement.clientWidth, width + 2, availableHeight * width / height + 2))
     win.style.width = `${fittedWidth}px`
-    container.style.height = `${(fittedWidth - 2) * height / width}px`
+    container.style.height = `${container.getBoundingClientRect().width * height / width}px`
     return { width, height }
   }
 
