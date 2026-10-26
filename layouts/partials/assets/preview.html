@@ -468,7 +468,7 @@
          content, which the script labels with the shown tab. */}}
     {{- $sharedPanel := and $itemTabs (not $headed) -}}
     {{- if $itemTabs }}
-        <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="View selection">
+        <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="{{ T "previewViewSelection" }}">
             {{- range $n, $item := $items }}
                 {{- $isActive := eq $n 0 }}
                 <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}">{{ $item.title }}</button>

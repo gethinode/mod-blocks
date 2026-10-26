@@ -112,18 +112,26 @@ test('in Bookshop live editing, load puts src on the default view and click on n
 })
 
 // The button label comes from the i18n strings of the module, so a site in another
-// language gets its own label, and so do the waiting status and the runtime
-// failure alert.
+// language gets its own label, and so do the waiting status, runtime failure
+// alert and item tablist. A missing translation must not fall back to English.
 const LABELS = {
-  de: ['Vorschau laden', 'Live-Vorschau wird geladen', 'Die Live-Vorschau ist gerade nicht verfügbar.'],
-  fr: ['Charger l\'aperçu', 'Chargement de l\'aperçu en direct', 'L\'aperçu en direct n\'est pas disponible pour le moment.'],
-  nl: ['Voorbeeld laden', 'Live voorbeeld wordt geladen', 'Het live voorbeeld is nu niet beschikbaar.'],
-  pl: ['Załaduj podgląd', 'Wczytywanie podglądu na żywo', 'Podgląd na żywo jest teraz niedostępny.']
+  en: ['Load preview', 'Loading the live preview', 'The live preview is not available right now.', 'View selection'],
+  de: ['Vorschau laden', 'Live-Vorschau wird geladen', 'Die Live-Vorschau ist gerade nicht verfügbar.', 'Ansichtsauswahl'],
+  fr: ['Charger l\'aperçu', 'Chargement de l\'aperçu en direct', 'L\'aperçu en direct n\'est pas disponible pour le moment.', 'Sélection de la vue'],
+  nl: ['Voorbeeld laden', 'Live voorbeeld wordt geladen', 'Het live voorbeeld is nu niet beschikbaar.', 'Weergaveselectie'],
+  pl: ['Załaduj podgląd', 'Wczytywanie podglądu na żywo', 'Podgląd na żywo jest teraz niedostępny.', 'Wybór widoku']
 }
 const text = value => value.trim().replaceAll('&#39;', "'")
-for (const [lang, [label, loading, unavailable]] of Object.entries(LABELS)) {
-  test(`with ${lang} as the site language, the poster button reads ${label}, and the waiting and failure texts are ${lang}`, () => {
-    const result = build({ click: ['activation: click', 'ready_message: demo:ok'] }, {}, `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
+for (const [lang, [label, loading, unavailable, selection]] of Object.entries(LABELS)) {
+  test(`with ${lang} as the site language, the poster, status, failure and item tablist labels are ${lang}`, () => {
+    const result = build({
+      click: {
+        url: null,
+        lines: ['activation: click', 'ready_message: demo:ok', 'items:',
+          '  - title: First view', '    url: https://example.org/a',
+          '  - title: Second view', '    url: https://example.org/b']
+      }
+    }, {}, `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
     assert.equal(result.status, 0, result.log)
     const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, value]) => text(value))
     assert.deepEqual(labels, [label, label, label])
@@ -131,6 +139,8 @@ for (const [lang, [label, loading, unavailable]] of Object.entries(LABELS)) {
     assert.deepEqual(statuses, [loading, loading, loading])
     const alerts = [...result.html.click.matchAll(/preview-unavailable-alert" role="alert">[\s\S]*?<span>([^<]*)<a /g)].map(([, value]) => text(value))
     assert.deepEqual(alerts, [unavailable, unavailable, unavailable])
+    const tablists = [...result.html.click.matchAll(/class="[^"]*preview-items" role="tablist" aria-label="([^"]*)"/g)].map(([, value]) => text(value))
+    assert.deepEqual(tablists, [selection])
   })
 }
 

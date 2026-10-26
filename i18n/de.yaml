@@ -5,3 +5,5 @@
   translation: "Live-Vorschau wird geladen"
 - id: previewUnavailable
   translation: "Die Live-Vorschau ist gerade nicht verfügbar."
+- id: previewViewSelection
+  translation: "Ansichtsauswahl"

@@ -5,3 +5,5 @@
   translation: "Chargement de l'aperçu en direct"
 - id: previewUnavailable
   translation: "L'aperçu en direct n'est pas disponible pour le moment."
+- id: previewViewSelection
+  translation: "Sélection de la vue"
