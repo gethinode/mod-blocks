@@ -559,7 +559,7 @@ fixtures:
       url: https://example.org/
     want:
       - 'data-load-timeout="15"'
-      - '<div class="preview-unavailable"><div class="alert alert-warning preview-unavailable-alert" role="alert">'
+      - '<div class="preview-unavailable"><div class="alert alert-warning preview-unavailable-alert" role="alert" aria-label="The live preview is not available right now.">'
       - 'The live preview is not available right now.'
       - 'class="alert-link preview-unavailable-link" href="https://example.org/" target="_blank" rel="noopener">Open in new tab</a>'
     reject:
@@ -585,7 +585,7 @@ fixtures:
       ready_message: 'demo:ok'
     want:
       - 'data-ready-message="demo:ok"'
-      - '<div class="preview-waiting" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Loading the live preview</span></div>'
+      - '<div class="preview-waiting" role="status" aria-label="Loading the live preview"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span class="preview-feedback-full">Loading the live preview</span><span class="preview-feedback-short" aria-hidden="true">Wait</span></div>'
     reject:
       - 'preview-activate'
     count:

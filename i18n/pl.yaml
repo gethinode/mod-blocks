@@ -9,3 +9,16 @@
   translation: "Wybór widoku"
 - id: previewReady
   translation: "Podgląd na żywo gotowy"
+
+- id: previewStatePreview
+  translation: "Podgląd"
+- id: previewStateLoading
+  translation: "Ładowanie"
+- id: previewStateLive
+  translation: "Na żywo"
+- id: previewStateUnavailable
+  translation: "Niedostępny"
+- id: previewStateWait
+  translation: "Czekaj"
+- id: previewStateError
+  translation: "Błąd"

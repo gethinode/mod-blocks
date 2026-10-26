@@ -1,0 +1,175 @@
+{
+  "sources": {
+    "exampleSite/static/preview-demo/ready/index.html": "e29d96c571838d3c88b0e8bdf762bc8ff7baefe80af917d5fda3df5afe1b0b71",
+    "exampleSite/static/preview-demo/activity/index.html": "87cf572567ca4d4171489db2b7bd32d4304c22c4a7c94878eea66c840f31da35",
+    "exampleSite/static/preview-demo/silent/index.html": "b4d81dbdd8f0a0baf75267f99840e73fa71ff2b4aef423fa73dbbd4de7e0fa98",
+    "exampleSite/static/preview-demo/ready.js": "a9143ffd5f26febb35fce9fda65bef7f0151cb92f554710bbe41eadd5ced339a",
+    "exampleSite/static/preview-demo/demo.css": "1251283514ce6a89e019f236da144cdf91ed2d27664a7d7aaca0b2d493e1260d"
+  },
+  "captures": [
+    {
+      "route": "ready",
+      "device": "desktop",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/ready-desktop-light.png",
+      "sha256": "5c1319c99ca1fbf3dff778b0bb5e9980e4a2c9d4096e524ca520f0ca1c0b171b"
+    },
+    {
+      "route": "ready",
+      "device": "desktop",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/ready-desktop-dark.png",
+      "sha256": "54fb99d42fb36b35611b9e8f3f77a099f1cd1f7163f81259eeeaee45b6900b96"
+    },
+    {
+      "route": "ready",
+      "device": "tablet",
+      "theme": "light",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/ready-tablet-light.png",
+      "sha256": "86d91e3770ad767522e0af9e4c87d7e90376da52c075e4ee346567c0b15ce408"
+    },
+    {
+      "route": "ready",
+      "device": "tablet",
+      "theme": "dark",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/ready-tablet-dark.png",
+      "sha256": "e63dcdd3d3aa24de3150d136f33aa1a082a7e9524cfab879be5d3c03b11114b0"
+    },
+    {
+      "route": "ready",
+      "device": "mobile",
+      "theme": "light",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/ready-mobile-light.png",
+      "sha256": "f8293569292f5184d88b7dcd99436b6dc5298ad81e218deff6d4a341ec70698b"
+    },
+    {
+      "route": "ready",
+      "device": "mobile",
+      "theme": "dark",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/ready-mobile-dark.png",
+      "sha256": "38c2359cbee3ba7419c5a24acd8a4e6f3153add8e962c1ab6930e71501d45941"
+    },
+    {
+      "route": "activity",
+      "device": "desktop",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/activity-desktop-light.png",
+      "sha256": "6aeba3170aefd1e8586ff635d280ff24bc4055b6b794c22c8d3b73383b92c960"
+    },
+    {
+      "route": "activity",
+      "device": "desktop",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/activity-desktop-dark.png",
+      "sha256": "cbae0f50513e1d2cee0b9720ea9a0eec495a2040b537af720efda73f2cdb3867"
+    },
+    {
+      "route": "activity",
+      "device": "tablet",
+      "theme": "light",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/activity-tablet-light.png",
+      "sha256": "01a2edf79502fd9ec89de30f869a0e34a9637d136710d3e262a4af79a376a332"
+    },
+    {
+      "route": "activity",
+      "device": "tablet",
+      "theme": "dark",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/activity-tablet-dark.png",
+      "sha256": "bdd87695ca45832af698f240eb843745fbcecce49dd7ad18c62b5e6b59980283"
+    },
+    {
+      "route": "activity",
+      "device": "mobile",
+      "theme": "light",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/activity-mobile-light.png",
+      "sha256": "b8e9ce71cbd171406af2df00fadcf3039815244af6427601f114c9ef1464522c"
+    },
+    {
+      "route": "activity",
+      "device": "mobile",
+      "theme": "dark",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/activity-mobile-dark.png",
+      "sha256": "a0101af45a605a73d7919cf37edb9771eba230df7d11818c34bc8ec91d59622f"
+    },
+    {
+      "route": "silent",
+      "device": "desktop",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/silent-desktop-light.png",
+      "sha256": "dcd8ead4118dd72acb7b38793b886b4410c4916fb4ab6c31632b0a8fcd5a1b16"
+    },
+    {
+      "route": "silent",
+      "device": "desktop",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "file": "exampleSite/assets/img/preview-demo/silent-desktop-dark.png",
+      "sha256": "527b99f7d71c90c529026fcca891f97ccaca438042816c4e2af4c7f1fbef6973"
+    },
+    {
+      "route": "silent",
+      "device": "tablet",
+      "theme": "light",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/silent-tablet-light.png",
+      "sha256": "696a05d212f4add6d5d880d8433c0b499c3e594111b262490c4234ebcf6f9687"
+    },
+    {
+      "route": "silent",
+      "device": "tablet",
+      "theme": "dark",
+      "width": 820,
+      "height": 1180,
+      "file": "exampleSite/assets/img/preview-demo/silent-tablet-dark.png",
+      "sha256": "30d4e36824e5f82e53929f1a0a2d2ad1178d5cea4093541874950d8c2a0a0862"
+    },
+    {
+      "route": "silent",
+      "device": "mobile",
+      "theme": "light",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/silent-mobile-light.png",
+      "sha256": "8b572617fdf58c5ae3c645a3201191c91891f05ec3828f288d6e6ab75d8b42a1"
+    },
+    {
+      "route": "silent",
+      "device": "mobile",
+      "theme": "dark",
+      "width": 402,
+      "height": 874,
+      "file": "exampleSite/assets/img/preview-demo/silent-mobile-dark.png",
+      "sha256": "31cd434930018646239ba48a64a87bb1c5646e04b5832d3e4abb181d8677d1f8"
+    }
+  ],
+  "browser": "156.0.8078.47",
+  "method": "ordinary local HTTP; DPR1; native viewport screenshot; no parent or private source"
+}

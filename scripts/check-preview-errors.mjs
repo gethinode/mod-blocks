@@ -19,7 +19,7 @@ import test, { after, before } from 'node:test'
 // environment variables to the build, config adds TOML that overrides the site
 // config, and html holds each built page. A build that runs longer than two
 // minutes is stopped.
-function build (pages, env = {}, config = '') {
+function build (pages, env = {}, config = '', assets = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preview-errors-'))
   const content = path.join(dir, 'content')
   fs.mkdirSync(content)
@@ -43,6 +43,13 @@ function build (pages, env = {}, config = '') {
     const quote = arg => shell ? `"${arg}"` : arg
     const publish = path.join(dir, 'public')
     const args = ['-s', 'exampleSite', '--contentDir', quote(content), '-d', quote(publish)]
+    if (Object.keys(assets).length) {
+      const assetDir=path.join(dir,'assets')
+      for(const [name,body] of Object.entries(assets)){
+        const file=path.join(assetDir,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,body)
+      }
+      config += `\n[[module.mounts]]\nsource = "assets"\ntarget = "assets"\n[[module.mounts]]\nsource = '${assetDir.replaceAll('\\','/')}'\ntarget = "assets"\n`
+    }
     if (config) {
       const file = path.join(dir, 'config.toml')
       fs.writeFileSync(file, config)
@@ -135,9 +142,9 @@ for (const [lang, [label, loading, unavailable, selection]] of Object.entries(LA
     assert.equal(result.status, 0, result.log)
     const labels = [...result.html.click.matchAll(/class="btn btn-primary preview-activate">([^<]*)</g)].map(([, value]) => text(value))
     assert.deepEqual(labels, [label, label, label])
-    const statuses = [...result.html.click.matchAll(/class="preview-waiting" role="status">.*?<span>([^<]*)<\/span>/g)].map(([, value]) => text(value))
+    const statuses = [...result.html.click.matchAll(/class="preview-waiting" role="status" aria-label="[^"]*">.*?<span class="preview-feedback-full">([^<]*)<\/span>/g)].map(([, value]) => text(value))
     assert.deepEqual(statuses, [loading, loading, loading])
-    const alerts = [...result.html.click.matchAll(/preview-unavailable-alert" role="alert">[\s\S]*?<span>([^<]*)<a /g)].map(([, value]) => text(value))
+    const alerts = [...result.html.click.matchAll(/preview-unavailable-alert" role="alert" aria-label="[^"]*">[\s\S]*?<span class="preview-feedback-full">([^<]*)<a /g)].map(([, value]) => text(value))
     assert.deepEqual(alerts, [unavailable, unavailable, unavailable])
     const tablists = [...result.html.click.matchAll(/class="[^"]*preview-items" role="tablist" aria-label="([^"]*)"/g)].map(([, value]) => text(value))
     assert.deepEqual(tablists, [selection])
@@ -361,4 +368,46 @@ test('mobile static presence preserves false underscore and accepts kebab keys',
   assert.match(result.html.kebab, /data-mobile-static="true"/)
   assert.doesNotMatch(result.html.kebab, / src="https:\/\/example.org\/"/)
   assert.match(result.html.title, /title="Example window"/)
+})
+
+
+test('theme bridge requires readiness and preserves explicit nil and invalid false forwarding', () => {
+  const invalid=build({invalid:['theme_message: example:theme']})
+  assert.notEqual(invalid.status,0)
+  assert.match(invalid.log,/theme-message.*ready-message|ready-message.*theme-message/)
+  const valid=build({configured:['ready_message: example:ready','theme_message: example:theme'],
+    kebab:['ready-message: example:ready','theme-message: example:theme'],
+    omitted:[],nil:['ready_message: example:ready','theme_message: null','theme-message: example:theme']})
+  assert.equal(valid.status,0,valid.log)
+  for(const name of ['configured','kebab']){
+    assert.match(valid.html[name],/data-theme-message="example:theme"/)
+    assert.doesNotMatch(valid.html[name],/<iframe[^>]+ src=/,'seed must precede navigation')
+  }
+  assert.doesNotMatch(valid.html.omitted,/data-theme-message=/)
+  assert.doesNotMatch(valid.html.nil,/data-theme-message=/,'explicit nil does not revive kebab value')
+  const bad=build({bad:['ready_message: example:ready','theme_message: false','theme-message: example:theme']})
+  assert.notEqual(bad.status,0,'false is invalid, not an or-fallback to kebab')
+})
+
+test('window action uses the externalLink theme icon alias and forwards explicit zero padding', () => {
+  const result=build({custom:['frame: window','open_link: true']},{},'[params.icons]\nexternalLink = "fi-tr arrow-up-right-from-square"\n',{'svgs/fi-tr/arrow-up-right-from-square.svg':'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3L10 14M10 3H3v18h18v-7" fill="none" stroke="currentColor"/></svg>'})
+  assert.equal(result.status,0,result.log)
+  assert.match(result.html.custom,/fi-tr-arrow-up-right-from-square|fi-tr.*arrow-up-right-from-square/)
+  const padded=build({padded:['frame: window','padding: 0']});assert.equal(padded.status,0,padded.log);assert.match(padded.html.padded,/py-0/)
+})
+
+
+const VISIBLE_STATES={en:['Preview','Loading','Live','Unavailable','Wait','Error'],de:['Vorschau','Laden','Live','Nicht verfügbar','Warten','Fehler'],fr:['Aperçu','Chargement','En direct','Indisponible','Attente','Erreur'],nl:['Voorbeeld','Laden','Live','Niet beschikbaar','Wacht','Fout'],pl:['Podgląd','Ładowanie','Na żywo','Niedostępny','Czekaj','Błąd']}
+for(const [lang,words]of Object.entries(VISIBLE_STATES))test(`window visible and concise states render in ${lang}`,()=>{
+ const result=build({window:['frame: window','open_link: true','ready_message: example:ready']},{},`defaultContentLanguage = '${lang}'\n[languages.${lang}]\nweight = 1\n`)
+ assert.equal(result.status,0,result.log)
+ const state=result.html.window.match(/<span class="preview-window-state"[^>]+>/)?.[0]
+ assert.ok(state)
+ for(const word of words)assert.ok(text(state).includes(`="${word}"`),`${lang}: ${word}`)
+})
+
+test('explicit false desktop responsive reaches the native public example profile',()=>{
+ const result=build({native:['desktop_responsive: false','desktop-responsive: true']})
+ assert.equal(result.status,0,result.log)
+ assert.match(result.html.native,/data-desktop-responsive="false"/)
 })

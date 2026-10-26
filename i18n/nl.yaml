@@ -9,3 +9,16 @@
   translation: "Weergaveselectie"
 - id: previewReady
   translation: "Live voorbeeld gereed"
+
+- id: previewStatePreview
+  translation: "Voorbeeld"
+- id: previewStateLoading
+  translation: "Laden"
+- id: previewStateLive
+  translation: "Live"
+- id: previewStateUnavailable
+  translation: "Niet beschikbaar"
+- id: previewStateWait
+  translation: "Wacht"
+- id: previewStateError
+  translation: "Fout"

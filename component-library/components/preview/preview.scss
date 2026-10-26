@@ -94,6 +94,17 @@ section.preview {
             inset: 0;
         }
 
+        isolation: isolate;
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            background: transparent;
+        }
+
         // With items, each item wraps its image the same way
         .preview-poster-item > * {
             position: absolute;
@@ -144,7 +155,15 @@ section.preview {
         }
     }
 
+    .preview-feedback-short { display: none; }
+
+    .preview-content > .tab-pane:is([data-preview-state="waiting"], [data-preview-state="failed"]) .preview-poster::after {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
     .preview-waiting {
+        position: relative;
+        z-index: 2;
         display: none;
         align-items: center;
         gap: 0.5rem;
@@ -416,7 +435,7 @@ section.preview {
         max-width: 100%;
         margin: 24px auto;
         border: 1px solid var(--bs-border-color);
-        border-radius: $preview-window-border-radius;
+        border-radius: var(--preview-window-border-radius, #{$preview-window-border-radius});
         overflow: hidden;
         background: var(--bs-tertiary-bg);
         box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.12);
@@ -451,27 +470,82 @@ section.preview {
         }
     }
 
-    // Keep the sole action whole before spending space on decorative chrome.
-    // Measured fitting selects this only when the normal bar cannot fit. Fixed
-    // consumer bar padding/font/min-height must not defeat the compact layout.
+    .preview-fallback-status {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+    }
+
+    .preview-window-viewport .preview-fallback-status .alert {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 100%;
+        margin: 0;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    .preview-window-state {
+        flex-shrink: 0;
+        white-space: nowrap;
+
+        .preview-state-short { display: none; }
+    }
+
+    // Reflow decorative chrome before sacrificing the action or visible state.
+    // Column measurement keeps the concise word below the top-right action.
     .preview-window-compact .preview-window-bar {
         padding: 2px !important;
         min-height: 0 !important;
         gap: 0 !important;
-        justify-content: flex-end;
+        flex-direction: column;
+        align-items: flex-end;
 
         .preview-window-title,
-        .preview-window-dots {
-            display: none;
+        .preview-window-dots { display: none; }
+
+        .preview-window-state {
+            order: 2;
+            font-size: 11px;
+            line-height: 14px;
+
+            .preview-state-word { display: none; }
+            .preview-state-short { display: block; }
         }
 
         .preview-open {
+            order: 1;
             flex: 0 0 28px;
             width: 28px;
             height: 28px;
             font-size: 14px;
             line-height: 1;
         }
+    }
+
+    .preview-window-compact {
+        .preview-waiting,
+        .preview-unavailable .alert,
+        .preview-fallback-status .alert {
+            gap: 2px;
+            padding: 2px;
+            font-size: 11px;
+            line-height: 14px;
+        }
+
+        .preview-unavailable,
+        .preview-fallback-status { padding: 0; }
+        .preview-feedback-full { display: none; }
+        .preview-feedback-short { display: block; }
+        .preview-unavailable .alert > svg,
+        .preview-fallback-status .alert > svg { display: none; }
+        .spinner-border { width: 10px; height: 10px; }
     }
 
     .preview-window-dots {
@@ -493,6 +567,7 @@ section.preview {
     .preview-content.preview-window-viewport {
         height: auto;
         aspect-ratio: 16 / 10;
+        container-type: inline-size;
         min-height: 0;
         max-height: none;
         border: 0 !important;
@@ -505,17 +580,38 @@ section.preview {
         }
 
         .preview-error {
+            position: relative;
+            isolation: isolate;
             width: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
+
+            > :not(.preview-fallback-status) { position: absolute; inset: 0; }
+            img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+            &::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                z-index: 1;
+                pointer-events: none;
+                background: rgba(0, 0, 0, 0.3);
+            }
         }
+    }
+
+    @container (max-width: 48px) {
+        .preview-window-compact .preview-waiting .spinner-border { display: none; }
     }
 
     // A static preview is also static before JS initializes. It keeps a poster,
     // with no focusable activation control, waiting status or embedded document.
     @media (max-width: 1023px) {
         .preview-content[data-mobile-static="true"] {
+            > .tab-pane .preview-poster::after,
+            > .tab-pane .preview-error::after { background: transparent; }
+            .preview-fallback-status { display: none; }
             .preview-iframe,
             .preview-activate,
             .preview-waiting,

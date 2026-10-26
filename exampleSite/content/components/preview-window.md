@@ -15,7 +15,13 @@ content_blocks:
     activation: visible
     mobile_static: true
     ready_message: example:ready
+    theme_message: example:theme
     mode: true
     poster:
-      desktop: img/poster-desktop.png
+      desktop: img/preview-demo/ready-desktop.png
 ---
+
+The local child answers both the configured readiness query and correlated theme
+requests. Opt-in theme synchronization requires both replies; an announcement
+alone never proves the theme of a new document. Existing previews without a
+theme token keep their original readiness behavior.

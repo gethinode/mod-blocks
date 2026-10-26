@@ -57,6 +57,8 @@ blueprint:
       url:
   load_timeout:
   ready_message:
+  theme_message:
+  padding:
   image:
   mode:
   show_fallback:

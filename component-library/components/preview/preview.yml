@@ -144,6 +144,23 @@ arguments:
       deadline: the script gives its views no waiting, failed or busy state,
       even when it gives the hidden frame of a view its src. A value that is
       not positive counts as 15.
+  padding:
+    optional: true
+    default:
+  theme-message:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Opt-in theme request token. Requires ready-message. The child must answer
+      the normal ready-message query as well as correlated theme requests.
+      The current ready
+      frame must acknowledge the resolved outer theme and unique requestId
+      before it becomes visible. A transient iframe name seeds the next full
+      document before paint. The complete serialized seed is limited to 512
+      characters and requires an HTTP or HTTPS parent origin; invalid seeds
+      retain the poster and failure feedback without navigating. Leave empty
+      to preserve ordinary readiness with no theme requests.
   ready-message:
     type: string
     optional: true

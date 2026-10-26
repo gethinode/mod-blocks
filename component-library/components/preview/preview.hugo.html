@@ -74,7 +74,7 @@
 		"activation"         .activation
 		"poster"             .poster
 		"items"              $items
-		"desktop-responsive" (or .desktop_responsive (index . "desktop-responsive"))
+		"desktop-responsive" (cond (isset . "desktop_responsive") .desktop_responsive (index . "desktop-responsive"))
 		"heading"            .heading
 		"image"              .image
 		"mode"               .mode
@@ -82,6 +82,7 @@
 		"open-link"          (or .open_link (index . "open-link"))
 		"links"              .links
 		"load-timeout"       (or .load_timeout (index . "load-timeout"))
+		"theme-message"      (cond (isset . "theme_message") .theme_message (index . "theme-message"))
 		"ready-message"      (or .ready_message (index . "ready-message"))
 	) }}
 
@@ -94,6 +95,7 @@
 			"id"             .id
 			"raw"            $raw
 			"background"     .background
+			"padding"        .padding
 			"width"          .width
 			"justify"        .justify
 			"wrapper"        .wrapper

@@ -73,9 +73,15 @@
  * load, and at initialization for the iframe that the markup gives src, so a
  * frame that announced itself before the script listened can answer. A message
  * from another window, with other data, from an iframe without src or before
- * click activation changes nothing, and message data is never used other than
- * compared. A late acknowledgement recovers a failed pane, and the script never
+ * click activation changes nothing. A late acknowledgement recovers a failed pane, and the script never
  * moves focus.
+ *
+ * Opt-in theme-message adds a current-document exchange after readiness. A
+ * monotonically increasing requestId, resolved light/dark theme and captured
+ * HTTP(S) origin must match the applied ACK before reveal. A transient name
+ * seed lets a participating child style its next full document before paint;
+ * pagehide/startup invalidation and iframe load require fresh proof. Seeds are
+ * limited to 512 characters; invalid admission keeps useful failure feedback.
  */
 
 ;(function () {
@@ -133,6 +139,67 @@
     return container.dataset.readyMessage || ''
   }
 
+  const THEME_SEED_PREFIX = 'hinode-preview-theme:'
+  let themeRequestId = 0
+
+  function themeMessage (container) { return container.dataset.themeMessage || '' }
+
+  function resolvedTheme () {
+    const root = document.documentElement
+    return [root.dataset.bsTheme, root.dataset.theme].find(value => value === 'light' || value === 'dark') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  }
+
+  function httpOrigin (value) {
+    try {
+      const url = new URL(value)
+      return ['http:', 'https:'].includes(url.protocol) && url.origin === value ? value : null
+    } catch { return null }
+  }
+
+  function currentThemeFrame (record) {
+    return record.container.isConnected && frames.get(record.iframe) === record &&
+      isActivated(record.container) && record.iframe.hasAttribute('src') && record.pane.classList.contains('active')
+  }
+
+  // Name is transient browsing-context state, restored when ownership ends.
+  // The child can apply it in its early critical task before a full navigation
+  // paints; it never replaces the current document's correlated applied ACK.
+  function seedTheme (record) {
+    const parentOrigin = httpOrigin(window.location.origin)
+    const seed = THEME_SEED_PREFIX + JSON.stringify({ type: themeMessage(record.container), theme: resolvedTheme(), requestId: record.seedId, parentOrigin })
+    if (!parentOrigin || seed.length > 512) return false
+    record.iframe.setAttribute('name', seed)
+    return true
+  }
+
+  function requestTheme (record) {
+    if (!currentThemeFrame(record) || !record.origin) return
+    const theme = resolvedTheme()
+    if (record.themeRequest && record.themeRequest.theme === theme) return
+    if (!record.themeRequest && record.state === 'ready' && record.applied && record.applied.theme === theme) return
+    if (themeRequestId === Number.MAX_SAFE_INTEGER) { setState(record, 'failed'); return }
+    const request = { type: themeMessage(record.container), theme, requestId: ++themeRequestId }
+    record.seedId = request.requestId
+    if (!seedTheme(record)) { setState(record, 'failed'); return }
+    record.themeRequest = request
+    if (record.state === 'ready' || record.state === null) {
+      setState(record, 'waiting')
+      stopDeadline(record)
+      startDeadline(record)
+    }
+    record.iframe.contentWindow.postMessage(request, record.origin)
+  }
+
+  function updateThemes () {
+    document.querySelectorAll('section.preview .preview-content .preview-iframe').forEach(iframe => {
+      const record = frames.get(iframe)
+      if (!record || !themeMessage(record.container) || !currentThemeFrame(record)) return
+      if (!seedTheme(record)) { setState(record, 'failed'); return }
+      requestTheme(record)
+    })
+  }
+
   function loadTimeout (container) {
     const seconds = Number(container.dataset.loadTimeout)
     return (seconds > 0 ? seconds : PREVIEW_LOAD_TIMEOUT) * 1000
@@ -140,9 +207,16 @@
 
   function updateWindowStatus (container) {
     if (container.dataset.frame !== 'window') return
-    const status = container.closest('.preview-window').querySelector('.preview-window-status')
+    const win = container.closest('.preview-window')
+    const status = win.querySelector('.preview-window-status')
+    const visible = win.querySelector('.preview-window-state')
     const pane = container.querySelector(':scope > .tab-pane.active')
-    status.textContent = pane && pane.dataset.previewState === 'ready' ? status.dataset.readyLabel : ''
+    const state = isStatic(container) ? 'preview' : (pane && pane.dataset.previewState) || (container.querySelector('.preview-error:not(.d-none)') ? 'failed' : 'preview')
+    status.textContent = status.dataset[`${state}Label`]
+    visible.querySelector('.preview-state-word').textContent = visible.dataset[`${state}Label`]
+    visible.querySelector('.preview-state-short').textContent = visible.dataset[`compact${state[0].toUpperCase() + state.slice(1)}Label`] || visible.dataset[`${state}Label`]
+    win.dataset.previewState = state
+    updatePreviewScale()
   }
 
   /**
@@ -206,7 +280,8 @@
     const pane = iframe.closest('.tab-pane')
     const container = pane.closest('.preview-content')
     if (isStatic(container) || container.querySelector('.preview-error:not(.d-none)')) return null
-    const record = { iframe, pane, container, state: null, timer: null, observer: null }
+    const record = { iframe, pane, container, state: null, timer: null, observer: null,
+      originalName: iframe.getAttribute('name'), seedId: 0, origin: null, themeRequest: null, applied: null, loaded: iframe.hasAttribute('src') }
     frames.set(iframe, record)
     return record
   }
@@ -221,6 +296,18 @@
     if (!record) return null
     iframe.addEventListener('load', () => {
       if (frames.get(iframe) !== record || !isActivated(record.container)) return
+      if (themeMessage(record.container)) {
+        // A full navigation keeps WindowProxy. Invalidate every previous
+        // document's proof, even if its early ready message beat this load.
+        record.origin = null
+        record.themeRequest = null
+        record.applied = null
+        const wasLoaded = record.loaded
+        record.loaded = true
+        const wasReady = record.state === 'ready'
+        setState(record, 'waiting')
+        if (wasLoaded || wasReady) { stopDeadline(record); startDeadline(record) }
+      }
       if (readyMessage(record.container)) askReady(record); else markReady(record)
     })
     setState(record, 'waiting')
@@ -235,7 +322,12 @@
    */
   function forget (pane, iframe) {
     const record = frames.get(iframe)
-    if (record) stopDeadline(record)
+    if (record) {
+      stopDeadline(record)
+      if (themeMessage(record.container)) {
+        if (record.originalName === null) iframe.removeAttribute('name'); else iframe.setAttribute('name', record.originalName)
+      }
+    }
     frames.delete(iframe)
     delete pane.dataset.previewState
     pane.removeAttribute('aria-busy')
@@ -252,9 +344,42 @@
       const container = iframe.closest('.preview-content')
       if (!iframe.hasAttribute('src') || !isActivated(container)) return
       const message = readyMessage(container)
-      if (message === '' || event.data !== message) return
-      const record = frames.get(iframe) || track(iframe)
-      if (record) markReady(record)
+      if (message === '') return
+      if (!themeMessage(container)) {
+        if (event.data !== message) return
+        const record = frames.get(iframe) || track(iframe)
+        if (record) markReady(record)
+        return
+      }
+      const record = frames.get(iframe) || watch(iframe)
+      if (!record || !currentThemeFrame(record)) return
+      const origin = httpOrigin(event.origin)
+      if (!origin) return
+      if (event.data === message) {
+        record.origin = origin
+        if (record.loaded) requestTheme(record)
+        return
+      }
+      const ack = event.data
+      if (!ack || typeof ack !== 'object' || Array.isArray(ack) || ack.type !== themeMessage(container) ||
+          !Number.isSafeInteger(ack.requestId) || ack.requestId <= 0 || !['light', 'dark'].includes(ack.theme) || record.origin !== origin) return
+      if (ack.applied === false) {
+        const proof = [record.themeRequest, record.applied].find(proof => proof && proof.requestId === ack.requestId && proof.theme === ack.theme)
+        if (!proof) return
+        record.origin = null
+        record.themeRequest = null
+        record.applied = null
+        setState(record, 'waiting')
+        stopDeadline(record)
+        startDeadline(record)
+        return
+      }
+      const request = record.themeRequest
+      if (ack.applied !== true || !request || ack.requestId !== request.requestId ||
+          ack.theme !== request.theme || ack.theme !== resolvedTheme()) return
+      record.applied = request
+      record.themeRequest = null
+      markReady(record)
     })
   })
 
@@ -265,9 +390,21 @@
     if (!pane) return
     if (!isActivated(pane.closest('.preview-content'))) return
     const iframe = pane.querySelector('iframe[data-src]')
-    if (iframe && !iframe.hasAttribute('src')) {
-      watch(iframe)
+    if (!iframe) return
+    if (!iframe.hasAttribute('src')) {
+      const record = watch(iframe)
+      if (record && themeMessage(record.container) && !seedTheme(record)) {
+        setState(record, 'failed')
+        stopDeadline(record)
+        return
+      }
       iframe.src = iframe.dataset.src
+    } else if (themeMessage(pane.closest('.preview-content'))) {
+      const record = frames.get(iframe) || watch(iframe)
+      if (record) {
+        if (!seedTheme(record)) { setState(record, 'failed'); stopDeadline(record); return }
+        if (record.origin) requestTheme(record); else askReady(record)
+      }
     }
   }
 
@@ -322,10 +459,7 @@
         }
         iframe.dataset.src = url
         iframe.setAttribute('title', title)
-        if (activated && pane.classList.contains('active')) {
-          watch(iframe)
-          iframe.src = url
-        }
+        if (activated && pane.classList.contains('active')) loadPane(pane)
       }
       pane.querySelectorAll('.preview-poster-item').forEach(image => {
         image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
@@ -345,7 +479,7 @@
   const measuredWindows = new Map()
   const geometryObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updatePreviewScale) : null
   function enhanced (container) {
-    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true'
+    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' || themeMessage(container) !== ''
   }
 
   function inViewport (container) {
@@ -372,7 +506,7 @@
       }
     })
     delete container.dataset.active
-    if (container.dataset.frame === 'window') container.closest('.preview-window').querySelector('.preview-window-status').textContent = ''
+    if (container.dataset.frame === 'window') updateWindowStatus(container)
   }
 
   function shownPane (container) {
@@ -425,6 +559,8 @@
     controllers.forEach((controller, container) => {
       if (container.isConnected) return
       cancelActivation(controller)
+      if (themeMessage(container)) resetStatic(container)
+      else container.querySelectorAll('iframe[data-src]').forEach(iframe => forget(iframe.closest('.tab-pane'), iframe))
       if (controller.observer) controller.observer.disconnect()
       controllers.delete(container)
     })
@@ -471,10 +607,12 @@
     const measure = () => {
       const style = window.getComputedStyle(bar)
       const children = [...bar.children].filter(el => window.getComputedStyle(el).display !== 'none')
+      const column = style.flexDirection === 'column'
       const chromeWidth = children.reduce((sum, el) => {
         const childStyle = window.getComputedStyle(el)
-        return sum + (childStyle.flexShrink === '0' ? el.getBoundingClientRect().width : parseFloat(childStyle.minWidth) || 0)
-      }, 0) + Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+        const fixedWidth = childStyle.flexShrink === '0' ? el.getBoundingClientRect().width : parseFloat(childStyle.minWidth) || 0
+        return column ? Math.max(sum, fixedWidth) : sum + fixedWidth
+      }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
       return { minimumWidth: Math.max(32, chromeWidth) + insets, barHeight: bar.getBoundingClientRect().height }
     }
     let chrome = measure()
@@ -544,6 +682,7 @@
         const target = showFittingPane(container)
         if (!target) return
         if (isActivated(container)) loadPane(target)
+        updateWindowStatus(container)
         updatePreviewScale()
       }
 
@@ -628,12 +767,17 @@
     initPreviewAutoPick()
     initPreviewAutoSwitch()
     discoverPreviews()
+    document.querySelectorAll('section.preview .preview-content').forEach(updateWindowStatus)
     if (typeof MutationObserver !== 'undefined') {
       new MutationObserver(records => {
         const changed = records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
           node.nodeType === 1 && (node.matches('section.preview, .preview-content, .preview-window') || node.querySelector('section.preview, .preview-content, .preview-window'))))
         if (changed) { discoverPreviews(); updatePreviewScale() }
       }).observe(document.body, { childList: true, subtree: true })
+    }
+    if (document.documentElement && typeof MutationObserver !== 'undefined') {
+      new MutationObserver(updateThemes).observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme'] })
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemes)
     }
     if (geometryObserver) {
       document.querySelectorAll('.navbar, header[role="banner"]').forEach(el => geometryObserver.observe(el))

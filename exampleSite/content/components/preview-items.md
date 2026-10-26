@@ -7,13 +7,17 @@ modules:
 content_blocks:
   - _bookshop_name: preview
     activation: click
+    desktop_responsive: false
+    ready_message: example:ready
+    theme_message: example:theme
     mode: true
     poster:
-      desktop: img/poster-desktop.png
-      mobile: img/poster-mobile.png
+      desktop: img/preview-demo/ready-desktop.png
+      tablet: img/preview-demo/ready-tablet.png
+      mobile: img/preview-demo/ready-mobile.png
     items:
-      - title: Home
-        url: https://example.org/
+      - title: Workspace
+        url: /preview-demo/ready/
         heading:
           preheading: Live preview
           title: Switch between views
@@ -21,14 +25,16 @@ content_blocks:
             Each tab shows another view with a heading of its own. Before the
             button over the poster is pressed, a tab swaps the heading and the
             poster only; after it, a tab loads its view in the shown device.
-      - title: About
-        url: https://example.org/about
+      - title: Activity
+        url: /preview-demo/activity/
         poster:
-          desktop: img/poster-mobile.png
+          desktop: img/preview-demo/activity-desktop.png
+          tablet: img/preview-demo/activity-tablet.png
+          mobile: img/preview-demo/activity-mobile.png
         heading:
           preheading: Live preview
           title: A second view
           content: >-
-            This view has a desktop poster of its own, which the tablet and
-            mobile views use too.
+            This view has matching native screenshots for every offered
+            device and follows the same outer theme.
 ---

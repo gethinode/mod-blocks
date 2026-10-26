@@ -11,13 +11,16 @@ content_blocks:
       title: Load on click
       content: >-
         The preview shows a poster of each device view and loads the live view
-        only when the button over the poster is pressed. The tablet view has no
-        poster of its own and shows the desktop poster. The posters follow the
-        color mode.
-    url: https://example.org/
+        only when the button over the poster is pressed. Native desktop,
+        tablet and mobile screenshots follow the outer color mode.
+    url: /preview-demo/ready/
     activation: click
+    desktop_responsive: false
+    ready_message: example:ready
+    theme_message: example:theme
     mode: true
     poster:
-      desktop: img/poster-desktop.png
-      mobile: img/poster-mobile.png
+      desktop: img/preview-demo/ready-desktop.png
+      tablet: img/preview-demo/ready-tablet.png
+      mobile: img/preview-demo/ready-mobile.png
 ---

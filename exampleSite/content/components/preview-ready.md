@@ -20,17 +20,24 @@ content_blocks:
         device view waits on its own.
     activation: click
     mode: true
+    desktop_responsive: false
     ready_message: example:ready
+    theme_message: example:theme
     load_timeout: 5
     open_link: true
     poster:
-      desktop: img/poster-desktop.png
-      mobile: img/poster-mobile.png
+      desktop: img/preview-demo/ready-desktop.png
+      tablet: img/preview-demo/ready-tablet.png
+      mobile: img/preview-demo/ready-mobile.png
     items:
       - title: Ready
         url: /preview-demo/ready/
       - title: Silent
         url: /preview-demo/silent/
+        poster:
+          desktop: img/preview-demo/silent-desktop.png
+          tablet: img/preview-demo/silent-tablet.png
+          mobile: img/preview-demo/silent-mobile.png
     links:
       - title: About Hinode
         url: https://gethinode.com/

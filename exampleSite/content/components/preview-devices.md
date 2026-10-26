@@ -13,7 +13,15 @@ content_blocks:
         The preview offers the desktop and mobile views without a device
         switcher. It shows desktop from a 1024px wide viewport and mobile below
         it, and loads each view only when it is first shown.
-    url: https://example.org/
+    url: /preview-demo/ready/
     devices: [desktop, mobile]
     controls: false
+    desktop_responsive: false
+    ready_message: example:ready
+    theme_message: example:theme
+    mode: true
+    poster:
+      desktop: img/preview-demo/ready-desktop.png
+      tablet: img/preview-demo/ready-tablet.png
+      mobile: img/preview-demo/ready-mobile.png
 ---

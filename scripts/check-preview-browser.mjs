@@ -75,6 +75,7 @@ const PAGES = {
   default: [],
   'window-ready-devices': { url: child('silent'), lines: ['frame: window', `ready_message: '${TOKEN}'`, 'load_timeout: 15'] },
   'window-devices': ['frame: window', 'activation: click', 'open_link: true'],
+  'window-fallback-static': ['frame: window','devices: [desktop]','controls: false','mobile_static: true','open_link: true','show_fallback: true','mode: true','image: img/poster-desktop.png'],
   'window-fallback': ['frame: window', 'open_link: true', 'show_fallback: true', 'mode: true', 'image: img/poster-desktop.png'],
   nocontrols: ['controls: false'],
   desktop: ['devices: [desktop]'],
@@ -228,17 +229,29 @@ function hugo (name, args = [], dir = content) {
 // TOKEN to its parent 800ms after its DOM is ready and answers a TOKEN request after that.
 // Each counts the requests Chrome makes, told apart from those of the build by user agent,
 // and prints the counts when it reads a line.
+const THEME_CHILD = `<!doctype html><html data-bs-theme="light"><head><meta charset="utf-8"><script>
+if(location.search.includes('announce-only')){const img=document.createElement('img');img.src='/delay-load.svg';addEventListener('DOMContentLoaded',()=>document.body.append(img))}
+const token='demo:theme',prefix='hinode-preview-theme:';window.themeRequests=[];window.firstTheme='light';let current=null,origin=null;
+try{const seed=JSON.parse(window.name.slice(prefix.length));if(window.name.startsWith(prefix)&&window.name.length<=512&&['light','dark'].includes(seed.theme)){document.documentElement.dataset.bsTheme=seed.theme;window.firstTheme=seed.theme;if(seed.requestId>0)parent.postMessage({...seed,applied:false},seed.parentOrigin)}}catch{}
+window.ack=(index,changes={})=>{const q=themeRequests[index];document.documentElement.dataset.bsTheme=q.data.theme;document.documentElement.dataset.theme=q.data.theme;current=q.data;origin=q.origin;window.name=prefix+JSON.stringify({...q.data,parentOrigin:q.origin});parent.postMessage({...q.data,applied:true,...changes},q.origin)};
+window.invalidate=()=>{if(current)parent.postMessage({...current,applied:false},origin)};addEventListener('pagehide',window.invalidate);
+addEventListener('message',e=>{if(e.source!==parent)return;if(e.data==='demo:ok'){if(!location.search.includes('announce-only'))parent.postMessage('demo:ok',e.origin)}else if(e.data?.type===token)themeRequests.push({data:e.data,origin:e.origin})});
+addEventListener('DOMContentLoaded',()=>parent.postMessage('demo:ok','*'));
+</script></head><body><h1>Theme bridge child</h1><p>A real local HTTP document.</p></body></html>`
+
 const FRAMING_SERVERS = `
 const http = require('node:http')
 const chrome = { deny: 0, allow: 0 }
+const themed = ${JSON.stringify(THEME_CHILD)}
 const child = '<!doctype html><title>allow</title><p>allow</p><script>let ready = false;' +
   'document.addEventListener("DOMContentLoaded", () => setTimeout(() => { ready = true; parent.postMessage(${JSON.stringify(TOKEN)}, "*") }, 800));' +
   'addEventListener("message", e => { if (ready && e.source === parent && e.data === ${JSON.stringify(TOKEN)}) e.source.postMessage(e.data, "*") })</script>'
 const listen = (name, headers, body) => new Promise(resolve => {
   const server = http.createServer((req, res) => {
     if (/Chrome/.test(req.headers['user-agent'] || '')) chrome[name]++
+    if(req.url==='/delay-load.svg'){setTimeout(()=>{res.writeHead(200,{'Content-Type':'image/svg+xml'});res.end('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')},250);return}
     res.writeHead(200, { 'Content-Type': 'text/html', ...headers })
-    res.end(body)
+    res.end(req.url.startsWith('/theme') ? themed : body)
   })
   server.listen(0, '127.0.0.1', () => resolve(server.address().port))
 })
@@ -263,6 +276,13 @@ function buildDeniedSite () {
     fs.writeFileSync(path.join(dir, `${name}.md`), ['---', `title: ${name}`, 'modules: [preview]', 'content_blocks:', '  - _bookshop_name: preview',
       `    url: ${url}`, `    ready_message: '${TOKEN}'`, '    load_timeout: 1', '    devices: [desktop, mobile]', '---', ''].join('\n'))
   }
+  fs.writeFileSync(path.join(dir, 'themed-ready.md'), ['---','title: Theme bridge','modules: [preview]','content_blocks:','  - _bookshop_name: preview',
+    `    url: ${framing.allow}/theme`,'    frame: window','    frame_title: Theme bridge','    open_link: true','    controls: false','    devices: [desktop]',
+    '    activation: visible','    mobile_static: true',`    ready_message: '${TOKEN}'`,'    theme_message: demo:theme','    load_timeout: 2',
+    '    mode: true','    poster:','      desktop: img/poster-desktop.png','---',''].join('\n'))
+  const themedMarkdown=fs.readFileSync(path.join(dir,'themed-ready.md'),'utf8')
+  for(const activation of ['load','click'])fs.writeFileSync(path.join(dir,`themed-${activation}.md`),themedMarkdown.replace('activation: visible',`activation: ${activation}`))
+  fs.writeFileSync(path.join(dir,'themed-announce.md'),themedMarkdown.replace('/theme','/theme?announce-only'))
   const config = path.join(tmp, 'denied.toml')
   fs.writeFileSync(config, `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n[params.modules.framing.csp]\n  frame-src = ["${framing.deny}", "${framing.allow}"]\n`)
   return hugo('public-denied', ['--config', `hugo.toml,${config}`], dir)
@@ -274,7 +294,7 @@ function buildSite () {
   fs.mkdirSync(content)
   // The readiness demo page of the exampleSite, as it is.
   fs.mkdirSync(path.join(content, 'components'))
-  for (const name of ['preview-ready', 'preview-window']) {
+  for (const name of ['preview','preview-devices','preview-click','preview-items','preview-ready','preview-window']) {
     fs.copyFileSync(path.join('exampleSite', 'content', 'components', `${name}.md`), path.join(content, 'components', `${name}.md`))
   }
   for (const [name, page] of Object.entries(PAGES)) {
@@ -469,6 +489,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   const send = (method, params) => cdp.send(method, params, sessionId)
   const requests = []
   const localRequests = []
+  const documentRequests = []
   // Each iframe request as its view and URL, in the order they came.
   const urls = []
   const held = []
@@ -493,6 +514,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   const scripts = []
   const off = cdp.on(async msg => {
     if (msg.sessionId !== sessionId) return
+    if (msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document') documentRequests.push(msg.params.request.url)
     if (msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document' && new URL(msg.params.request.url).pathname.startsWith('/preview-demo/')) localRequests.push(msg.params.request.url)
     if (msg.method !== 'Fetch.requestPaused') return
     const { requestId, frameId, resourceType } = msg.params
@@ -553,10 +575,12 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   return {
     requests,
     localRequests,
+    documentRequests,
     urls,
     evaluate,
     state: () => evaluate(STATE),
     releaseScripts,
+    send,
     resize: (w, h = height) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }),
     // Presses Enter on the focused element, as a keyboard does.
     async pressEnter () {
@@ -1100,11 +1124,11 @@ const READY_STATE = `(() => {
     iframe: shows(iframe),
     poster: shows(pane.querySelector('.preview-poster')),
     hasPoster: !!pane.querySelector('.preview-poster'),
-    waiting: shows(status) ? status.textContent.trim() : null,
+    waiting: shows(status) ? status.innerText.trim() : null,
     // The status sits in the middle of the poster, less than half its height.
     statusFits: !status || status.getBoundingClientRect().height < pane.querySelector('.preview-poster').getBoundingClientRect().height / 2,
     button: shows(pane.querySelector('.preview-activate')),
-    alert: shows(alert) ? { text: alert.textContent.replace(/\\s+/g, ' ').trim(), role: alert.querySelector('[role]').getAttribute('role'), href: link.href, name: link.textContent.trim() } : null,
+    alert: shows(alert) ? { text: alert.innerText.replace(/\\s+/g, ' ').trim(), role: alert.querySelector('[role]').getAttribute('role'), href: link.href, name: link.textContent.trim() } : null,
     focus: document.activeElement === document.body ? 'body' : document.activeElement.className || document.activeElement.tagName
   }
 })()`
@@ -1610,7 +1634,9 @@ test('components/preview-ready: the Ready tab shows its view, the Silent tab fai
         setTimeout(() => resolve({ got, seen: win.seen }), 500)
       }, 1000)
     })`)
-    assert.deepEqual(reloaded, { got: ['example:ready', 'example:ready'], seen: 1 })
+    assert.deepEqual(reloaded.got.filter(data=>typeof data==='string'), ['example:ready', 'example:ready'])
+    assert.ok(reloaded.got.filter(data=>typeof data==='object').every(data=>data.type==='example:theme'&&typeof data.applied==='boolean'))
+    assert.equal(reloaded.seen,1,'the local page receives its self-post without replying to it')
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/ready/`])
     await clickItem(page, 1)
     await assertWaiting(page, 'Silent')
@@ -1694,7 +1720,7 @@ const FALLBACK_READINESS = `(() => {
     states: [...content.querySelectorAll(':scope > .tab-pane')].map(el => el.dataset.previewState || null),
     busy: [...document.querySelectorAll('[aria-busy]')].map(el => el.getAttribute('aria-busy')),
     alertInBusy: !!alert.closest('[aria-busy="true"]'),
-    alert: { role: alert.getAttribute('role'), box: box(alert), text: alert.textContent.replace(/\\s+/g, ' ').trim() },
+    alert: { role: alert.getAttribute('role'), box: box(alert), text: alert.innerText.replace(/\\s+/g, ' ').trim() },
     link: { box: box(link), href: link.href, reached: link === hit || link.contains(hit) },
     frame: (() => { const iframe = pane.querySelector('iframe'); return { src: iframe.getAttribute('src'), display: getComputedStyle(iframe).display } })()
   }
@@ -2049,7 +2075,7 @@ test('window success announcement follows the shown device independently of hidd
     await page.evaluate(`document.querySelector('.preview-controls [data-bs-target$="-tablet"]').click()`)
     await waitFor(() => page.requests.length === 2, 'tablet navigation')
     await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: document.querySelector('.preview-desktop').contentWindow }))`)
-    assert.equal((await page.evaluate(WINDOW_STATE)).status, '', 'hidden desktop must not announce tablet success')
+    assert.equal((await page.evaluate(WINDOW_STATE)).status, 'Loading the live preview', 'hidden desktop must not announce tablet success')
     await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: document.querySelector('.preview-tablet').contentWindow }))`)
     assert.equal((await page.evaluate(WINDOW_STATE)).status, 'Live preview ready')
   } finally { await page.close() }
@@ -2106,6 +2132,8 @@ const WINDOW_ACTION = `(() => {
     margin:parseFloat(style.marginTop), corners:[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomLeftRadius,style.borderBottomRightRadius],
     contained:a.left>=w.left+0.5 && a.right<=w.right-0.5 && a.top>=w.top+0.5 && a.bottom<=w.bottom-0.5,
     hit:points.every(([x,y]) => open.contains(document.elementFromPoint(x,y))),
+    hitTargets:points.map(([x,y])=>{const el=document.elementFromPoint(x,y);return el?.tagName+'.'+el?.getAttribute('class')}),
+    barChildren:[...bar.children].map(el=>({class:el.className,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height,position:getComputedStyle(el).position,display:getComputedStyle(el).display})),
     overflow:document.documentElement.scrollWidth>innerWidth,
     state:viewport.querySelector('.tab-pane.active')?.dataset.previewState || null }
 })()`
@@ -2137,7 +2165,8 @@ for (const height of [220, 240, 320, 360, 400, 768, 900]) {
         t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
         assert.notEqual(b.fit, 'scroll', 'feasible short canvas still fits')
         assert.ok(b.win.height + 2*b.margin <= b.height-b.nav+2, 'complete window and margins fit after navigation')
-        assert.ok(b.margin >= 24, '24px margins remain feasible')
+        if(!enlarged || height>=240)assert.ok(b.margin >= 24, '24px margins remain feasible with visible state')
+        else assert.ok(b.margin>0&&b.margin<24,'enlarged chrome only reduces infeasible24px margins')
         if (height >= 768 && !enlarged) assert.equal(b.compact, false, 'normal appearance remains unchanged')
         const stable = JSON.stringify([b.win.width, b.win.height, b.compact])
         await sleep(250)
@@ -2224,3 +2253,249 @@ for (const constrained of [false,true]) {
     }finally{await page.close()}
   })
 }
+
+
+const FEEDBACK_PAINT = `(() => {
+  const pane=document.querySelector('.preview-content > .tab-pane.active'),poster=pane.querySelector('.preview-poster');
+  const status=pane.querySelector('.preview-waiting'),label=[...status?.querySelectorAll('.preview-feedback-full,.preview-feedback-short')||[]].find(el=>el.offsetWidth)||status?.querySelector('span:last-child');
+  const r=label?.getBoundingClientRect(),bar=document.querySelector('.preview-window-state');
+  const hit=r&&[[r.left+1,r.top+1],[r.right-1,r.top+1],[r.left+1,r.bottom-1],[r.right-1,r.bottom-1],[(r.left+r.right)/2,(r.top+r.bottom)/2]].every(([x,y])=>status.contains(document.elementFromPoint(x,y)));
+  return {word:bar?.innerText||null,label:label?.innerText||null,hit:!!hit,scrim:poster?getComputedStyle(poster,'::after').backgroundColor:null,
+    state:pane.dataset.previewState||null,spinner:status?getComputedStyle(status.querySelector('.spinner-border')).display:null}
+})()`
+
+test('window loading words and spinner paint above the thirty percent poster scrim', {skip}, async () => {
+  const page=await openPage(browser.cdp,base,'window-visible',1440,{beforeScript:CONTROL_IDLE})
+  try{
+    await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()')
+    await waitFor(()=>page.evaluate(FEEDBACK_PAINT).then(b=>b.state==='waiting'),'waiting')
+    const b=await page.evaluate(FEEDBACK_PAINT)
+    assert.ok(b.hit,JSON.stringify(b));assert.equal(b.word,'Loading');assert.equal(b.scrim,'rgba(0, 0, 0, 0.3)');assert.notEqual(b.spinner,'none')
+  }finally{await page.close()}
+})
+
+test('window static Preview and explicit CSS square token keep action and native geometry', {skip},async()=>{
+  const page=await openPage(browser.cdp,base,'window-visible',390,{height:600})
+  try{
+    await loadedParent(page);await page.evaluate(IN_VIEW)
+    assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Preview')
+    assert.notEqual((await page.evaluate(FEEDBACK_PAINT)).scrim,'rgba(0, 0, 0, 0.3)')
+    await page.evaluate("document.querySelector('.preview-window').style.setProperty('--preview-window-border-radius','0')")
+    const b=await page.evaluate(WINDOW_ACTION);assert.ok(b.corners.every(v=>parseFloat(v)===0));assertWindowAction(b);assert.deepEqual(page.requests,[])
+  }finally{await page.close()}
+})
+
+
+// Isolated worlds do not share JS globals; the document exposes controls through
+// DOM events, so the calls remain real messages from the actual child window.
+async function themeProbe (page,expression) {
+  const tree=await page.send('Page.getFrameTree'),child=tree.frameTree.childFrames?.find(f=>f.frame.url.includes('/theme'))
+  assert.ok(child)
+  // The default world can be reached by a transient script element in the child.
+  const world=await page.send('Page.createIsolatedWorld',{frameId:child.frame.id,worldName:'theme-probe'})
+  const code=`(()=>{const s=document.createElement('script');s.textContent=${JSON.stringify('document.documentElement.dataset.themeProbe=JSON.stringify('+expression+')')};document.head.append(s);s.remove();return JSON.parse(document.documentElement.dataset.themeProbe)})()`
+  const result=await page.send('Runtime.evaluate',{expression:code,contextId:world.executionContextId,returnByValue:true,awaitPromise:true})
+  if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails))
+  return result.result.value
+}
+async function themeRequests (page) {return themeProbe(page,'window.themeRequests')}
+async function startThemed (page) {
+  await loadedParent(page);await page.evaluate("document.documentElement.dataset.bsTheme='dark'");await page.evaluate(IN_VIEW)
+  if(await page.evaluate("typeof flushIdle==='function'")){await idlePending(page);await page.evaluate('flushIdle()')}
+  await waitFor(()=>themeRequests(page).then(x=>x?.length>0).catch(()=>false),'a real correlated theme request')
+  return (await themeRequests(page)).at(-1).data
+}
+
+test('theme bridge keeps real current document hidden until correlated applied ACK and outer theme', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE})
+  try{
+    const first=await startThemed(page)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+    assert.equal(first.theme,'dark');assert.ok(Number.isSafeInteger(first.requestId)&&first.requestId>0)
+    const name=await page.evaluate("document.querySelector('.preview-iframe').name")
+    assert.ok(name.startsWith('hinode-preview-theme:')&&name.length<=512)
+    assert.equal(JSON.parse(name.slice('hinode-preview-theme:'.length)).parentOrigin,new URL(deniedBase).origin)
+    for(const changes of [{requestId:first.requestId+1},{requestId:String(first.requestId)},{theme:'light'},{applied:'true'},{type:'wrong'}]){
+      await themeProbe(page,`(window.ack(0,${JSON.stringify(changes)}),true)`);await sleep(30)
+      assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','malformed or mismatched ACK cannot reveal')
+    }
+    await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:window,origin:${JSON.stringify(framing.allow)},data:${JSON.stringify({...first,applied:true})}}))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','wrong source rejected')
+    await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:document.querySelector('iframe').contentWindow,origin:'null',data:${JSON.stringify({...first,applied:true})}}))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','opaque origin rejected')
+    await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'matching applied ACK')
+    assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Live')
+    await page.evaluate("document.documentElement.dataset.bsTheme='light'")
+    await waitFor(()=>themeRequests(page).then(q=>q.length>1),'new outer theme request')
+    const next=(await themeRequests(page)).at(-1).data;assert.ok(next.requestId>first.requestId);assert.equal(next.theme,'light')
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+    await themeProbe(page,'(window.ack(0),true)');await sleep(30);assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','out-of-order old ACK rejected')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'latest theme ACK')
+    assert.equal(await themeProbe(page,'document.documentElement.dataset.bsTheme'),'light')
+    await page.emulateMedia([{name:'prefers-color-scheme',value:'dark'}]);await sleep(50)
+    assert.equal(await themeProbe(page,'document.documentElement.dataset.bsTheme'),'light','resolved explicit outer theme beats OS preference')
+    assert.equal(page.localRequests.length,0)
+    assert.equal(await page.evaluate('document.activeElement.tagName'),'BODY')
+  }finally{await page.close()}
+})
+
+test('theme bridge full navigation uses transient early seed and fresh proof despite same WindowProxy', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
+  try{
+    const old=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'initial ACK')
+    await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow")
+    await themeProbe(page,"(window.invalidate(),location.href='/theme?next',true)")
+    await waitFor(()=>themeProbe(page,"location.search==='?next'&&window.themeRequests.length>0").catch(()=>false),'new real child document')
+    assert.equal(await page.evaluate("previousThemeFrame===document.querySelector('.preview-iframe').contentWindow"),true)
+    assert.equal(await themeProbe(page,'window.firstTheme'),'dark','next document applies current theme in head')
+    const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','new document needs a new ACK')
+    await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:previousThemeFrame,origin:${JSON.stringify(framing.allow)},data:${JSON.stringify({...old,applied:true})}}))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','old-document ACK cannot prove the new document')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'new document ACK')
+    await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:previousThemeFrame,origin:${JSON.stringify(framing.allow)},data:${JSON.stringify({...old,applied:false})}}))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'ready','superseded invalidation cannot undo fresh proof')
+    await page.resize(390,600);await sleep(100)
+    assert.equal((await page.evaluate(WINDOW_STATE)).src,null);assert.equal(await page.evaluate("document.querySelector('.preview-iframe').getAttribute('name')"),'original-preview-frame')
+    await page.resize(1440,900);await page.evaluate(IN_VIEW)
+    await idlePending(page);await page.evaluate('flushIdle()')
+    await waitFor(()=>themeRequests(page).then(q=>q.length>0).catch(()=>false),'new desktop document')
+    const after=(await themeRequests(page)).at(-1).data;assert.ok(after.requestId>fresh.requestId)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh desktop ACK')
+  }finally{await page.close()}
+})
+
+
+for(const activation of ['load','click','visible']){
+ test(`theme bridge ${activation} preserves static zero requests and admitted activation`,{skip},async()=>{
+  const name=activation==='visible'?'themed-ready':`themed-${activation}`
+  const page=await openPage(browser.cdp,deniedBase,name,390,{beforeScript:CONTROL_IDLE})
+  try{
+   await loadedParent(page);await page.evaluate(IN_VIEW);await sleep(200)
+   assert.equal(page.documentRequests.filter(u=>u.startsWith(framing.allow)).length,0)
+   assert.equal((await page.evaluate(WINDOW_STATE)).src,null)
+   await page.resize(1440,900);await page.evaluate(IN_VIEW)
+   if(activation==='click'){
+    await sleep(100);assert.equal(page.documentRequests.filter(u=>u.startsWith(framing.allow)).length,0)
+    await page.evaluate("document.querySelector('.preview-activate').click()")
+   }else if(activation==='visible'){await idlePending(page);await page.evaluate('flushIdle()')}
+   await waitFor(()=>themeRequests(page).then(q=>q.length>0).catch(()=>false),'eligible theme request')
+   assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+   await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'eligible ACK')
+  }finally{await page.close()}
+ })
+}
+
+test('theme seed overflow fails closed before navigation while preserving visible fallback/action',{skip},async()=>{
+ const beforeScript="document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-content').dataset.themeMessage='x'.repeat(600),{once:true})"
+ const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='failed'),'seed admission failure')
+  assert.equal(page.documentRequests.filter(u=>u.startsWith(framing.allow)).length,0)
+  assert.equal((await page.evaluate(WINDOW_STATE)).src,null)
+  assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Unavailable')
+  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+ }finally{await page.close()}
+})
+
+test('theme rapid changes supersede pending proof and late matching ACK recovers failure', {skip},async()=>{
+ const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE})
+ try{
+  const first=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'first ACK')
+  await page.evaluate("document.documentElement.dataset.bsTheme='light'");await waitFor(()=>themeRequests(page).then(q=>q.length>=2),'pending light')
+  await page.evaluate("document.documentElement.dataset.bsTheme='dark'");await waitFor(()=>themeRequests(page).then(q=>q.length>=3),'superseding dark')
+  const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>first.requestId)
+  await themeProbe(page,'(window.ack(1),true)');await sleep(30);assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+  await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='failed'),'theme ACK deadline')
+  await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'late current ACK')
+ }finally{await page.close()}
+})
+
+test('theme disconnect cancels pending ownership and reinsertion needs fresh eligible proof', {skip},async()=>{
+ const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()')
+  await waitFor(()=>themeRequests(page).then(q=>q.length>0).catch(()=>false),'first request');const old=(await themeRequests(page)).at(-1).data
+  await page.evaluate("window.detachedSection=document.querySelector('section.preview');window.detachedFrame=detachedSection.querySelector('iframe').contentWindow;detachedSection.remove()")
+  await sleep(100)
+  await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:detachedFrame,origin:${JSON.stringify(framing.allow)},data:${JSON.stringify({...old,applied:true})}}))`)
+  const before=page.documentRequests.filter(u=>u.startsWith(framing.allow)).length
+  await page.evaluate("document.body.append(detachedSection);detachedSection.scrollIntoView({block:'center'})")
+  await idlePending(page);assert.equal(page.documentRequests.filter(u=>u.startsWith(framing.allow)).length,before,'no request before fresh idle')
+  await page.evaluate('flushIdle()');await waitFor(()=>themeRequests(page).then(q=>q.length>0).catch(()=>false),'fresh request')
+  const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId)
+  assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
+  await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh reinsert ACK')
+ }finally{await page.close()}
+})
+
+for(const height of [220,240,320,768])for(const name of ['window-visible','window-ok','window-503','window-fallback']){
+ test(`window visible concise state and entire action survive ${name} at1440x${height}`,{skip},async t=>{
+  const page=await openPage(browser.cdp,base,name,1440,{height,beforeScript:name==='window-visible'?CONTROL_IDLE:''})
+  try{
+   await loadedParent(page);await page.evaluate("document.querySelector('.navbar').style.height='91px'");await sleep(100);await positionWindow(page)
+   if(name==='window-visible'){await idlePending(page);await page.evaluate('flushIdle()')}
+   if(name==='window-ok'||name==='window-503')await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state===(name==='window-ok'?'ready':'failed')),'state')
+   const b=await page.evaluate(WINDOW_ACTION);assertWindowAction(b)
+   const word=await page.evaluate("(()=>{const el=document.querySelector('.preview-window-state'),r=el.getBoundingClientRect(),w=el.closest('.preview-window').getBoundingClientRect();return {text:el.innerText,inside:r.left>=w.left&&r.right<=w.right&&r.top>=w.top&&r.bottom<=w.bottom,hit:el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),height:r.height}})()")
+   t.diagnostic(JSON.stringify({b,word}));assert.ok(word.text&&word.inside&&word.hit,JSON.stringify(word));assert.ok(word.height>0)
+   if(name==='window-fallback'){
+    const fallback=await page.evaluate("(()=>{const e=document.querySelector('.preview-error:not(.d-none)'),status=e.querySelector('.preview-fallback-status'),label=[...e.querySelectorAll('.preview-feedback-full,.preview-feedback-short')].find(x=>x.offsetWidth),r=label?.getBoundingClientRect();return {scrim:getComputedStyle(e,'::after').backgroundColor,hit:!!r&&[[r.left+1,r.top+1],[r.right-1,r.top+1],[r.left+1,r.bottom-1],[r.right-1,r.bottom-1],[(r.left+r.right)/2,(r.top+r.bottom)/2]].every(([x,y])=>status.contains(document.elementFromPoint(x,y)))}})()")
+    assert.equal(fallback.scrim,'rgba(0, 0, 0, 0.3)');assert.ok(fallback.hit,JSON.stringify(fallback))
+   }
+   if(height<=240)assert.ok(['Preview','Wait','Live','Error'].includes(word.text))
+   if(name==='window-visible'){const paint=await page.evaluate(FEEDBACK_PAINT);assert.ok(paint.hit,JSON.stringify(paint));assert.equal(paint.scrim,'rgba(0, 0, 0, 0.3)')}
+  }finally{await page.close()}
+ })
+}
+
+for(const name of ['preview','preview-devices','preview-click','preview-items','preview-ready','preview-window'])for(const width of [390,1440]){
+ test(`public local ${name} paints a real matching native child at ${width}`,{skip},async()=>{
+  const page=await openPage(browser.cdp,base,`components/${name}`,width)
+  try{
+   await loadedParent(page);await page.evaluate(IN_VIEW)
+   if(name==='preview-window'&&width<1024){await sleep(150);assert.deepEqual(page.localRequests,[]);return}
+   if(['preview-click','preview-items','preview-ready'].includes(name)){
+    assert.deepEqual(page.localRequests,[],'poster is shown before activation')
+    await activateWithEnter(page)
+   }
+   await waitFor(()=>page.evaluate("[...document.querySelectorAll('.preview-content>.tab-pane')].find(p=>p.offsetParent)?.dataset.previewState==='ready'"),'real public ready child')
+   assert.ok(page.localRequests.every(u=>u.startsWith(base+'/preview-demo/')))
+   const content=await page.evaluate("(()=>{const p=[...document.querySelectorAll('.preview-content>.tab-pane')].find(p=>p.offsetParent),f=p.querySelector('iframe');return {text:f.contentDocument.body.innerText,width:f.contentWindow.innerWidth,height:f.contentWindow.innerHeight,theme:f.contentDocument.documentElement.dataset.bsTheme,reference:[f.offsetWidth,f.offsetHeight]}})()")
+   assert.ok(content.text.includes('Project workspace'))
+   assert.deepEqual(content.reference,width<640&&name!=='preview-window'?[402,874]:[1440,900]);assert.ok(content.width>0&&content.height>0)
+   await page.evaluate("(()=>{const f=[...document.querySelectorAll('.preview-content>.tab-pane')].find(p=>p.offsetParent).querySelector('iframe');f.contentDocument.querySelector('[data-add-task]').click()})()")
+   assert.equal(await page.evaluate("[...document.querySelectorAll('.preview-content>.tab-pane')].find(p=>p.offsetParent).querySelector('iframe').contentDocument.body.innerText.includes('New task 1')"),true,'a working live page, not a screenshot')
+  }finally{await page.close()}
+ })
+}
+
+
+test('static CSS prevents a pending spinner or scrim even before lifecycle JavaScript runs',{skip},async()=>{
+ const beforeScript="document.addEventListener('DOMContentLoaded',()=>document.querySelector('.tab-pane.active').dataset.previewState='waiting',{once:true})"
+ const page=await openPage(browser.cdp,base,'window-visible',390,{height:600,skipPreviewScript:true,beforeScript})
+ try{await loadedParent(page);await page.evaluate(IN_VIEW);const b=await page.evaluate(FEEDBACK_PAINT);assert.equal(b.word,'Preview');assert.notEqual(b.scrim,'rgba(0, 0, 0, 0.3)');assert.deepEqual(page.requests,[])}finally{await page.close()}
+})
+
+
+test('opt-in theme child that ignores the normal ready query fails safely after its announcement',{skip},async()=>{
+ const page=await openPage(browser.cdp,deniedBase,'themed-announce',1440)
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='failed'),'silent query deadline')
+  assert.equal((await themeRequests(page)).length,0,'no applied proof from an initial announcement alone')
+  assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Unavailable')
+  assert.equal(await page.evaluate("document.querySelector('.tab-pane.active iframe').hasAttribute('inert')"),true)
+ }finally{await page.close()}
+})
+
+
+test('static phone fallback stays Preview with no error scrim, spinner or child request',{skip},async()=>{
+ const page=await openPage(browser.cdp,base,'window-fallback-static',390,{height:600})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await sleep(100)
+  const value=await page.evaluate("(()=>{const e=document.querySelector('.preview-error:not(.d-none)');return {word:document.querySelector('.preview-window-state').innerText,scrim:getComputedStyle(e,'::after').backgroundColor,status:getComputedStyle(e.querySelector('.preview-fallback-status')).display,src:document.querySelector('.preview-iframe').getAttribute('src')}})()")
+  assert.equal(value.word,'Preview');assert.notEqual(value.scrim,'rgba(0, 0, 0, 0.3)');assert.equal(value.status,'none');assert.equal(value.src,null);assert.deepEqual(page.requests,[])
+  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+ }finally{await page.close()}
+})
