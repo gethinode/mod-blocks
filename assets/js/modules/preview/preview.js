@@ -448,8 +448,10 @@
     })
   }
 
-  // The bar remains outside the native viewport. Its actual height, and the
-  // navigation height, reserve space before containing the complete window.
+  // Measure normal chrome first on every pass, then choose one final layout.
+  // This makes resize observation deterministic when compact chrome is shorter.
+  // When even minimum chrome cannot fit, retain useful native content and let
+  // the page scroll instead of clipping the action or collapsing the viewport.
   function fitWindow (container) {
     const win = container.closest('.preview-window')
     const bar = win.querySelector('.preview-window-bar')
@@ -459,8 +461,33 @@
     const { width, height } = PREVIEW_DEVICE_DIMS[device || 'preview-desktop']
     const navigation = document.querySelector('.navbar, header[role="banner"]')
     const navigationHeight = navigation ? navigation.getBoundingClientRect().height : 0
-    const availableHeight = window.innerHeight - navigationHeight - 48 - bar.getBoundingClientRect().height - 2
-    const fittedWidth = Math.max(3, Math.min(win.parentElement.clientWidth, width + 2, availableHeight * width / height + 2))
+    const availableHeight = window.innerHeight - navigationHeight
+    win.classList.remove('preview-window-compact')
+    win.style.width = `${Math.min(win.parentElement.clientWidth, width + 2)}px`
+    const maximumWidth = win.getBoundingClientRect().width
+    const insets = maximumWidth - container.getBoundingClientRect().width
+    const winStyle = window.getComputedStyle(win)
+    const borderHeight = parseFloat(winStyle.borderTopWidth) + parseFloat(winStyle.borderBottomWidth)
+    const measure = () => {
+      const style = window.getComputedStyle(bar)
+      const children = [...bar.children].filter(el => window.getComputedStyle(el).display !== 'none')
+      const chromeWidth = children.reduce((sum, el) => {
+        const childStyle = window.getComputedStyle(el)
+        return sum + (childStyle.flexShrink === '0' ? el.getBoundingClientRect().width : parseFloat(childStyle.minWidth) || 0)
+      }, 0) + Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      return { minimumWidth: Math.max(32, chromeWidth) + insets, barHeight: bar.getBoundingClientRect().height }
+    }
+    let chrome = measure()
+    const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.minimumWidth - insets) * height / width
+    if (maximumWidth < chrome.minimumWidth || availableHeight - 48 < minimumHeight()) {
+      win.classList.add('preview-window-compact')
+      chrome = measure()
+    }
+    const scroll = availableHeight < minimumHeight()
+    const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
+    const fittedWidth = scroll ? maximumWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
+    if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
+    win.style.marginBlock = `${margin}px`
     win.style.width = `${fittedWidth}px`
     container.style.height = `${container.getBoundingClientRect().width * height / width}px`
     return { width, height }

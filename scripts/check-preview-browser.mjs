@@ -313,6 +313,22 @@ function buildCustomFadeSite () {
   return hugo('public-fade', ['--config', `hugo.toml,${file}`, '--themesDir', themes])
 }
 
+// Compile the real Sass input used by a consumer with square global UI corners.
+// A CSS custom property cannot exercise the producer's Sass radius dependency.
+function buildZeroRadiusSite () {
+  const themes = path.join(tmp, 'themes-zero')
+  const scss = path.join(themes, 'preview-square', 'assets', 'scss', 'theme')
+  fs.mkdirSync(scss, { recursive: true })
+  fs.writeFileSync(path.join(scss, '_variables.scss'), '$theme-border-radius: 0;\n')
+  const shell = process.platform === 'win32'
+  const config = spawnSync('hugo', ['config', '-s', 'exampleSite', '--format', 'json'], { encoding: 'utf8', shell, timeout: 120000 })
+  assert.equal(config.status, 0, `hugo config failed:\n${config.error || ''}${config.stderr}`)
+  const imports = JSON.parse(config.stdout).module.imports.map(({ path }) => ({ path }))
+  const file = path.join(tmp, 'zero-radius.json')
+  fs.writeFileSync(file, JSON.stringify({ module: { imports: [{ path: 'preview-square' }, ...imports] } }))
+  return hugo('public-zero-radius', ['--config', `hugo.toml,${file}`, '--themesDir', themes])
+}
+
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' }
 
 function serve (root) {
@@ -598,12 +614,12 @@ const chromePath = findChrome()
 let skip = chromePath ? false : 'no Chrome found; set CHROME_PATH to run this check'
 if (!skip && typeof WebSocket === 'undefined') skip = 'this Node has no global WebSocket'
 
-let base, customFadeBase, deniedBase
+let base, customFadeBase, deniedBase, zeroRadiusBase
 if (!skip) {
   const start = Date.now()
   await startFramingServers()
-  servers.push(await serve(buildSite()), await serve(buildCustomFadeSite()), await serve(buildDeniedSite()))
-  ;[base, customFadeBase, deniedBase] = servers.map(server => `http://127.0.0.1:${server.address().port}`)
+  servers.push(await serve(buildSite()), await serve(buildCustomFadeSite()), await serve(buildDeniedSite()), await serve(buildZeroRadiusSite()))
+  ;[base, customFadeBase, deniedBase, zeroRadiusBase] = servers.map(server => `http://127.0.0.1:${server.address().port}`)
   console.log(`# built the probe sites in ${Date.now() - start} ms`)
   try {
     await launch(chromePath)
@@ -2073,5 +2089,138 @@ for (const [width, height] of [[390, 600], [390, 844], [1023, 900], [1920, 1080]
         'the static poster covers the actual native viewport without bands')
       if (width < 1024) assert.equal(page.requests.length, 0)
     } finally { await page.close() }
+  })
+}
+
+
+// Check the entire sole action, including edge hit tests. A large target whose
+// centre is inside the window can still lose an edge to its clipping boundary.
+const WINDOW_ACTION = `(() => {
+  const win = document.querySelector('.preview-window'), bar = win.querySelector('.preview-window-bar');
+  const viewport = win.querySelector('.preview-content'), open = bar.querySelector('.preview-open');
+  const rect = el => { const r = el.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom, width:r.width, height:r.height } };
+  const w = rect(win), a = rect(open), v = rect(viewport), style = getComputedStyle(win);
+  const points = [[a.left+1,a.top+1], [a.right-1,a.top+1], [a.left+1,a.bottom-1], [a.right-1,a.bottom-1], [(a.left+a.right)/2,(a.top+a.bottom)/2]];
+  return { win:w, open:a, viewport:v, bar:rect(bar), nav:document.querySelector('.navbar').getBoundingClientRect().height,
+    height:innerHeight, fit:win.dataset.previewFit || null, compact:win.classList.contains('preview-window-compact'),
+    margin:parseFloat(style.marginTop), corners:[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomLeftRadius,style.borderBottomRightRadius],
+    contained:a.left>=w.left+0.5 && a.right<=w.right-0.5 && a.top>=w.top+0.5 && a.bottom<=w.bottom-0.5,
+    hit:points.every(([x,y]) => open.contains(document.elementFromPoint(x,y))),
+    overflow:document.documentElement.scrollWidth>innerWidth,
+    state:viewport.querySelector('.tab-pane.active')?.dataset.previewState || null }
+})()`
+async function positionWindow (page, scrollFallback = false) {
+  await page.evaluate(`(() => { const win = document.querySelector('.preview-window');
+    if (${scrollFallback}) win.querySelector('.preview-open').scrollIntoView({ block:'end' });
+    else scrollBy(0, win.getBoundingClientRect().top - document.querySelector('.navbar').getBoundingClientRect().height - parseFloat(getComputedStyle(win).marginTop)) })()`)
+  await sleep(100)
+}
+function assertWindowAction (b) {
+  const detail = JSON.stringify(b)
+  assert.ok(b.open.width >= 24 && b.open.height >= 24, `minimum action target: ${detail}`)
+  assert.ok(b.contained, `entire action stays inside window: ${detail}`)
+  assert.ok(b.hit, `all action edges are hit-testable: ${detail}`)
+  assert.equal(b.overflow, false, `no horizontal page overflow: ${detail}`)
+  assert.ok(b.viewport.width > 0 && b.viewport.height > 0 && Math.abs(b.viewport.width / b.viewport.height - 1.6) < 0.002, `native nonzero viewport: ${detail}`)
+}
+
+for (const height of [220, 240, 320, 360, 400, 768, 900]) {
+  for (const enlarged of [false, true]) {
+    test(`window sole action fits complete short chrome at 1440x${height} enlarged ${enlarged}`, { skip }, async t => {
+      const page = await openPage(browser.cdp, base, 'window-visible', 1440, { height, beforeScript: CONTROL_IDLE })
+      try {
+        await loadedParent(page)
+        await page.evaluate(`document.querySelector('.navbar').style.height = '${enlarged ? 110 : 91}px';
+          ${enlarged ? "document.querySelector('.preview-window-bar').style.cssText = 'font-size:40px;padding:24px 60px;min-height:100px';" : ''}`)
+        await sleep(200); await positionWindow(page)
+        const b = await page.evaluate(WINDOW_ACTION)
+        t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
+        assert.notEqual(b.fit, 'scroll', 'feasible short canvas still fits')
+        assert.ok(b.win.height + 2*b.margin <= b.height-b.nav+2, 'complete window and margins fit after navigation')
+        assert.ok(b.margin >= 24, '24px margins remain feasible')
+        if (height >= 768 && !enlarged) assert.equal(b.compact, false, 'normal appearance remains unchanged')
+        const stable = JSON.stringify([b.win.width, b.win.height, b.compact])
+        await sleep(250)
+        const next = await page.evaluate(WINDOW_ACTION)
+        assert.equal(JSON.stringify([next.win.width,next.win.height,next.compact]), stable, 'resize observation settles without oscillation')
+      } finally { await page.close() }
+    })
+  }
+}
+
+for (const [name,width,height,state] of [['window-visible',1440,220,'waiting'], ['window-ok',1440,240,'ready'], ['window-503',1440,220,'failed'], ['window-fallback',1440,240,null], ['window-visible',390,220,null]]) {
+  test(`window sole action survives short lifecycle ${name} ${width}x${height}`, { skip }, async t => {
+    const page = await openPage(browser.cdp, base, name, width, { height, beforeScript: name === 'window-visible' ? CONTROL_IDLE : '' })
+    try {
+      await loadedParent(page)
+      await page.evaluate("document.querySelector('.navbar').style.height='91px'")
+      await sleep(200); await positionWindow(page)
+      if (state === 'waiting') { await idlePending(page); await page.evaluate('flushIdle()') }
+      if (state) await waitFor(() => page.evaluate(WINDOW_ACTION).then(b => b.state === state), 'short lifecycle state')
+      const b = await page.evaluate(WINDOW_ACTION); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
+      assert.equal(await page.evaluate('document.querySelectorAll(".preview-open").length'),1)
+      if (width < 1024) assert.deepEqual(page.requests, [], 'static narrow state has zero app requests')
+    } finally { await page.close() }
+  })
+}
+
+test('window impossible height keeps useful uncropped viewport and page-scroll action', { skip }, async t => {
+  const page = await openPage(browser.cdp, base, 'window-visible', 1440, { height:120, beforeScript:CONTROL_IDLE })
+  try {
+    await loadedParent(page); await page.evaluate("document.querySelector('.navbar').style.height='91px'")
+    await sleep(200); await positionWindow(page,true)
+    const b = await page.evaluate(WINDOW_ACTION); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
+    assert.equal(b.fit,'scroll','impossible canvas explicitly uses ordinary page scrolling')
+    assert.ok(b.viewport.width >= 320 && b.win.height > b.height-b.nav, 'fallback preserves a useful native viewport')
+    await page.evaluate("document.querySelector('.preview-open').focus()")
+    assert.equal(await page.evaluate("document.activeElement.matches('.preview-open')"),true)
+    await page.resize(1440,900); await sleep(200); await positionWindow(page)
+    const recovered=await page.evaluate(WINDOW_ACTION); assertWindowAction(recovered)
+    assert.notEqual(recovered.fit,'scroll','resize restores normal fit')
+    assert.equal(recovered.compact,false)
+  } finally { await page.close() }
+})
+
+for (const [name,width,height,dark] of [['window-ok',1440,900,false], ['window-ok',1440,900,true], ['window-503',1440,240,false], ['window-fallback',1440,220,true], ['window-visible',390,600,false]]) {
+  test(`window independent radius survives Sass zero UI radius ${name} ${width}x${height} dark ${dark}`, { skip }, async t => {
+    const page=await openPage(browser.cdp,zeroRadiusBase,name,width,{height})
+    try {
+      await loadedParent(page)
+      await page.evaluate(`document.documentElement.dataset.bsTheme='${dark ? 'dark' : 'light'}';document.querySelector('.navbar').style.height='91px'`)
+      await sleep(200);await positionWindow(page)
+      if (name==='window-ok'||name==='window-503') await waitFor(() => page.evaluate(WINDOW_ACTION).then(b=>b.state===(name==='window-ok'?'ready':'failed')),'radius runtime state')
+      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b))
+      assert.ok(b.corners.every(value=>parseFloat(value)>0),`all four independent window radii: ${JSON.stringify(b.corners)}`)
+      assertWindowAction(b)
+      if(width<1024)assert.deepEqual(page.requests,[])
+    }finally{await page.close()}
+  })
+}
+
+test('Sass zero UI radius preserves legacy frame none square style', { skip }, async () => {
+  const page=await openPage(browser.cdp,zeroRadiusBase,'default',1440)
+  try {
+    await loadedParent(page)
+    assert.equal(await page.evaluate('document.querySelector(".preview-window")'),null)
+    assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".preview-content")).borderTopLeftRadius'),'0px')
+  }finally{await page.close()}
+})
+
+
+for (const constrained of [false,true]) {
+  test(`window minimum chrome keeps whole action with reduced margins and theme constraints ${constrained}`, { skip }, async t => {
+    const page=await openPage(browser.cdp,base,'window-visible',1440,{height:constrained ? 900 : 180,beforeScript:CONTROL_IDLE})
+    try {
+      await loadedParent(page)
+      await page.evaluate(`document.querySelector('.navbar').style.height='91px';
+        ${constrained ? "document.querySelector('.preview-window').parentElement.style.cssText='max-width:100px;padding-inline:16px;margin-inline:auto';dispatchEvent(new Event('resize'))" : ''}`)
+      await sleep(200);await positionWindow(page)
+      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b));assertWindowAction(b)
+      assert.equal(b.compact,true)
+      assert.notEqual(b.fit,'scroll','feasible constrained window fits')
+      assert.ok(b.win.height+2*b.margin <= b.height-b.nav+2,'complete constrained window fits')
+      if(constrained) assert.ok(b.win.width<=100,'honour actual theme max width and padding')
+      else assert.ok(b.margin>0 && b.margin<24,'only reduce margins where 24px cannot fit minimum chrome')
+    }finally{await page.close()}
   })
 }

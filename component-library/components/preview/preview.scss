@@ -407,13 +407,16 @@ section.preview {
     }
 }
 
+// Window corners have their own overridable default, independent of global UI corners.
+$preview-window-border-radius: 0.375rem !default;
+
 // Window chrome is opt-in; the existing frame keeps its sizing and controls.
 section.preview {
     .preview-window {
         max-width: 100%;
         margin: 24px auto;
         border: 1px solid var(--bs-border-color);
-        border-radius: $theme-border-radius;
+        border-radius: $preview-window-border-radius;
         overflow: hidden;
         background: var(--bs-tertiary-bg);
         box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.12);
@@ -445,6 +448,29 @@ section.preview {
             min-width: 28px;
             min-height: 28px;
             flex-shrink: 0;
+        }
+    }
+
+    // Keep the sole action whole before spending space on decorative chrome.
+    // Measured fitting selects this only when the normal bar cannot fit. Fixed
+    // consumer bar padding/font/min-height must not defeat the compact layout.
+    .preview-window-compact .preview-window-bar {
+        padding: 2px !important;
+        min-height: 0 !important;
+        gap: 0 !important;
+        justify-content: flex-end;
+
+        .preview-window-title,
+        .preview-window-dots {
+            display: none;
+        }
+
+        .preview-open {
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            line-height: 1;
         }
     }
 
