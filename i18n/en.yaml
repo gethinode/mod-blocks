@@ -7,3 +7,5 @@
   translation: "The live preview is not available right now."
 - id: previewViewSelection
   translation: "View selection"
+- id: previewReady
+  translation: "Live preview ready"

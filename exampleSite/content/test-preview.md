@@ -22,6 +22,9 @@ fixtures:
       - 'data-devices="desktop tablet mobile"'
       - 'preview-controls'
     reject:
+      - 'preview-window'
+      - 'data-mobile-static='
+      - 'data-frame='
       - 'data-controls='
     count:
       'src="https://example.org/" class="preview-iframe preview-desktop"': 1
@@ -631,4 +634,86 @@ fixtures:
       - 'class="preview-error d-none"'
     reject:
       - 'class="preview-error"'
+  - case: window-visible-contract
+    block:
+      _bookshop_name: preview
+      url: /preview-demo/ready/
+      frame: window
+      frame_title: 'Example <window> & title'
+      open_url: '/open/?a=1&b=2'
+      open_link: true
+      controls: false
+      activation: visible
+      mobile_static: true
+      devices: [desktop]
+      ready_message: example:ready
+    want:
+      - 'class="preview-window"'
+      - 'class="preview-window-bar"'
+      - 'preview-window-viewport'
+      - 'preview-window-status'
+      - 'data-frame="window"'
+      - 'data-mobile-static="true"'
+      - 'data-activation="visible"'
+      - '<span class="preview-window-title">Example &lt;window&gt; &amp; title</span>'
+      - 'title="Example &lt;window&gt; &amp; title"'
+      - 'href="/open/?a=1&amp;b=2"'
+    reject:
+      - 'preview-unavailable-link'
+      - '<p class="text-center'
+      - 'preview-activate'
+    count:
+      'src="/preview-demo/ready/"': 0
+      'class="preview-open"': 1
+    order:
+      - 'preview-window-bar'
+      - 'class="preview-open"'
+      - 'preview-window-viewport'
+  - case: window-build-fallback-action
+    block:
+      _bookshop_name: preview
+      url: /preview-demo/ready/
+      frame: window
+      open_link: true
+      show_fallback: true
+    want:
+      - 'preview-window-bar'
+      - 'class="preview-open"'
+    reject:
+      - 'class="alert-link"'
+    count:
+      'class="preview-open"': 1
+  - case: window-items-keep-own-title-and-open-url
+    block:
+      _bookshop_name: preview
+      frame: window
+      frame_title: Window title
+      open_url: /ignored/
+      open_link: true
+      activation: visible
+      items:
+        - title: First item
+          url: /preview-demo/ready/
+          open_url: /first-open/
+        - title: Second item
+          url: /preview-demo/silent/
+    want:
+      - '<span class="preview-window-title">Window title</span>'
+      - 'title="First item"'
+      - 'class="preview-open" href="/first-open/"'
+    reject:
+      - 'href="/ignored/"'
+      - 'title="Window title"'
+  - case: explicit-no-frame-keeps-legacy
+    block:
+      _bookshop_name: preview
+      url: /preview-demo/ready/
+      frame: none
+      mobile_static: false
+    reject:
+      - 'preview-window'
+      - 'data-mobile-static='
+      - 'data-frame='
+    count:
+      'src="/preview-demo/ready/"': 1
 ---

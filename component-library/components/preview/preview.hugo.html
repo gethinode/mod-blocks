@@ -67,6 +67,10 @@
 		"devices"            .devices
 		"controls"           (cond (isset . "controls") .controls nil)
 		"controls-placement" (or .controls_placement (index . "controls-placement"))
+		"frame"              .frame
+		"frame-title"        (or .frame_title (index . "frame-title"))
+		"open-url"           (or .open_url (index . "open-url"))
+		"mobile-static"      (cond (isset . "mobile_static") .mobile_static (index . "mobile-static"))
 		"activation"         .activation
 		"poster"             .poster
 		"items"              $items

@@ -7,3 +7,5 @@
   translation: "Podgląd na żywo jest teraz niedostępny."
 - id: previewViewSelection
   translation: "Wybór widoku"
+- id: previewReady
+  translation: "Podgląd na żywo gotowy"

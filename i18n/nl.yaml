@@ -7,3 +7,5 @@
   translation: "Het live voorbeeld is nu niet beschikbaar."
 - id: previewViewSelection
   translation: "Weergaveselectie"
+- id: previewReady
+  translation: "Live voorbeeld gereed"

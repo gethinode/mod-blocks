@@ -406,3 +406,101 @@ section.preview {
 
     }
 }
+
+// Window chrome is opt-in; the existing frame keeps its sizing and controls.
+section.preview {
+    .preview-window {
+        max-width: 100%;
+        margin: 24px auto;
+        border: 1px solid var(--bs-border-color);
+        border-radius: $theme-border-radius;
+        overflow: hidden;
+        background: var(--bs-tertiary-bg);
+        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.12);
+    }
+
+    .preview-window-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        min-height: 2.5rem;
+        border-bottom: 1px solid var(--bs-border-color);
+        font-size: 0.875rem;
+        line-height: 1.5;
+
+        .preview-window-title {
+            min-width: 0;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .preview-open {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            min-height: 28px;
+            flex-shrink: 0;
+        }
+    }
+
+    .preview-window-dots {
+        display: inline-flex;
+        gap: 0.3rem;
+        flex-shrink: 0;
+
+        span {
+            width: 0.6rem;
+            height: 0.6rem;
+            border-radius: 50%;
+            background: #ed6a5e;
+
+            &:nth-child(2) { background: #f4bf50; }
+            &:nth-child(3) { background: #61c454; }
+        }
+    }
+
+    .preview-content.preview-window-viewport {
+        height: auto;
+        aspect-ratio: 16 / 10;
+        min-height: 0;
+        max-height: none;
+        border: 0 !important;
+        border-radius: 0;
+
+        .preview-iframe,
+        .preview-poster {
+            border: 0;
+            border-radius: 0;
+        }
+
+        .preview-error {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+    }
+
+    // A static preview is also static before JS initializes. It keeps a poster,
+    // with no focusable activation control, waiting status or embedded document.
+    @media (max-width: 1023px) {
+        .preview-content[data-mobile-static="true"] {
+            .preview-iframe,
+            .preview-activate,
+            .preview-waiting,
+            .preview-unavailable {
+                display: none !important;
+            }
+
+            > .tab-pane.active .preview-poster {
+                opacity: 1;
+                visibility: visible;
+            }
+        }
+    }
+}

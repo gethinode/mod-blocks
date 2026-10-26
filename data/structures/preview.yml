@@ -36,19 +36,53 @@ arguments:
       shows the largest offered device that fits the viewport, or the smallest
       offered device when none fits, and swaps views when the viewport crosses
       a device breakpoint.
+  frame:
+    type: select
+    optional: true
+    default: none
+    comment: >-
+      Window adds a title bar outside a contained native device viewport.
+      None keeps the original preview presentation.
+    options:
+      values:
+        - none
+        - window
+  frame-title:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Optional window title. Also names the frame for a single URL in a window.
+      Item frames keep the title of the selected item.
+  open-url:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Address opened by the single URL preview action, falling back to url.
+      Items keep their own open-url or url.
+  mobile-static:
+    type: bool
+    optional: true
+    default: false
+    comment: >-
+      Below 1024px show only the poster or image without navigating an embedded
+      frame. Returning to desktop starts a fresh eligible navigation.
   activation:
     type: select
     optional: true
     default: load
     comment: >-
       When the live view loads. With load, the shown view loads with the
-      page. With click, every view shows its poster with a button over it, and
+      page. With visible, the shown view loads after entering the viewport,
+      parent load and an idle opportunity with a 600ms timeout. With click, every view shows its poster with a button over it, and
       no view loads until the button is pressed; after that, a view loads when
       it is first shown. A block that shows its fallback shows no poster.
     options:
       values:
         - load
         - click
+        - visible
   poster:
     type: map[string]interface {}
     optional: true
@@ -91,8 +125,9 @@ arguments:
     default: false
     comment: >-
       Flag indicating if a link that opens the shown view in a new tab renders
-      under the frame. It points at the open-url of the shown item, else at its
-      url, else at url. A block that shows its fallback renders no such link.
+      under the frame, or only in the title bar with frame window, including
+      fallback. It points at the open-url of the shown item, else at its url,
+      else at open-url or url. Legacy fallback renders no such link.
   links:
     optional: true
     comment: >-

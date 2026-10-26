@@ -328,3 +328,37 @@ test('a scheme-relative URL with a host gets the header request, which warns whe
   assert.match(result.log, /Could not verify embedding restrictions: schemeless\.md/)
   assert.match(result.log, /Request to '\/\/example\.org\/x' failed/)
 })
+
+const WINDOW_LABELS = {
+  en: ['Live preview ready', 'Open in new tab'],
+  de: ['Live-Vorschau bereit', 'In neuem Tab öffnen'],
+  fr: ['Aperçu en direct prêt', 'Ouvrir dans un nouvel onglet'],
+  nl: ['Live voorbeeld gereed', 'Open in nieuw tabblad'],
+  pl: ['Podgląd na żywo gotowy', 'Otwórz w nowej karcie']
+}
+for (const [lang, [ready, open]] of Object.entries(WINDOW_LABELS)) {
+  test(`window labels render in ${lang}`, () => {
+    const result = build({ window: ['frame: window', 'open_link: true', 'ready_message: demo:ok'] }, {},
+      `defaultContentLanguage = '${lang}'\n[languages.${lang}]\n  weight = 1\n`)
+    assert.equal(result.status, 0, result.log)
+    const html = text(result.html.window)
+    assert.match(html, new RegExp(`data-ready-label="${ready}"`))
+    assert.ok(html.includes(`aria-label="${open}"`), html)
+    assert.ok(html.includes(LABELS[lang][1]), 'localized loading status')
+    assert.ok(html.includes(LABELS[lang][2]), 'localized unavailable status')
+  })
+}
+
+test('mobile static presence preserves false underscore and accepts kebab keys', () => {
+  const result = build({
+    explicit: ['mobile_static: false', 'mobile-static: true'],
+    kebab: ['mobile-static: true'],
+    title: ['frame: window', 'frame-title: Example window', 'open-url: /open/']
+  })
+  assert.equal(result.status, 0, result.log)
+  assert.doesNotMatch(result.html.explicit, /data-mobile-static=/)
+  assert.match(result.html.explicit, / src="https:\/\/example.org\/"/)
+  assert.match(result.html.kebab, /data-mobile-static="true"/)
+  assert.doesNotMatch(result.html.kebab, / src="https:\/\/example.org\/"/)
+  assert.match(result.html.title, /title="Example window"/)
+})

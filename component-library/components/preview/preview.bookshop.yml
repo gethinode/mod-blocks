@@ -29,6 +29,10 @@ blueprint:
     - tablet
     - mobile
   controls: true
+  frame: none
+  frame_title:
+  open_url:
+  mobile_static: false
   activation: load
   poster:
     desktop:

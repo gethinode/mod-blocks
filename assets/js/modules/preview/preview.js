@@ -30,6 +30,11 @@
  * posters unless the block has a ready message, and dispatches a bubbling
  * preview:activate event on the section. After that, views load as above.
  *
+ * With visible activation the shown view starts after actual viewport entry,
+ * parent load and an idle opportunity (600ms timeout). Opt-in mobile-static
+ * blocks never navigate below 1024px and forget earlier navigation windows.
+ * Window framing contains the native viewport below a measured title bar.
+ *
  * With items, a tab per item sits above the frame, and every iframe starts with
  * the URL of the first item in data-src. Showing an item tab gives every iframe
  * the item URL in data-src, and loads it in the shown view when the block may
@@ -133,17 +138,26 @@
     return (seconds > 0 ? seconds : PREVIEW_LOAD_TIMEOUT) * 1000
   }
 
+  function updateWindowStatus (container) {
+    if (container.dataset.frame !== 'window') return
+    const status = container.closest('.preview-window').querySelector('.preview-window-status')
+    const pane = container.querySelector(':scope > .tab-pane.active')
+    status.textContent = pane && pane.dataset.previewState === 'ready' ? status.dataset.readyLabel : ''
+  }
+
   /**
    * Sets the state of the pane of a navigation, with the busy state and inert
    * iframe that go with it.
    */
   function setState (record, state) {
     const { iframe, pane, container } = record
+    if (isStatic(container) || frames.get(iframe) !== record) return
     record.state = state
     pane.dataset.previewState = state
     const waiting = state === 'waiting' && readyMessage(container) !== ''
     if (waiting) pane.setAttribute('aria-busy', 'true'); else pane.removeAttribute('aria-busy')
     if (waiting || state === 'failed') iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
+    updateWindowStatus(container)
   }
 
   function stopDeadline (record) {
@@ -178,6 +192,7 @@
 
   // Posts the ready message to the window of the iframe of a navigation.
   function askReady (record) {
+    if (!isActivated(record.container) || frames.get(record.iframe) !== record || !record.iframe.hasAttribute('src')) return
     record.iframe.contentWindow.postMessage(readyMessage(record.container), '*')
   }
 
@@ -190,7 +205,7 @@
   function track (iframe) {
     const pane = iframe.closest('.tab-pane')
     const container = pane.closest('.preview-content')
-    if (container.querySelector('.preview-error:not(.d-none)')) return null
+    if (isStatic(container) || container.querySelector('.preview-error:not(.d-none)')) return null
     const record = { iframe, pane, container, state: null, timer: null, observer: null }
     frames.set(iframe, record)
     return record
@@ -205,6 +220,7 @@
     const record = track(iframe)
     if (!record) return null
     iframe.addEventListener('load', () => {
+      if (frames.get(iframe) !== record || !isActivated(record.container)) return
       if (readyMessage(record.container)) askReady(record); else markReady(record)
     })
     setState(record, 'waiting')
@@ -220,6 +236,7 @@
   function forget (pane, iframe) {
     const record = frames.get(iframe)
     if (record) stopDeadline(record)
+    frames.delete(iframe)
     delete pane.dataset.previewState
     pane.removeAttribute('aria-busy')
     if (readyMessage(pane.closest('.preview-content'))) iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
@@ -246,6 +263,7 @@
    */
   function loadPane (pane) {
     if (!pane) return
+    if (!isActivated(pane.closest('.preview-content'))) return
     const iframe = pane.querySelector('iframe[data-src]')
     if (iframe && !iframe.hasAttribute('src')) {
       watch(iframe)
@@ -258,7 +276,8 @@
    * its poster button.
    */
   function isActivated (container) {
-    return container.dataset.activation !== 'click' || container.dataset.active === 'true'
+    if (isStatic(container)) return false
+    return !['click', 'visible'].includes(container.dataset.activation) || container.dataset.active === 'true'
   }
 
   /**
@@ -316,8 +335,140 @@
     section.dispatchEvent(new CustomEvent('preview:item', { bubbles: true, detail: { index } }))
   }
 
+  function isStatic (container) {
+    return container.dataset.mobileStatic === 'true' && !deviceFits('desktop')
+  }
+
+  // Only opt-in lifecycle modes need discovery and an eligibility controller.
+  // Existing editor/load behavior remains on the original initialization path.
+  const controllers = new Map()
+  const measuredWindows = new Map()
+  const geometryObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updatePreviewScale) : null
+  function enhanced (container) {
+    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true'
+  }
+
+  function inViewport (container) {
+    const rect = container.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth
+  }
+
+  function cancelActivation (controller) {
+    if (controller.idle === null) return
+    if (controller.nativeIdle) window.cancelIdleCallback(controller.idle); else clearTimeout(controller.idle)
+    controller.idle = null
+    controller.generation++
+  }
+
+  function resetStatic (container) {
+    container.querySelectorAll(':scope > .tab-pane').forEach(pane => {
+      const iframe = pane.querySelector('iframe[data-src]')
+      if (!iframe) return
+      forget(pane, iframe)
+      if (iframe.hasAttribute('src')) {
+        const copy = iframe.cloneNode(false)
+        copy.removeAttribute('src')
+        iframe.replaceWith(copy)
+      }
+    })
+    delete container.dataset.active
+    if (container.dataset.frame === 'window') container.closest('.preview-window').querySelector('.preview-window-status').textContent = ''
+  }
+
+  function shownPane (container) {
+    return container.dataset.controls === 'false'
+      ? showFittingPane(container)
+      : container.querySelector(':scope > .tab-pane.active')
+  }
+
+  function eligible (container) {
+    return container.isConnected && !isStatic(container) && document.readyState === 'complete' && inViewport(container)
+  }
+
+  function reconcile (container, controller) {
+    if (!container.isConnected) { cancelActivation(controller); return }
+    const narrow = isStatic(container)
+    if (narrow) {
+      cancelActivation(controller)
+      if (container.dataset.previewStatic !== 'true') resetStatic(container)
+      container.dataset.previewStatic = 'true'
+      return
+    }
+    delete container.dataset.previewStatic
+    if (container.dataset.activation !== 'visible') {
+      if (isActivated(container)) loadPane(shownPane(container))
+      return
+    }
+    if (container.dataset.active === 'true') return
+    if (!eligible(container)) { cancelActivation(controller); return }
+    if (controller.idle !== null) return
+    const generation = ++controller.generation
+    const activate = () => {
+      if (generation !== controller.generation) return
+      controller.idle = null
+      if (!eligible(container)) return
+      container.dataset.active = 'true'
+      loadPane(shownPane(container))
+      updatePreviewScale()
+      container.closest('section.preview').dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
+    }
+    controller.nativeIdle = typeof window.requestIdleCallback === 'function' && typeof window.cancelIdleCallback === 'function'
+    controller.idle = controller.nativeIdle ? window.requestIdleCallback(activate, { timeout: 600 }) : setTimeout(activate, 0)
+  }
+
+  function discoverPreviews () {
+    measuredWindows.forEach((bar, container) => {
+      if (container.isConnected) return
+      geometryObserver.unobserve(bar)
+      measuredWindows.delete(container)
+    })
+    controllers.forEach((controller, container) => {
+      if (container.isConnected) return
+      cancelActivation(controller)
+      if (controller.observer) controller.observer.disconnect()
+      controllers.delete(container)
+    })
+    document.querySelectorAll('section.preview .preview-content').forEach(container => {
+      if (geometryObserver && container.dataset.frame === 'window' && !measuredWindows.has(container)) {
+        const bar = container.closest('.preview-window').querySelector('.preview-window-bar')
+        measuredWindows.set(container, bar)
+        geometryObserver.observe(bar)
+      }
+      if (!enhanced(container)) return
+      let controller = controllers.get(container)
+      if (!controller) {
+        controller = { idle: null, generation: 0, observer: null }
+        controllers.set(container, controller)
+        if (typeof IntersectionObserver !== 'undefined') {
+          controller.observer = new IntersectionObserver(() => reconcile(container, controller))
+          controller.observer.observe(container)
+        }
+      }
+      reconcile(container, controller)
+    })
+  }
+
+  // The bar remains outside the native viewport. Its actual height, and the
+  // navigation height, reserve space before containing the complete window.
+  function fitWindow (container) {
+    const win = container.closest('.preview-window')
+    const bar = win.querySelector('.preview-window-bar')
+    const pane = container.querySelector(':scope > .tab-pane.active')
+    const iframe = pane && pane.querySelector('.preview-iframe')
+    const device = iframe && Object.keys(PREVIEW_DEVICE_DIMS).find(cls => iframe.classList.contains(cls))
+    const { width, height } = PREVIEW_DEVICE_DIMS[device || 'preview-desktop']
+    const navigation = document.querySelector('.navbar, header[role="banner"]')
+    const navigationHeight = navigation ? navigation.getBoundingClientRect().height : 0
+    const availableHeight = window.innerHeight - navigationHeight - 48 - bar.getBoundingClientRect().height - 2
+    const fittedWidth = Math.max(3, Math.min(win.parentElement.clientWidth, width + 2, availableHeight * width / height + 2))
+    win.style.width = `${fittedWidth}px`
+    container.style.height = `${(fittedWidth - 2) * height / width}px`
+    return { width, height }
+  }
+
   function updatePreviewScale () {
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
+      const windowDims = container.dataset.frame === 'window' && fitWindow(container)
       const containerWidth = container.clientWidth
       const containerHeight = container.clientHeight
       container.querySelectorAll('.preview-iframe').forEach(iframe => {
@@ -326,7 +477,10 @@
         const { width, height } = PREVIEW_DEVICE_DIMS[deviceClass]
 
         let scale
-        if (deviceClass === 'preview-desktop') {
+        if (windowDims) {
+          scale = Math.min(containerWidth / width, containerHeight / height, 1)
+          iframe.style.height = ''
+        } else if (deviceClass === 'preview-desktop') {
           const desktopResponsive = container.dataset.desktopResponsive !== 'false'
           if (desktopResponsive) {
             // Responsive (default): scale to fill the full container width, then set the
@@ -409,6 +563,8 @@
     } else if (event.target.closest('.preview-controls') && isActivated(section.querySelector('.preview-content'))) {
       loadPane(section.querySelector(event.target.dataset.bsTarget))
     }
+    updatePreviewScale()
+    updateWindowStatus(section.querySelector('.preview-content'))
   })
 
   // Load the shown view when a poster button is pressed. Listen on the
@@ -417,7 +573,7 @@
     const button = event.target.closest && event.target.closest('.preview-activate')
     const container = button && button.closest('.preview-content')
     const section = container && container.closest('section.preview')
-    if (!section) return
+    if (!section || isStatic(container)) return
 
     container.dataset.active = 'true'
     const pane = container.dataset.controls === 'false'
@@ -444,6 +600,18 @@
     updatePreviewScale()
     initPreviewAutoPick()
     initPreviewAutoSwitch()
+    discoverPreviews()
+    if (typeof MutationObserver !== 'undefined') {
+      new MutationObserver(records => {
+        const changed = records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
+          node.nodeType === 1 && (node.matches('section.preview, .preview-content, .preview-window') || node.querySelector('section.preview, .preview-content, .preview-window'))))
+        if (changed) { discoverPreviews(); updatePreviewScale() }
+      }).observe(document.body, { childList: true, subtree: true })
+    }
+    if (geometryObserver) {
+      document.querySelectorAll('.navbar, header[role="banner"]').forEach(el => geometryObserver.observe(el))
+    }
+    if (document.fonts) document.fonts.ready.then(updatePreviewScale)
   }
 
   if (document.readyState === 'loading') {
@@ -453,6 +621,9 @@
   }
 
   // Scale again once the page has loaded, and on every resize
-  window.addEventListener('load', () => { updatePreviewScale() })
-  window.addEventListener('resize', () => { updatePreviewScale() })
+  window.addEventListener('load', () => { discoverPreviews(); updatePreviewScale() })
+  window.addEventListener('resize', () => { discoverPreviews(); updatePreviewScale() })
+  window.addEventListener('scroll', () => {
+    controllers.forEach((controller, container) => reconcile(container, controller))
+  }, { passive: true })
 }())

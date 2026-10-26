@@ -7,3 +7,5 @@
   translation: "L'aperçu en direct n'est pas disponible pour le moment."
 - id: previewViewSelection
   translation: "Sélection de la vue"
+- id: previewReady
+  translation: "Aperçu en direct prêt"

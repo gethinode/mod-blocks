@@ -22,4 +22,5 @@ Explore focused examples:
 - [Load on click](/components/preview-click/)
 - [Switch between items](/components/preview-items/)
 - [Wait for readiness](/components/preview-ready/)
+- [A visible desktop window](/components/preview-window/)
 - [Basic preview](/components/preview/)

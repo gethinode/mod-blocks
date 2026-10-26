@@ -73,6 +73,9 @@ function childDocument ({ announce, reply, delay = 0, wrong, phone }) {
 
 const PAGES = {
   default: [],
+  'window-ready-devices': { url: child('silent'), lines: ['frame: window', `ready_message: '${TOKEN}'`, 'load_timeout: 15'] },
+  'window-devices': ['frame: window', 'activation: click', 'open_link: true'],
+  'window-fallback': ['frame: window', 'open_link: true', 'show_fallback: true', 'mode: true', 'image: img/poster-desktop.png'],
   nocontrols: ['controls: false'],
   desktop: ['devices: [desktop]'],
   'desktop-nocontrols': ['devices: [desktop]', 'controls: false'],
@@ -95,6 +98,16 @@ const PAGES = {
   'items-fallback': ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B'), 'show_fallback: true'],
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true'],
+  ...Object.fromEntries(['visible', 'load', 'click'].map(activation => [`window-${activation}`, {
+    url: child('slow'),
+    lines: ['frame: window', 'frame_title: Example window', 'devices: [desktop]', 'controls: false',
+      'mobile_static: true', `activation: ${activation}`, `ready_message: '${TOKEN}'`, 'load_timeout: 2', 'open_link: true',
+      'mode: true', 'poster:', '  desktop: img/poster-desktop.png']
+  }])),
+  ...Object.fromEntries(['ok', 'reply', 'announce', 'silent', 'wrong', '503', 'refused', 'late'].map(name => [`window-${name}`, {
+    url: child(name), lines: ['frame: window', 'devices: [desktop]', 'controls: false', 'activation: visible',
+      `ready_message: '${TOKEN}'`, 'load_timeout: 2', 'open_link: true']
+  }])),
   ...readyPages()
 }
 
@@ -261,7 +274,9 @@ function buildSite () {
   fs.mkdirSync(content)
   // The readiness demo page of the exampleSite, as it is.
   fs.mkdirSync(path.join(content, 'components'))
-  fs.copyFileSync(path.join('exampleSite', 'content', 'components', 'preview-ready.md'), path.join(content, 'components', 'preview-ready.md'))
+  for (const name of ['preview-ready', 'preview-window']) {
+    fs.copyFileSync(path.join('exampleSite', 'content', 'components', `${name}.md`), path.join(content, 'components', `${name}.md`))
+  }
   for (const [name, page] of Object.entries(PAGES)) {
     const { url = TARGET, lines } = Array.isArray(page) ? { lines: page } : page
     fs.writeFileSync(path.join(content, `${name}.md`), [
@@ -432,11 +447,12 @@ const STATE = `(() => {
 // answered and holdScript ms have passed, so the child can announce itself
 // before the script listens. Every page records the src of each iframe whose
 // load event fires in window.previewLoads.
-async function openPage (cdp, base, name, width, { hold = false, height = 900, holdScript = 0 } = {}) {
+async function openPage (cdp, base, name, width, { hold = false, height = 900, holdScript = 0, beforeScript = '', skipPreviewScript = false } = {}) {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
   const send = (method, params) => cdp.send(method, params, sessionId)
   const requests = []
+  const localRequests = []
   // Each iframe request as its view and URL, in the order they came.
   const urls = []
   const held = []
@@ -460,10 +476,12 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   let childAnswered = 0
   const scripts = []
   const off = cdp.on(async msg => {
-    if (msg.sessionId !== sessionId || msg.method !== 'Fetch.requestPaused') return
+    if (msg.sessionId !== sessionId) return
+    if (msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document' && new URL(msg.params.request.url).pathname.startsWith('/preview-demo/')) localRequests.push(msg.params.request.url)
+    if (msg.method !== 'Fetch.requestPaused') return
     const { requestId, frameId, resourceType } = msg.params
     if (!msg.params.request.url.startsWith(TARGET)) {
-      scripts.push(requestId)
+      if (skipPreviewScript) send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {}); else scripts.push(requestId)
       return
     }
     if (resourceType !== 'Document') {
@@ -489,11 +507,13 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
     scripts.splice(0).forEach(requestId => send('Fetch.continueRequest', { requestId }).catch(() => {}))
     return childAnswered
   })()
+  if (beforeScript) await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (window === window.top) { ${beforeScript} }` })
+  await send('Network.enable')
   await send('Page.enable')
   await send('DOM.enable')
   await send('Runtime.enable')
   await send('Fetch.enable', {
-    patterns: [{ urlPattern: `${TARGET}*`, requestStage: 'Request' }, ...(holdScript ? [{ urlPattern: `${base}/js/preview*`, requestStage: 'Request' }] : [])]
+    patterns: [{ urlPattern: `${TARGET}*`, requestStage: 'Request' }, ...((holdScript || skipPreviewScript) ? [{ urlPattern: `${base}/js/preview*`, requestStage: 'Request' }] : [])]
   })
   await send('Page.addScriptToEvaluateOnNewDocument', {
     source: `if (window === window.top) { window.previewLoads = []; document.addEventListener('load', event => {
@@ -516,6 +536,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   const evaluate = async expression => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result.value
   return {
     requests,
+    localRequests,
     urls,
     evaluate,
     state: () => evaluate(STATE),
@@ -1724,3 +1745,317 @@ test('denied-ready: a block whose target the build found refusing framing starts
   }
   assert.equal((await framing.counts()).allow - mid.allow, 1, 'the live view loads its frame once')
 })
+
+// Framed previews use real layout and frames; the small API shims only control
+// browser scheduling so that load, exit and breakpoint races are deterministic.
+const CONTROL_IDLE = `window.idleCallbacks = new Map(); window.idleSerial = 0; window.idleOptions = [];
+  window.requestIdleCallback = (callback, options) => { idleOptions.push(options); idleCallbacks.set(++idleSerial, callback); return idleSerial };
+  window.cancelIdleCallback = id => idleCallbacks.delete(id);
+  window.flushIdle = () => { const callbacks = [...idleCallbacks.values()]; idleCallbacks.clear(); callbacks.forEach(fn => fn({ didTimeout: false, timeRemaining: () => 20 })) };`
+const BELOW = `document.addEventListener('DOMContentLoaded', () => { document.querySelector('section.preview').style.marginTop = '2000px' }, { once: true });`
+const IN_VIEW = `document.querySelector('section.preview').scrollIntoView({ block: 'center' })`
+const WINDOW_STATE = `(() => {
+  const container = document.querySelector('section.preview .preview-content')
+  const frame = container.querySelector('iframe')
+  const pane = frame.closest('.tab-pane')
+  return { src: frame.getAttribute('src'), state: pane.dataset.previewState || null,
+    busy: pane.getAttribute('aria-busy'), static: container.dataset.previewStatic || null,
+    status: document.querySelector('.preview-window-status').textContent }
+})()`
+async function loadedParent (page) {
+  await waitFor(() => page.evaluate('document.readyState === "complete"'), 'parent load')
+}
+async function idlePending (page) {
+  await waitFor(() => page.evaluate('window.idleCallbacks.size > 0'), 'eligible idle callback')
+  assert.deepEqual(await page.evaluate('window.idleOptions.at(-1)'), { timeout: 600 })
+}
+
+for (const visibleBeforeLoad of [false, true]) {
+  test(`window visible waits for viewport, parent load and idle (visible before load ${visibleBeforeLoad})`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-visible', 1440, { hold: true, beforeScript: CONTROL_IDLE + BELOW })
+    try {
+      await waitFor(() => page.evaluate('window.previewCheckReady'), 'DOM ready')
+      if (visibleBeforeLoad) await page.evaluate(IN_VIEW)
+      await sleep(700)
+      assert.equal(page.requests.length, 0, 'no child before parent load')
+      assert.equal(await page.evaluate('idleCallbacks.size'), 0)
+      page.release(); await loadedParent(page)
+      if (!visibleBeforeLoad) {
+        await sleep(700)
+        assert.equal(page.requests.length, 0, 'no child below fold')
+        await page.evaluate(IN_VIEW)
+      }
+      await idlePending(page)
+      assert.equal(page.requests.length, 0, 'no child before idle')
+      await page.evaluate('flushIdle()')
+      await waitFor(() => page.requests.length === 1, 'one child navigation')
+      assert.deepEqual(page.requests, ['desktop'])
+      await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === 'ready'), 'ready window')
+      assert.equal((await page.evaluate(WINDOW_STATE)).status, 'Live preview ready')
+      assert.equal(await page.evaluate('document.activeElement === document.body'), true, 'no automatic focus')
+    } finally { await page.close() }
+  })
+}
+
+for (const reason of ['exit', 'detach', 'static']) {
+  test(`window visible cancels idle on ${reason}, and rechecks eligibility`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-visible', 1440, { beforeScript: CONTROL_IDLE })
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW); await idlePending(page)
+      // Retain the queued callback too: cancellation alone cannot admit stale work.
+      await page.evaluate('window.oldIdle = [...idleCallbacks.values()][0]; window.savedSection = document.querySelector("section.preview")')
+      if (reason === 'exit') await page.evaluate('savedSection.style.marginTop = "3000px"; scrollTo(0,0)')
+      if (reason === 'detach') await page.evaluate('savedSection.remove()')
+      if (reason === 'static') await page.resize(390, 600)
+      await sleep(150)
+      await page.evaluate('oldIdle({}); flushIdle()')
+      await sleep(700)
+      assert.equal(page.requests.length, 0, `no navigation after ${reason}`)
+      if (reason === 'exit') await page.evaluate('savedSection.style.marginTop = "0"')
+      if (reason === 'detach') await page.evaluate('document.body.append(savedSection)')
+      if (reason === 'static') await page.resize(1440)
+      await page.evaluate(IN_VIEW); await idlePending(page); await page.evaluate('flushIdle()')
+      await waitFor(() => page.requests.length === 1, 'fresh eligible navigation')
+    } finally { await page.close() }
+  })
+}
+
+for (const activation of ['load', 'click', 'visible']) {
+  for (const [width, height] of [[390, 844], [390, 600], [1023, 900]]) {
+    test(`window ${activation} is static with no app requests at ${width}x${height}`, { skip }, async () => {
+      const page = await openPage(browser.cdp, base, `window-${activation}`, width, { height })
+      try {
+        await loadedParent(page); await page.evaluate(IN_VIEW)
+        await page.evaluate('document.querySelector(".preview-activate")?.click()')
+        await sleep(2300)
+        assert.deepEqual(page.requests, [])
+        const state = await page.evaluate(WINDOW_STATE)
+        assert.deepEqual({ src: state.src, state: state.state, busy: state.busy }, { src: null, state: null, busy: null })
+        assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".preview-poster")).visibility'), 'visible')
+        assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".preview-waiting")).display'), 'none')
+        assert.equal(await page.evaluate('document.querySelector(".preview-open").getBoundingClientRect().width >= 24'), true)
+      } finally { await page.close() }
+    })
+  }
+}
+
+for (const waitForReady of [false, true]) {
+  test(`window desktop to static forgets ${waitForReady ? 'ready' : 'waiting'} frame and restarts at 1024`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-visible', 1440, { beforeScript: CONTROL_IDLE })
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW); await idlePending(page); await page.evaluate('flushIdle()')
+      await waitFor(() => page.requests.length === 1, 'desktop navigation')
+      if (waitForReady) await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === 'ready'), 'ready desktop')
+      await page.evaluate('window.oldFrame = document.querySelector(".preview-iframe"); window.oldWindow = oldFrame.contentWindow')
+      await page.resize(1023)
+      await sleep(100)
+      const state = await page.evaluate(WINDOW_STATE)
+      assert.equal(state.src, null); assert.equal(state.state, null); assert.equal(state.busy, null)
+      assert.equal(await page.evaluate('oldFrame === document.querySelector(".preview-iframe")'), false)
+      await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: oldWindow }))`)
+      assert.equal((await page.evaluate(WINDOW_STATE)).state, null)
+      await sleep(2300)
+      assert.equal(page.requests.length, 1, 'no static navigation or deadline')
+      await page.resize(1024); await page.evaluate(IN_VIEW); await idlePending(page)
+      await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: oldWindow })); flushIdle()`)
+      await waitFor(() => page.requests.length === 2, 'fresh desktop navigation')
+      assert.equal((await page.evaluate(WINDOW_STATE)).state, 'waiting')
+    } finally { await page.close() }
+  })
+}
+
+test('window inserted after parent load has one controller and independent visibility', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'window-visible', 1440, { beforeScript: CONTROL_IDLE + BELOW })
+  try {
+    await loadedParent(page)
+    await page.evaluate(`window.first = document.querySelector('section.preview'); window.second = first.cloneNode(true);
+      second.querySelectorAll('[id]').forEach(el => el.id = 'copy-' + el.id); second.style.marginTop = '0'; first.before(second);
+      window.activations = []; document.addEventListener('preview:activate', e => activations.push(e.target === second ? 'second' : 'first'));
+      second.scrollIntoView({ block: 'center' })`)
+    await idlePending(page); await page.evaluate('flushIdle()')
+    await waitFor(() => page.requests.length === 1, 'inserted block navigates once')
+    await page.evaluate('second.append(document.createElement("span")); second.append(document.createElement("span"))')
+    await sleep(150); await page.evaluate('flushIdle()')
+    assert.deepEqual(await page.evaluate('activations'), ['second'])
+    assert.equal(await page.evaluate('first.querySelector("iframe").hasAttribute("src")'), false, 'independent below-fold block')
+    await page.evaluate('first.scrollIntoView({ block: "center" })'); await idlePending(page); await page.evaluate('flushIdle()')
+    await waitFor(() => page.requests.length === 2, 'first block navigation')
+    assert.deepEqual(await page.evaluate('activations'), ['second', 'first'])
+  } finally { await page.close() }
+})
+
+for (const missing of ['observer', 'idle', 'both']) {
+  test(`window visible uses guarded ${missing} API fallback without polling`, { skip }, async () => {
+    const beforeScript = BELOW + (missing !== 'idle' ? 'window.IntersectionObserver = undefined;' : '') +
+      (missing !== 'observer' ? 'window.requestIdleCallback = undefined; window.cancelIdleCallback = undefined;' : '')
+    const page = await openPage(browser.cdp, base, 'window-visible', 1440, { beforeScript })
+    try {
+      await loadedParent(page); await sleep(800)
+      assert.equal(page.requests.length, 0, 'fallback still waits for entry')
+      await page.evaluate(IN_VIEW)
+      await waitFor(() => page.requests.length === 1, 'fallback navigation')
+    } finally { await page.close() }
+  })
+}
+
+const WINDOW_BOX = `(() => {
+  const win = document.querySelector('.preview-window'), bar = win.querySelector('.preview-window-bar'), viewport = win.querySelector('.preview-content');
+  const iframe = viewport.querySelector('.tab-pane.active iframe'), open = bar.querySelector('.preview-open'), navbar = document.querySelector('.navbar');
+  const box = el => { const b = el.getBoundingClientRect(); return { width: b.width, height: b.height, left: b.left, right: b.right, top: b.top, bottom: b.bottom } };
+  return { win: box(win), bar: box(bar), viewport: box(viewport), iframe: box(iframe), open: box(open), nav: navbar ? box(navbar) : { height: 0 }, width: innerWidth, height: innerHeight }
+})()`
+for (const [width, height] of [[1440, 900], [1440, 768], [1920, 1080]]) {
+  test(`window geometry contains native 16:10 viewport at ${width}x${height} after bar and navigation resize`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-visible', width, { height, beforeScript: CONTROL_IDLE })
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW)
+      for (const enlarged of [false, true]) {
+        if (enlarged) await page.evaluate(`document.querySelector('.preview-window-bar').style.fontSize = '40px'; document.querySelector('.navbar').style.minHeight = '140px'`)
+        await sleep(200)
+        const b = await page.evaluate(WINDOW_BOX)
+        assert.ok(b.bar.height > 0 && b.nav.height > 0 && b.viewport.height > 0)
+        assert.ok(Math.abs(b.iframe.width / b.iframe.height - 1.6) < 0.002, 'native desktop ratio')
+        assert.ok(b.win.height <= b.height - b.nav.height - 48 + 2, 'complete window fits after measured navigation and 48px margins')
+        assert.ok(b.win.width <= b.width && Math.abs(b.iframe.width - b.viewport.width) < 3, 'contained viewport')
+        assert.ok(b.iframe.top >= b.bar.bottom - 1 && b.iframe.bottom <= b.win.bottom + 1, 'bar stays outside uncropped app')
+        assert.ok(b.open.width >= 24 && b.open.height >= 24, 'reachable bar action')
+      }
+      await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+      assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('.preview-iframe')).transitionDuration`), '0s')
+    } finally { await page.close() }
+  })
+}
+
+for (const name of ['ok', 'reply', 'announce', 'silent', 'wrong', '503', 'refused', 'late']) {
+  test(`window ${name} retains readiness and late recovery with sole title bar action`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, `window-${name}`, 1440)
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW)
+      const ready = ['ok', 'reply', 'announce'].includes(name)
+      await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === (ready ? 'ready' : 'failed')), 'window readiness outcome')
+      assert.equal(await page.evaluate('document.querySelectorAll(".preview-open").length'), 1)
+      assert.equal(await page.evaluate('document.querySelectorAll(".preview-unavailable a").length'), 0)
+      if (name === 'late') await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === 'ready'), 'window late recovery')
+    } finally { await page.close() }
+  })
+}
+
+test('window script initialized after parent load still starts only the eligible view', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'window-visible', 1440, { skipPreviewScript: true, beforeScript: CONTROL_IDLE + BELOW })
+  try {
+    await loadedParent(page)
+    assert.equal(page.requests.length, 0)
+    await page.evaluate(fs.readFileSync('assets/js/modules/preview/preview.js', 'utf8'))
+    await sleep(200)
+    assert.equal(await page.evaluate('idleCallbacks.size'), 0)
+    await page.evaluate(IN_VIEW); await idlePending(page); await page.evaluate('flushIdle()')
+    await waitFor(() => page.requests.length === 1, 'late initialization navigation')
+  } finally { await page.close() }
+})
+
+test('window inserted bar changes and component re-render keep fitted geometry and one controller', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'window-visible', 1440, { beforeScript: CONTROL_IDLE + BELOW })
+  try {
+    await loadedParent(page)
+    await page.evaluate(`window.original = document.querySelector('section.preview'); window.inserted = original.cloneNode(true);
+      inserted.querySelectorAll('[id]').forEach(el => el.id = 'inserted-' + el.id); inserted.style.marginTop = '0'; original.before(inserted);
+      inserted.scrollIntoView({ block: 'center' }); window.activationCount = 0; document.addEventListener('preview:activate', () => activationCount++)`)
+    await idlePending(page); await page.evaluate('flushIdle()'); await waitFor(() => page.requests.length === 1, 'inserted navigation')
+    await page.evaluate(`inserted.querySelector('.preview-window-bar').style.fontSize = '48px'`)
+    await sleep(200)
+    const b = await page.evaluate(WINDOW_BOX)
+    assert.ok(b.win.height <= b.height - b.nav.height - 48 + 2, 'inserted title bar is measured after a size change')
+    await page.evaluate(`window.replacement = original.cloneNode(true); replacement.style.marginTop = '0';
+      replacement.querySelectorAll('[id]').forEach(el => el.id = 'replacement-' + el.id); inserted.replaceWith(replacement);
+      replacement.scrollIntoView({ block: 'center' }); replacement.append(document.createElement('span'))`)
+    await idlePending(page); await page.evaluate('flushIdle()'); await waitFor(() => page.requests.length === 2, 're-rendered navigation')
+    await sleep(100); await page.evaluate('flushIdle()')
+    assert.equal(await page.evaluate('activationCount'), 2, 'one activation per fresh component')
+  } finally { await page.close() }
+})
+
+test('window device controls preserve native tablet and mobile dimensions', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'window-devices', 1440)
+  try {
+    await loadedParent(page)
+    for (const [device, width, height] of [['desktop', 1440, 900], ['tablet', 820, 1180], ['mobile', 402, 874]]) {
+      await page.evaluate(`document.querySelector('.preview-controls [data-bs-target$="-${device}"]').click()`)
+      await sleep(200)
+      const b = await page.evaluate(WINDOW_BOX)
+      assert.ok(Math.abs(b.iframe.width / b.iframe.height - width / height) < 0.002, `${device} native ratio`)
+      assert.ok(Math.abs(b.viewport.height - b.iframe.height) < 2, `${device} contained without vertical gaps`)
+      assert.ok(b.win.height <= b.height - b.nav.height - 48 + 2)
+    }
+  } finally { await page.close() }
+})
+
+for (const width of [390, 1440]) {
+  test(`window build fallback retains its sole reachable title bar action at ${width}`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'window-fallback', width, { height: 600 })
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW)
+      assert.equal(await page.evaluate('document.querySelectorAll("section.preview a").length'), 1)
+      assert.equal(await page.evaluate(`(() => { const a = document.querySelector('.preview-open'); a.focus();
+        const r = a.getBoundingClientRect(); return document.activeElement === a && r.width >= 24 && r.height >= 24 && a.target === '_blank' && a.rel === 'noopener' })()`), true)
+    } finally { await page.close() }
+  })
+}
+
+for (const activation of ['load', 'click']) {
+  test(`window static return respects ${activation} activation eligibility`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, `window-${activation}`, 390)
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW); await sleep(100)
+      assert.equal(page.requests.length, 0)
+      await page.resize(1024); await page.evaluate(IN_VIEW)
+      if (activation === 'click') {
+        await sleep(200); assert.equal(page.requests.length, 0, 'click eligibility remains required')
+        await page.evaluate('document.querySelector(".preview-activate").click()')
+      }
+      await waitFor(() => page.requests.length === 1, 'eligible desktop return')
+      await page.resize(390); await sleep(100)
+      assert.equal((await page.evaluate(WINDOW_STATE)).state, null)
+      await page.resize(1024); await page.evaluate(IN_VIEW)
+      if (activation === 'click') {
+        await sleep(200); assert.equal(page.requests.length, 1, 'fresh click required after static reset')
+        await page.evaluate('document.querySelector(".preview-activate").click()')
+      }
+      await waitFor(() => page.requests.length === 2, 'fresh return navigation')
+    } finally { await page.close() }
+  })
+}
+
+test('window success announcement follows the shown device independently of hidden ready frames', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'window-ready-devices', 1440)
+  try {
+    await loadedParent(page); await page.evaluate(IN_VIEW)
+    await waitFor(() => page.requests.length === 1, 'desktop navigation')
+    await page.evaluate(`document.querySelector('.preview-controls [data-bs-target$="-tablet"]').click()`)
+    await waitFor(() => page.requests.length === 2, 'tablet navigation')
+    await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: document.querySelector('.preview-desktop').contentWindow }))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).status, '', 'hidden desktop must not announce tablet success')
+    await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: document.querySelector('.preview-tablet').contentWindow }))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).status, 'Live preview ready')
+  } finally { await page.close() }
+})
+
+for (const width of [390, 1440]) {
+  test(`components/preview-window renders the real local Ready route with static narrow behavior at ${width}`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'components/preview-window', width)
+    try {
+      await loadedParent(page); await page.evaluate(IN_VIEW)
+      if (width >= 1024) {
+        await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === 'ready'), 'real local Ready document')
+        assert.equal(page.localRequests.length, 1)
+        assert.ok(page.localRequests[0].endsWith('/preview-demo/ready/'))
+        assert.equal(await page.evaluate('document.querySelector(".preview-content").dataset.readyMessage'), 'example:ready')
+      } else {
+        await sleep(1000)
+        assert.deepEqual(page.localRequests, [], 'no local embedded app requests after scroll or idle')
+        assert.equal((await page.evaluate(WINDOW_STATE)).src, null)
+      }
+      assert.equal(await page.evaluate('document.querySelectorAll("section.preview a").length'), 1)
+      assert.equal(await page.evaluate('document.querySelector(".preview-window-title").textContent'), 'Example workspace')
+    } finally { await page.close() }
+  })
+}
