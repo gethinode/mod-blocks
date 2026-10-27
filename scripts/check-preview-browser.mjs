@@ -10,8 +10,9 @@
 // The check builds the exampleSite with a throwaway content directory of probe
 // pages, once as is and once with a longer $transition-fade, serves both on
 // 127.0.0.1 and drives Chrome over the DevTools protocol.
-// Chrome never reaches https://example.org/: the check answers those requests
-// itself and records which view's iframe made each one. A path under
+// The check answers iframe requests for https://example.org/ itself and records
+// which view made each one. Native fallback links briefly open their configured
+// target in a real tab before the check closes it. A path under
 // https://example.org/child/ gets a child document of CHILDREN, which posts
 // the ready message of a block or not, answers with an error status, refuses
 // the connection or never answers, so the readiness checks run against real
@@ -1670,22 +1671,29 @@ const FALLBACK_BOXES = `(async () => {
   const pane = content.querySelector(':scope > .tab-pane.active')
   const image = [...pane.querySelectorAll('.preview-fallback-image')].find(el => el.getBoundingClientRect().height > 0)
   await image.decode().catch(() => {})
+  await document.fonts.ready
   const alert = pane.querySelector('.preview-error .alert')
   const link = alert.querySelector('a')
   const linkTop = link.getBoundingClientRect().top + scrollY
   scrollTo({ top: linkTop - innerHeight / 2, behavior: 'instant' })
-  const box = el => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) } }
-  const linkBox = link.getBoundingClientRect()
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  const box = el => el.getBoundingClientRect().toJSON()
+  const linkBox = box(link)
   const hit = document.elementFromPoint(linkBox.left + linkBox.width / 2, linkBox.top + linkBox.height / 2)
-  const inside = (el, outer) => el.top >= outer.top - 1 && el.bottom <= outer.bottom + 1
+  const inside = (el, outer) => el.left >= outer.left - 0.01 && el.right <= outer.right + 0.01 && el.top >= outer.top - 0.01 && el.bottom <= outer.bottom + 0.01
   const c = box(content)
+  const clip = { left: c.left + content.clientLeft, right: c.left + content.clientLeft + content.clientWidth,
+    top: c.top + content.clientTop, bottom: c.top + content.clientTop + content.clientHeight }
+  const linkRects = [...link.getClientRects()].map(rect => rect.toJSON())
   return {
     content: c.height,
     clipped: content.scrollHeight > content.clientHeight + 1,
     image: box(image).height,
-    imageInside: inside(box(image), c),
+    imageInside: inside(box(image), clip),
     alert: box(alert).height,
-    alertInside: inside(box(alert), c),
+    alertInside: inside(box(alert), clip),
+    clip, linkBox, linkRects,
+    wholeLinkInside: linkRects.length > 0 && linkRects.every(rect => inside(rect, clip)),
     linkReached: link === hit || link.contains(hit),
     contentScrollTop: content.scrollTop,
     scrollWidth: document.scrollingElement.scrollWidth
@@ -1704,6 +1712,19 @@ for (const height of [600, 844]) {
       assert.deepEqual({ clipped: boxes.clipped, imageInside: boxes.imageInside, alertInside: boxes.alertInside, linkReached: boxes.linkReached, contentScrollTop: boxes.contentScrollTop },
         { clipped: false, imageInside: true, alertInside: true, linkReached: true, contentScrollTop: 0 }, `nothing is cut off: ${JSON.stringify(boxes)}`)
       assert.ok(boxes.scrollWidth <= 390, `no horizontal scroll: ${boxes.scrollWidth}`)
+      assert.ok(boxes.wholeLinkInside, `every link rectangle stays within the actual clipping boundary: ${JSON.stringify(boxes)}`)
+      await page.evaluate(`window.legacyFallbackClicks=[];document.addEventListener('click',e=>{if(e.target.closest('.preview-error .alert-link'))legacyFallbackClicks.push(e.isTrusted)},true)`)
+      let gestures=0
+      for(const rect of boxes.linkRects)for(const [fx,fy] of [[.08,.08],[.92,.08],[.08,.92],[.92,.92],[.5,.5]]){
+        await page.send('Page.bringToFront')
+        const before=new Set((await browser.cdp.send('Target.getTargets')).targetInfos.map(info=>info.targetId))
+        const point={x:rect.x+rect.width*fx,y:rect.y+rect.height*fy,button:'left',clickCount:1}
+        await page.send('Input.dispatchMouseEvent',{type:'mousePressed',...point})
+        await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point})
+        const popup=await waitFor(async()=> (await browser.cdp.send('Target.getTargets')).targetInfos.find(info=>!before.has(info.targetId)&&info.type==='page'&&info.url===TARGET),'configured fallback target tab')
+        await browser.cdp.send('Target.closeTarget',{targetId:popup.targetId});gestures++
+      }
+      assert.deepEqual(await page.evaluate('legacyFallbackClicks'),Array(gestures).fill(true),'every native corner/center gesture clicks the real link')
       assert.deepEqual(page.urls, [], 'the fallback loads no view')
       console.log(`# fallback-portrait @390x${height}: ${JSON.stringify(boxes)}`)
     } finally {
