@@ -45,6 +45,15 @@ class FakeElement {
     return this
   }
 
+  // Native membership now participates in admission. Keep these read-only
+  // properties tied to the actual fake tree, including newly cloned frames.
+  get ownerDocument () {
+    let root = this
+    while (root.parent) root = root.parent
+    return root.isDocument ? root : null
+  }
+  get isConnected () { return this.ownerDocument !== null }
+
   hasAttribute (name) { return name in this.attrs }
   removeAttribute (name) { delete this.attrs[name] }
   getAttribute (name) { return name in this.attrs ? this.attrs[name] : null }
@@ -63,6 +72,7 @@ class FakeElement {
   get src () { return this.attrs.src }
   set src (value) { this.attrs.src = value; this.srcSets = (this.srcSets || 0) + 1 }
   addEventListener (type, fn) { (this.listeners[type] ||= []).push(fn) }
+  removeEventListener (type, fn) { this.listeners[type] = (this.listeners[type] || []).filter(listener => listener !== fn) }
   // Events bubble from the element up to the document, as Bootstrap's do.
   dispatch (type, event = {}) {
     const evt = { target: this, ...event }
@@ -236,6 +246,7 @@ function run (preview, width, { until = 'load', readyState = 'loading', globals 
   const windowListeners = {}
   const queries = new Map()
   const document = new FakeElement().append(preview.section)
+  document.isDocument = true
   document.readyState = readyState
   const window = {
     // innerWidth rounds down to a whole number; the media queries see the exact width.

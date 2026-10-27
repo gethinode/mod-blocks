@@ -282,6 +282,7 @@ function buildDeniedSite () {
     '    mode: true','    poster:','      desktop: img/poster-desktop.png','---',''].join('\n'))
   const themedMarkdown=fs.readFileSync(path.join(dir,'themed-ready.md'),'utf8')
   for(const activation of ['load','click'])fs.writeFileSync(path.join(dir,`themed-${activation}.md`),themedMarkdown.replace('activation: visible',`activation: ${activation}`))
+  fs.writeFileSync(path.join(dir,'owned-visible.md'),themedMarkdown.replace(/theme_message: demo:theme/, '').replace('/theme','/x'))
   fs.writeFileSync(path.join(dir,'themed-announce.md'),themedMarkdown.replace('/theme','/theme?announce-only'))
   const config = path.join(tmp, 'denied.toml')
   fs.writeFileSync(config, `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n[params.modules.framing.csp]\n  frame-src = ["${framing.deny}", "${framing.allow}"]\n`)
@@ -2497,5 +2498,87 @@ test('static phone fallback stays Preview with no error scrim, spinner or child 
   const value=await page.evaluate("(()=>{const e=document.querySelector('.preview-error:not(.d-none)');return {word:document.querySelector('.preview-window-state').innerText,scrim:getComputedStyle(e,'::after').backgroundColor,status:getComputedStyle(e.querySelector('.preview-fallback-status')).display,src:document.querySelector('.preview-iframe').getAttribute('src')}})()")
   assert.equal(value.word,'Preview');assert.notEqual(value.scrim,'rgba(0, 0, 0, 0.3)');assert.equal(value.status,'none');assert.equal(value.src,null);assert.deepEqual(page.requests,[])
   await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+ }finally{await page.close()}
+})
+
+
+const OWNER_SNAPSHOT = `(() => {
+ const section=window.ownershipSection,container=section.querySelector('.preview-content'),frame=container.querySelector('iframe'),pane=frame.closest('.tab-pane');
+ return {connected:section.isConnected,owned:section.ownerDocument===document,src:frame.getAttribute('src'),active:container.dataset.active||null,state:pane.dataset.previewState||null,top:section.getBoundingClientRect().top}
+})()`
+const TAKE_OUT = `window.ownershipSection=document.querySelector('section.preview');window.ownershipFrame=ownershipSection.querySelector('iframe').contentWindow;
+ window.ownershipForeign=document.implementation.createHTMLDocument('Temporary preview host');ownershipForeign.body.append(ownershipForeign.adoptNode(ownershipSection));`
+const RETURN_BELOW = `scrollTo(0,0);const spacer=document.createElement('div');spacer.style.height='3000px';document.body.append(spacer,document.adoptNode(ownershipSection));`
+for(const themed of [true,false])for(const kind of ['adopt150','remove150','adoptRapid','removeRapid']){
+ test(`ownership ${themed?'themed':'unthemed'} ${kind} clears current proof and requires fresh visible admission`,{skip},async t=>{
+  const page=await openPage(browser.cdp,themed?base:deniedBase,themed?'components/preview-window':'owned-visible',1440,{beforeScript:CONTROL_IDLE})
+  const childRequests=()=>page.documentRequests.filter(u=>themed?u.startsWith(base+'/preview-demo/'):u.startsWith(framing.allow))
+  try{
+   await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'actual local child ready')
+   const before=childRequests().length
+   await page.evaluate("window.oldOwnershipRelease=document.querySelector('hinode-preview-owner').previewRelease;window.ownershipElement=document.querySelector('section.preview iframe')")
+   const element=(await page.send('Runtime.evaluate',{expression:'ownershipElement'})).result.objectId
+   const listeners=()=>page.send('DOMDebugger.getEventListeners',{objectId:element}).then(r=>r.listeners.filter(l=>l.type==='load'))
+   assert.ok((await listeners()).length>0,'actual watched iframe has a load listener')
+   const leave=kind.startsWith('adopt')?TAKE_OUT:"window.ownershipSection=document.querySelector('section.preview');window.ownershipFrame=ownershipSection.querySelector('iframe').contentWindow;ownershipSection.remove();"
+   if(kind.endsWith('150')){
+    await page.evaluate(leave);await sleep(150)
+    const foreign=await page.evaluate(OWNER_SNAPSHOT);t.diagnostic(JSON.stringify({foreign}))
+    if(kind.startsWith('adopt'))assert.deepEqual([foreign.connected,foreign.owned],[true,false],'inert-document adoption is connected but not owned')
+    assert.equal(foreign.src,null,'release src after ownership ends');assert.equal(foreign.active,null);assert.equal(foreign.state,null)
+    await page.evaluate(RETURN_BELOW)
+   }else await page.evaluate(leave+RETURN_BELOW)
+   await sleep(400)
+   const returned=await page.evaluate(OWNER_SNAPSHOT);t.diagnostic(JSON.stringify({returned,requests:childRequests().slice(before)}))
+   assert.ok(returned.owned&&returned.connected&&returned.top>900,'returned component remains below fold')
+   assert.deepEqual(childRequests().slice(before),[],'no re-adoption navigation without fresh visible admission')
+   assert.equal(returned.src,null);assert.equal(returned.active,null);assert.equal(returned.state,null)
+   assert.equal((await listeners()).length,0,'release removes the old native iframe load listener')
+   await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:ownershipFrame,origin:location.origin,data:document.querySelector('.preview-content').dataset.readyMessage}))`)
+   assert.equal((await page.evaluate(OWNER_SNAPSHOT)).state,null,'old window readiness cannot restore proof')
+   await page.evaluate(IN_VIEW);await idlePending(page);assert.equal(childRequests().length,before,'fresh idle must still be admitted');await page.evaluate('flushIdle()')
+   await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh actual child ready')
+   assert.equal(childRequests().length,before+1)
+   await page.evaluate('oldOwnershipRelease()');await sleep(50)
+   assert.equal((await page.evaluate(WINDOW_STATE)).state,'ready','old owning-controller callback cannot release the new owner')
+  }finally{await page.close()}
+ })
+}
+
+for(const themed of [true,false])test(`ownership pending idle ${themed?'themed':'unthemed'} adoption rejects stale callback`,{skip},async()=>{
+ const page=await openPage(browser.cdp,themed?base:deniedBase,themed?'components/preview-window':'owned-visible',1440,{beforeScript:CONTROL_IDLE})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page)
+  await page.evaluate('window.ownershipIdle=[...idleCallbacks.values()][0];'+TAKE_OUT)
+  await sleep(150);await page.evaluate('ownershipIdle({});flushIdle()')
+  assert.equal(page.documentRequests.filter(u=>themed?u.startsWith(base+'/preview-demo/'):u.startsWith(framing.allow)).length,0)
+  await page.evaluate(RETURN_BELOW);await sleep(150);await page.evaluate('ownershipIdle({});flushIdle()')
+  assert.equal((await page.evaluate(OWNER_SNAPSHOT)).src,null)
+  await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('ownershipIdle({})');await sleep(50)
+  assert.equal((await page.evaluate(OWNER_SNAPSHOT)).src,null,'stale idle cannot bypass the newly admitted owner')
+  await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh eligible current owner')
+ }finally{await page.close()}
+})
+
+
+const NO_NATIVE_OWNER = `Object.defineProperty(window,'customElements',{value:undefined,configurable:true});`
+for(const name of ['window-visible','window-load','window-click'])test(`ownership capability absence keeps enhanced ${name} static without new UI copy`,{skip},async()=>{
+ const page=await openPage(browser.cdp,base,name,1440,{beforeScript:NO_NATIVE_OWNER+CONTROL_IDLE})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await sleep(150);await page.evaluate('flushIdle()')
+  assert.deepEqual(page.requests,[]);const state=await page.evaluate(WINDOW_STATE);assert.equal(state.src,null);assert.equal(state.state,null)
+  assert.equal(state.static,'true');assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Preview')
+  assert.equal(await page.evaluate("getComputedStyle(document.querySelector('.preview-iframe')).display"),'none')
+  assert.equal(await page.evaluate("document.querySelector('.preview-activate')?getComputedStyle(document.querySelector('.preview-activate')).display:'none'"),'none')
+  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+ }finally{await page.close()}
+})
+for(const name of ['default','click'])test(`ownership capability absence preserves unconfigured legacy ${name}`,{skip},async()=>{
+ const page=await openPage(browser.cdp,base,name,1440,{beforeScript:NO_NATIVE_OWNER})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW)
+  if(name==='click'){assert.deepEqual(page.requests,[]);await activateWithEnter(page)}
+  await waitFor(()=>page.requests.length===1,'legacy default activation')
+  assert.equal(await page.evaluate("document.querySelector('.preview-content').dataset.previewStatic||null"),null)
  }finally{await page.close()}
 })

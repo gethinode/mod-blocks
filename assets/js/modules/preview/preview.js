@@ -157,8 +157,12 @@
     } catch { return null }
   }
 
+  function owned (container) {
+    return container.isConnected && container.ownerDocument === document
+  }
+
   function currentThemeFrame (record) {
-    return record.container.isConnected && frames.get(record.iframe) === record &&
+    return owned(record.container) && frames.get(record.iframe) === record &&
       isActivated(record.container) && record.iframe.hasAttribute('src') && record.pane.classList.contains('active')
   }
 
@@ -225,7 +229,7 @@
    */
   function setState (record, state) {
     const { iframe, pane, container } = record
-    if (isStatic(container) || frames.get(iframe) !== record) return
+    if (!owned(container) || isStatic(container) || frames.get(iframe) !== record) return
     record.state = state
     pane.dataset.previewState = state
     const waiting = state === 'waiting' && readyMessage(container) !== ''
@@ -245,6 +249,7 @@
    */
   function startDeadline (record) {
     const start = () => {
+      if (!owned(record.container) || frames.get(record.iframe) !== record) return
       record.timer = setTimeout(() => setState(record, 'failed'), loadTimeout(record.container))
     }
     if (typeof IntersectionObserver === 'undefined') {
@@ -252,6 +257,7 @@
       return
     }
     record.observer = new IntersectionObserver(entries => {
+      if (!owned(record.container) || frames.get(record.iframe) !== record) return
       if (!entries.some(entry => entry.isIntersecting)) return
       stopDeadline(record)
       if (record.state === 'waiting') start()
@@ -279,7 +285,7 @@
   function track (iframe) {
     const pane = iframe.closest('.tab-pane')
     const container = pane.closest('.preview-content')
-    if (isStatic(container) || container.querySelector('.preview-error:not(.d-none)')) return null
+    if (!owned(container) || isStatic(container) || container.querySelector('.preview-error:not(.d-none)')) return null
     const record = { iframe, pane, container, state: null, timer: null, observer: null,
       originalName: iframe.getAttribute('name'), seedId: 0, origin: null, themeRequest: null, applied: null, loaded: iframe.hasAttribute('src') }
     frames.set(iframe, record)
@@ -294,7 +300,7 @@
   function watch (iframe) {
     const record = track(iframe)
     if (!record) return null
-    iframe.addEventListener('load', () => {
+    record.onLoad = () => {
       if (frames.get(iframe) !== record || !isActivated(record.container)) return
       if (themeMessage(record.container)) {
         // A full navigation keeps WindowProxy. Invalidate every previous
@@ -309,7 +315,8 @@
         if (wasLoaded || wasReady) { stopDeadline(record); startDeadline(record) }
       }
       if (readyMessage(record.container)) askReady(record); else markReady(record)
-    })
+    }
+    iframe.addEventListener('load', record.onLoad)
     setState(record, 'waiting')
     startDeadline(record)
     return record
@@ -324,6 +331,7 @@
     const record = frames.get(iframe)
     if (record) {
       stopDeadline(record)
+      if (record.onLoad) iframe.removeEventListener('load', record.onLoad)
       if (themeMessage(record.container)) {
         if (record.originalName === null) iframe.removeAttribute('name'); else iframe.setAttribute('name', record.originalName)
       }
@@ -413,7 +421,7 @@
    * its poster button.
    */
   function isActivated (container) {
-    if (isStatic(container)) return false
+    if (!owned(container) || isStatic(container)) return false
     return !['click', 'visible'].includes(container.dataset.activation) || container.dataset.active === 'true'
   }
 
@@ -470,7 +478,7 @@
   }
 
   function isStatic (container) {
-    return container.dataset.mobileStatic === 'true' && !deviceFits('desktop')
+    return (enhanced(container) && !ownershipSupported) || (container.dataset.mobileStatic === 'true' && !deviceFits('desktop'))
   }
 
   // Only opt-in lifecycle modes need discovery and an eligibility controller.
@@ -478,6 +486,34 @@
   const controllers = new Map()
   const measuredWindows = new Map()
   const geometryObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updatePreviewScale) : null
+  const ownershipHooks = new WeakMap()
+  const ownershipTag = 'hinode-preview-owner'
+  const registry = window.customElements
+  const ownershipSupported = !!(registry && typeof registry.define === 'function' && typeof registry.get === 'function' && window.HTMLElement)
+
+  // Observer delivery is too late to stop an iframe reconnecting in one task.
+  // These native reactions release ownership synchronously. Per-node callbacks
+  // keep independently initialized documents isolated when a subtree is adopted.
+  if (ownershipSupported && !registry.get(ownershipTag)) {
+    registry.define(ownershipTag, class extends window.HTMLElement {
+      disconnectedCallback () { if (this.previewRelease) this.previewRelease() }
+      adoptedCallback () { if (this.previewRelease) this.previewRelease() }
+    })
+  }
+
+  function observeOwnership (container, controller) {
+    let hook = ownershipHooks.get(container)
+    if (hook && hook.parentElement === container) return
+    hook = document.createElement(ownershipTag)
+    hook.hidden = true
+    hook.style.setProperty('display', 'none', 'important')
+    hook.previewRelease = () => {
+      if (controllers.get(container) === controller) releaseOwnership(container)
+    }
+    ownershipHooks.set(container, hook)
+    container.append(hook)
+  }
+
   function enhanced (container) {
     return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' || themeMessage(container) !== ''
   }
@@ -516,11 +552,12 @@
   }
 
   function eligible (container) {
-    return container.isConnected && !isStatic(container) && document.readyState === 'complete' && inViewport(container)
+    return owned(container) && !isStatic(container) && document.readyState === 'complete' && inViewport(container)
   }
 
   function reconcile (container, controller) {
-    if (!container.isConnected) { cancelActivation(controller); return }
+    if (controllers.get(container) !== controller) return
+    if (!owned(container)) { releaseOwnership(container); return }
     const narrow = isStatic(container)
     if (narrow) {
       cancelActivation(controller)
@@ -538,7 +575,7 @@
     if (controller.idle !== null) return
     const generation = ++controller.generation
     const activate = () => {
-      if (generation !== controller.generation) return
+      if (controllers.get(container) !== controller || generation !== controller.generation) return
       controller.idle = null
       if (!eligible(container)) return
       container.dataset.active = 'true'
@@ -550,20 +587,30 @@
     controller.idle = controller.nativeIdle ? window.requestIdleCallback(activate, { timeout: 600 }) : setTimeout(activate, 0)
   }
 
-  function discoverPreviews () {
-    measuredWindows.forEach((bar, container) => {
-      if (container.isConnected) return
-      geometryObserver.unobserve(bar)
-      measuredWindows.delete(container)
-    })
-    controllers.forEach((controller, container) => {
-      if (container.isConnected) return
+  function releaseOwnership (container) {
+    const hook = ownershipHooks.get(container)
+    if (hook) {
+      ownershipHooks.delete(container)
+      hook.previewRelease = null
+      hook.remove()
+    }
+    const controller = controllers.get(container)
+    if (controller) {
       cancelActivation(controller)
-      if (themeMessage(container)) resetStatic(container)
-      else container.querySelectorAll('iframe[data-src]').forEach(iframe => forget(iframe.closest('.tab-pane'), iframe))
       if (controller.observer) controller.observer.disconnect()
       controllers.delete(container)
-    })
+      resetStatic(container)
+    }
+    const bar = measuredWindows.get(container)
+    if (bar) {
+      geometryObserver.unobserve(bar)
+      measuredWindows.delete(container)
+    }
+  }
+
+  function discoverPreviews () {
+    measuredWindows.forEach((bar, container) => { if (!owned(container)) releaseOwnership(container) })
+    controllers.forEach((controller, container) => { if (!owned(container)) releaseOwnership(container) })
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
       if (geometryObserver && container.dataset.frame === 'window' && !measuredWindows.has(container)) {
         const bar = container.closest('.preview-window').querySelector('.preview-window-bar')
@@ -571,6 +618,9 @@
         geometryObserver.observe(bar)
       }
       if (!enhanced(container)) return
+      // Without native synchronous ownership reactions, enhanced modes stay
+      // static. The unconfigured legacy load/click modes retain their defaults.
+      if (!ownershipSupported) { resetStatic(container); container.dataset.previewStatic = 'true'; return }
       let controller = controllers.get(container)
       if (!controller) {
         controller = { idle: null, generation: 0, observer: null }
@@ -580,6 +630,7 @@
           controller.observer.observe(container)
         }
       }
+      observeOwnership(container, controller)
       reconcile(container, controller)
     })
   }
@@ -770,8 +821,13 @@
     document.querySelectorAll('section.preview .preview-content').forEach(updateWindowStatus)
     if (typeof MutationObserver !== 'undefined') {
       new MutationObserver(records => {
+        records.forEach(record => record.removedNodes.forEach(node => {
+          if (node.nodeType !== 1) return
+          if (node.matches('.preview-content')) releaseOwnership(node)
+          node.querySelectorAll('.preview-content').forEach(releaseOwnership)
+        }))
         const changed = records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
-          node.nodeType === 1 && (node.matches('section.preview, .preview-content, .preview-window') || node.querySelector('section.preview, .preview-content, .preview-window'))))
+          node.nodeType === 1 && (node.matches(`section.preview, .preview-content, .preview-window, ${ownershipTag}`) || node.querySelector('section.preview, .preview-content, .preview-window'))))
         if (changed) { discoverPreviews(); updatePreviewScale() }
       }).observe(document.body, { childList: true, subtree: true })
     }

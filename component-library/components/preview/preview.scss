@@ -605,10 +605,9 @@ section.preview {
         .preview-window-compact .preview-waiting .spinner-border { display: none; }
     }
 
-    // A static preview is also static before JS initializes. It keeps a poster,
-    // with no focusable activation control, waiting status or embedded document.
-    @media (max-width: 1023px) {
-        .preview-content[data-mobile-static="true"] {
+    // Static before JS on phones, or an intentional static enhancement when
+    // native synchronous ownership callbacks are unavailable.
+    @mixin preview-static-content {
             > .tab-pane .preview-poster::after,
             > .tab-pane .preview-error::after { background: transparent; }
             .preview-fallback-status { display: none; }
@@ -623,6 +622,12 @@ section.preview {
                 opacity: 1;
                 visibility: visible;
             }
-        }
+
+    }
+
+    .preview-content[data-preview-static="true"] { @include preview-static-content; }
+
+    @media (max-width: 1023px) {
+        .preview-content[data-mobile-static="true"] { @include preview-static-content; }
     }
 }
