@@ -73,6 +73,7 @@ function childDocument ({ announce, reply, delay = 0, wrong, phone }) {
 
 const PAGES = {
   default: [],
+  'window-guard-held': { url: '/preview-demo/held/', lines: ['frame: window','devices: [desktop]','controls: false','activation: visible','open_link: true','load_timeout: 2','mode: true','poster:','  desktop: img/poster-desktop.png'] },
   'window-ready-devices': { url: child('silent'), lines: ['frame: window', `ready_message: '${TOKEN}'`, 'load_timeout: 15'] },
   'window-devices': ['frame: window', 'activation: click', 'open_link: true'],
   'window-fallback-static': ['frame: window','devices: [desktop]','controls: false','mobile_static: true','open_link: true','show_fallback: true','mode: true','image: img/poster-desktop.png'],
@@ -353,13 +354,20 @@ function buildZeroRadiusSite () {
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' }
 
 function serve (root) {
+  const previewRequests = []
+  const held = []
   const server = http.createServer((req, res) => {
-    let file = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname))
+    const pathname=new URL(req.url,'http://x').pathname
+    if(req.method==='GET'&&pathname.startsWith('/preview-demo/')&&pathname.endsWith('/'))previewRequests.push(pathname)
+    if(pathname==='/preview-demo/held/'){held.push(res);return}
+    let file = path.join(root, decodeURIComponent(pathname))
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html')
     if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404).end(); return }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' })
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store', 'Referrer-Policy': 'strict-origin' })
     fs.createReadStream(file).pipe(res)
   })
+  server.releaseHeld=()=>{const body=fs.readFileSync(path.join(root,'preview-demo/ready/index.html'));held.splice(0).forEach(res=>{if(res.destroyed)return;res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});res.end(body)})}
+  server.previewRequests=previewRequests
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)))
 }
 
@@ -572,7 +580,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
   await send('Page.navigate', { url: `${base}/${name}/` })
 
-  const evaluate = async expression => (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result.value
+  const evaluate = async expression => (await send('Runtime.evaluate', { expression: typeof expression === 'function' ? `(${expression})()` : expression, returnByValue: true, awaitPromise: true })).result.value
   return {
     requests,
     localRequests,
@@ -2580,5 +2588,71 @@ for(const name of ['default','click'])test(`ownership capability absence preserv
   if(name==='click'){assert.deepEqual(page.requests,[]);await activateWithEnter(page)}
   await waitFor(()=>page.requests.length===1,'legacy default activation')
   assert.equal(await page.evaluate("document.querySelector('.preview-content').dataset.previewStatic||null"),null)
+ }finally{await page.close()}
+})
+
+
+for(const themed of [true,false])test(`guarded active clone ${themed?'themed':'unthemed'} has no app request or copied live proof`,{skip},async t=>{
+ const page=await openPage(browser.cdp,themed?base:deniedBase,themed?'components/preview-window':'owned-visible',1440,{beforeScript:CONTROL_IDLE})
+ const documents=()=>page.documentRequests.filter(u=>themed?u.startsWith(base+'/preview-demo/'):u.startsWith(framing.allow))
+ const wire=async()=>themed?servers[0].previewRequests.length:(await framing.counts()).allow
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'real source ready')
+  const before=documents().length,wireBefore=await wire()
+  await page.evaluate("window.ownershipSection=document.querySelector('section.preview').cloneNode(true);document.querySelector('section.preview').remove();scrollTo(0,0);const spacer=document.createElement('div');spacer.style.height='3000px';document.body.append(spacer,ownershipSection)")
+  await sleep(400);const snapshot=await page.evaluate(OWNER_SNAPSHOT);t.diagnostic(JSON.stringify({snapshot,requests:documents().slice(before),wire:(await wire())-wireBefore}))
+  assert.deepEqual(documents().slice(before),[]);assert.equal(await wire(),wireBefore);assert.equal(snapshot.src,null);assert.equal(snapshot.active,null);assert.equal(snapshot.state,null)
+  assert.equal(await page.evaluate("ownershipSection.querySelector('.preview-content').dataset.previewStatic||null"),null,'supported clone must remain eligible for fresh live admission')
+  assert.equal(await page.evaluate("ownershipSection.querySelector('.preview-window-state').innerText"),'Preview')
+  await page.evaluate(IN_VIEW);await idlePending(page);assert.equal(await wire(),wireBefore);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh clone admission')
+  assert.equal(await wire(),wireBefore+1)
+ }finally{await page.close()}
+})
+for(const policy of ['no-referrer','same-origin','strict-origin'])test(`guard incompatible iframe referrer ${policy} stays static without a request`,{skip},async()=>{
+ const beforeScript=CONTROL_IDLE+`document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('section.preview iframe').forEach(f=>f.referrerPolicy='${policy}'),{once:true})`
+ const page=await openPage(browser.cdp,base,'components/preview-window',1440,{beforeScript})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await sleep(100);await page.evaluate('flushIdle()');await sleep(100)
+  assert.deepEqual(page.localRequests,[]);const state=await page.evaluate(WINDOW_STATE);assert.equal(state.src,null);assert.equal(state.state,null);assert.equal(state.static,'true');assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Preview')
+  assert.equal(await page.evaluate('document.querySelector("section.preview iframe").referrerPolicy'),policy)
+ }finally{await page.close()}
+})
+
+
+test('native blank guard is not app readiness, a restarted navigation or a deadline reset',{skip},async()=>{
+ const page=await openPage(browser.cdp,base,'window-guard-held',1440,{beforeScript:CONTROL_IDLE});const before=servers[0].previewRequests.length
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()');await waitFor(()=>servers[0].previewRequests.length===before+1,'one held actual HTTP app request')
+  assert.equal(await page.evaluate("document.querySelector('section.preview iframe').contentDocument.URL"),'about:srcdoc')
+  assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','blank native load never marks Live without an app load')
+  await sleep(1300);await page.evaluate("document.querySelector('section.preview iframe').dispatchEvent(new Event('load'))")
+  await sleep(900);assert.equal((await page.evaluate(WINDOW_STATE)).state,'failed','blank load cannot reset the real app deadline')
+  assert.equal(servers[0].previewRequests.length,before+1,'blank load never recursively restarts the app')
+  servers[0].releaseHeld();await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'actual late HTTP app load recovers normally')
+  assert.equal(await page.evaluate("document.querySelector('section.preview iframe').contentDocument.querySelector('h1').textContent"),'Project workspace')
+ }finally{servers[0].releaseHeld();await page.close()}
+})
+
+test('empty guard prevents implicit two-owner wire requests before fresh admission',{skip},async()=>{
+ const page=await openPage(browser.cdp,base,'components/preview-window',1440,{beforeScript:CONTROL_IDLE})
+ try{
+  await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'first actual owner ready')
+  await page.evaluate(`window.ownershipSection=document.querySelector('section.preview');const host=document.createElement('iframe');host.id='guard-owner';host.src='${base}/components/preview-window/';host.style.cssText='position:fixed;inset:0;width:1440px;height:900px;z-index:9999';document.body.append(host)`)
+  await waitFor(()=>page.evaluate("document.querySelector('#guard-owner').contentDocument?.querySelector('.tab-pane.active')?.dataset.previewState==='ready'"),'independent second owner ready')
+  const before=servers[0].previewRequests.length
+  await page.evaluate(()=>{const d=document.querySelector('#guard-owner').contentDocument,w=d.defaultView;d.querySelector('section.preview').remove();w.heldOwnerIdles=new Map();w.heldOwnerSerial=0;w.requestIdleCallback=fn=>{w.heldOwnerIdles.set(++w.heldOwnerSerial,fn);return w.heldOwnerSerial};w.cancelIdleCallback=id=>w.heldOwnerIdles.delete(id);d.body.prepend(ownershipSection)})
+  await waitFor(()=>page.evaluate("document.querySelector('#guard-owner').contentWindow.heldOwnerIdles.size>0"),'recipient fresh idle')
+  await sleep(150);assert.equal(servers[0].previewRequests.length,before,'implicit adoption must not leak an aborted wire GET')
+  assert.equal(await page.evaluate("document.querySelector('#guard-owner').contentDocument.querySelector('.preview-content').dataset.active||null"),null)
+  assert.equal(await page.evaluate("document.querySelector('#guard-owner').contentDocument.querySelector('.tab-pane.active').dataset.previewState||null"),null)
+  await page.evaluate(()=>{const w=document.querySelector('#guard-owner').contentWindow,callbacks=[...w.heldOwnerIdles.values()];w.heldOwnerIdles.clear();callbacks.forEach(fn=>fn({didTimeout:false,timeRemaining:()=>20}))})
+  await waitFor(()=>page.evaluate("document.querySelector('#guard-owner').contentDocument.querySelector('.tab-pane.active').dataset.previewState==='ready'"),'recipient actual app ready')
+  assert.equal(servers[0].previewRequests.length,before+1)
+  const returnBefore=servers[0].previewRequests.length
+  await page.evaluate("scrollTo(0,0);const spacer=document.createElement('div');spacer.style.height='3000px';document.body.append(spacer,ownershipSection)")
+  await sleep(300);assert.equal(servers[0].previewRequests.length,returnBefore,'implicit return below-fold has zero wire GET')
+  const returned=await page.evaluate(OWNER_SNAPSHOT);assert.equal(returned.src,null);assert.equal(returned.active,null);assert.equal(returned.state,null);assert.ok(returned.top>900)
+  await page.evaluate("document.querySelector('#guard-owner').remove()");await page.evaluate(IN_VIEW);await idlePending(page);assert.equal(servers[0].previewRequests.length,returnBefore);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh original owner ready')
+  assert.equal(servers[0].previewRequests.length,returnBefore+1)
  }finally{await page.close()}
 })

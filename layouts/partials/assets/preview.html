@@ -326,6 +326,7 @@
 {{- $url := $args.url -}}
 {{- $ready := $args.readyMessage -}}
 {{- $themeMessage := $args.themeMessage -}}
+{{- $guarded := or $visible $static (ne $themeMessage "") -}}
 {{- $rawThemeMessage := index . "theme-message" -}}
 {{- if and (ne $rawThemeMessage nil) (ne (printf "%T" $rawThemeMessage) "string") -}}
     {{- partial "utilities/LogErr.html" (dict "partial" "assets/preview.html" "msg" "theme-message requires a string" "file" $page.File) -}}
@@ -518,7 +519,7 @@
                          renders in Bookshop live editing; with click activation no view does. The script
                          sets src from data-src when a view is shown, and with click activation only
                          after the poster button is pressed. */}}
-                    <iframe data-src="{{ $url }}"{{ if and $isActive (not $click) (not $visible) (not $static) (not $themeMessage) (or $controls $live) }} src="{{ $url }}"{{ end }}
+                    <iframe data-src="{{ $url }}"{{ if $guarded }} srcdoc=""{{ end }}{{ if and $isActive (not $click) (not $visible) (not $static) (not $themeMessage) (or $controls $live) }} src="{{ $url }}"{{ end }}
                         class="preview-iframe preview-{{ $device }}{{ if $showFallback }} d-none{{ end }}"
                         title="{{ $frameTitle }}"{{ if $ready }} inert{{ end }}
                         loading="lazy"

@@ -161,9 +161,73 @@
     return container.isConnected && container.ownerDocument === document
   }
 
+  function blankGuard (iframe) {
+    const current = iframe.contentDocument
+    return current && ['about:blank', 'about:srcdoc'].includes(current.URL)
+  }
+
+  function currentGuard (record) {
+    return owned(record.container) && owned(record.iframe) && frames.get(record.iframe) === record &&
+      record.pane.closest('.preview-content') === record.container && (!record.window || record.iframe.contentWindow === record.window) &&
+      record.pane.querySelector('iframe[data-src]') === record.iframe &&
+      controllers.get(record.container) === record.controller && record.generation === record.controller.generation
+  }
+
+  // The compiled framing policy is deliberately retained. Native Location
+  // navigation uses the parent's policy; stricter iframe policies cannot be
+  // honored by that API, so those enhancements remain static. Default sites
+  // declare strict-origin. No parent/iframe policy is changed to permit loading.
+  function guardTarget (iframe) {
+    try {
+      const target = new URL(iframe.dataset.src, iframe.ownerDocument.baseURI)
+      if (iframe.getAttribute('srcdoc') !== '' || iframe.referrerPolicy !== 'no-referrer-when-downgrade' ||
+          !['http:', 'https:'].includes(window.location.protocol) || !['http:', 'https:'].includes(target.protocol) ||
+          (window.location.protocol === 'https:' && target.protocol === 'http:') ||
+          (iframe.hasAttribute('sandbox') && !iframe.sandbox.contains('allow-same-origin'))) return null
+      return target
+    } catch { return null }
+  }
+
+  function staticEnhancement (container) {
+    staticEnhancements.add(container)
+    releaseOwnership(container)
+    resetStatic(container)
+    container.dataset.previewStatic = 'true'
+  }
+
+  function beginGuardedNavigation (record) {
+    if (!currentGuard(record) || record.cancelled || record.appStarted || !record.guardReady) return
+    const { container, pane, iframe } = record
+    if (!guardTarget(iframe)) { staticEnhancement(container); return }
+    if (!pane.classList.contains('active')) return
+    if (!isActivated(container) || (container.dataset.activation === 'visible' && !eligible(container))) {
+      resetStatic(container)
+      return
+    }
+    if (themeMessage(container) && !seedTheme(record)) {
+      record.cancelled = true
+      iframe.removeAttribute('src')
+      setState(record, 'failed')
+      return
+    }
+    record.window = iframe.contentWindow
+    record.appStarted = true
+    startDeadline(record)
+    try {
+      // srcdoc stays empty forever: reconnection can only create a blank native
+      // document. Only this admitted record navigates that context to the app.
+      iframe.contentWindow.location.replace(iframe.src)
+    } catch {
+      record.cancelled = true
+      stopDeadline(record)
+      setState(record, 'failed')
+    }
+  }
+
   function currentThemeFrame (record) {
     return owned(record.container) && frames.get(record.iframe) === record &&
-      isActivated(record.container) && record.iframe.hasAttribute('src') && record.pane.classList.contains('active')
+      isActivated(record.container) && record.iframe.hasAttribute('src') && record.pane.classList.contains('active') &&
+      (!record.guarded || (currentGuard(record) && record.appStarted && !blankGuard(record.iframe)))
   }
 
   // Name is transient browsing-context state, restored when ownership ends.
@@ -272,7 +336,8 @@
 
   // Posts the ready message to the window of the iframe of a navigation.
   function askReady (record) {
-    if (!isActivated(record.container) || frames.get(record.iframe) !== record || !record.iframe.hasAttribute('src')) return
+    if (!isActivated(record.container) || frames.get(record.iframe) !== record || !record.iframe.hasAttribute('src') ||
+        (record.guarded && (!currentGuard(record) || !record.appStarted || blankGuard(record.iframe)))) return
     record.iframe.contentWindow.postMessage(readyMessage(record.container), '*')
   }
 
@@ -282,12 +347,14 @@
    * build-time fallback, whose fallback alert lacks d-none, has no live view to
    * wait for, so its iframes get no record.
    */
-  function track (iframe) {
-    const pane = iframe.closest('.tab-pane')
-    const container = pane.closest('.preview-content')
+  function track (iframe, context = {}) {
+    const pane = context.pane || iframe.closest('.tab-pane')
+    const container = context.container || pane.closest('.preview-content')
     if (!owned(container) || isStatic(container) || container.querySelector('.preview-error:not(.d-none)')) return null
     const record = { iframe, pane, container, state: null, timer: null, observer: null,
-      originalName: iframe.getAttribute('name'), seedId: 0, origin: null, themeRequest: null, applied: null, loaded: iframe.hasAttribute('src') }
+      originalName: iframe.getAttribute('name'), seedId: 0, origin: null, themeRequest: null, applied: null,
+      guarded: !!context.guarded, controller: context.controller, generation: context.controller && context.controller.generation,
+      guardReady: false, appStarted: false, cancelled: false, loaded: !context.guarded && iframe.hasAttribute('src') }
     frames.set(iframe, record)
     return record
   }
@@ -297,11 +364,30 @@
    * it src or, for the iframe the markup gives src, at initialization. Returns
    * null for an iframe that gets no record.
    */
-  function watch (iframe) {
-    const record = track(iframe)
+  function watch (iframe, context) {
+    const record = track(iframe, context)
     if (!record) return null
     record.onLoad = () => {
       if (frames.get(iframe) !== record || !isActivated(record.container)) return
+      if (record.guarded) {
+        if (!currentGuard(record) || record.cancelled) return
+        const current = iframe.contentDocument
+        if (!record.appStarted) {
+          if (current && current.URL === 'about:blank') return
+          if (!current || current.URL !== 'about:srcdoc') {
+            record.cancelled = true
+            iframe.removeAttribute('src')
+            setState(record, 'failed')
+            return
+          }
+          record.guardReady = true
+          beginGuardedNavigation(record)
+          return
+        }
+        // A reconnect/clone's native blank is never app readiness, never a
+        // deadline reset, and never permission to restart its previous URL.
+        if (blankGuard(iframe)) return
+      }
       if (themeMessage(record.container)) {
         // A full navigation keeps WindowProxy. Invalidate every previous
         // document's proof, even if its early ready message beat this load.
@@ -318,7 +404,7 @@
     }
     iframe.addEventListener('load', record.onLoad)
     setState(record, 'waiting')
-    startDeadline(record)
+    if (!record.guarded) startDeadline(record)
     return record
   }
 
@@ -336,6 +422,7 @@
         if (record.originalName === null) iframe.removeAttribute('name'); else iframe.setAttribute('name', record.originalName)
       }
     }
+    if (!record && enhanced(pane.closest('.preview-content')) && (iframe.getAttribute('name') || '').startsWith(THEME_SEED_PREFIX)) iframe.removeAttribute('name')
     frames.delete(iframe)
     delete pane.dataset.previewState
     pane.removeAttribute('aria-busy')
@@ -351,6 +438,8 @@
       if (iframe.contentWindow !== event.source) return
       const container = iframe.closest('.preview-content')
       if (!iframe.hasAttribute('src') || !isActivated(container)) return
+      const known = frames.get(iframe)
+      if (enhanced(container) && (!known || !known.guarded || !currentGuard(known) || !known.appStarted || blankGuard(iframe))) return
       const message = readyMessage(container)
       if (message === '') return
       if (!themeMessage(container)) {
@@ -396,23 +485,41 @@
    */
   function loadPane (pane) {
     if (!pane) return
-    if (!isActivated(pane.closest('.preview-content'))) return
-    const iframe = pane.querySelector('iframe[data-src]')
-    if (!iframe) return
-    if (!iframe.hasAttribute('src')) {
-      const record = watch(iframe)
-      if (record && themeMessage(record.container) && !seedTheme(record)) {
-        setState(record, 'failed')
-        stopDeadline(record)
+    const container = pane.closest('.preview-content')
+    if (!isActivated(container)) return
+    if (enhanced(container)) {
+      const controller = controllerFor(container)
+      const previous = pane.querySelector('iframe[data-src]')
+      if (!previous) return
+      if (!guardTarget(previous)) { staticEnhancement(container); return }
+      const current = frames.get(previous)
+      if (current && current.guarded) {
+        if (!current.appStarted) beginGuardedNavigation(current)
+        else if (themeMessage(container)) {
+          if (current.origin) requestTheme(current); else askReady(current)
+        }
         return
       }
+      // Set both native attributes while disconnected. This avoids WebKit
+      // racing a queued srcdoc load against an already-started app navigation.
+      forget(pane, previous)
+      const iframe = previous.cloneNode(false)
       iframe.src = iframe.dataset.src
-    } else if (themeMessage(pane.closest('.preview-content'))) {
-      const record = frames.get(iframe) || watch(iframe)
-      if (record) {
-        if (!seedTheme(record)) { setState(record, 'failed'); stopDeadline(record); return }
-        if (record.origin) requestTheme(record); else askReady(record)
+      const record = watch(iframe, { pane, container, controller, guarded: true })
+      if (!record) return
+      if (themeMessage(container) && !seedTheme(record)) {
+        record.cancelled = true
+        iframe.removeAttribute('src')
+        setState(record, 'failed')
       }
+      previous.replaceWith(iframe)
+      updatePreviewScale()
+      return
+    }
+    const iframe = pane.querySelector('iframe[data-src]')
+    if (iframe && !iframe.hasAttribute('src')) {
+      watch(iframe)
+      iframe.src = iframe.dataset.src
     }
   }
 
@@ -422,7 +529,11 @@
    */
   function isActivated (container) {
     if (!owned(container) || isStatic(container)) return false
-    return !['click', 'visible'].includes(container.dataset.activation) || container.dataset.active === 'true'
+    if (!['click', 'visible'].includes(container.dataset.activation)) return true
+    if (container.dataset.active !== 'true') return false
+    if (!enhanced(container)) return true
+    const controller = controllers.get(container)
+    return !!controller && controller.admittedGeneration === controller.generation
   }
 
   /**
@@ -478,7 +589,7 @@
   }
 
   function isStatic (container) {
-    return (enhanced(container) && !ownershipSupported) || (container.dataset.mobileStatic === 'true' && !deviceFits('desktop'))
+    return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || (container.dataset.mobileStatic === 'true' && !deviceFits('desktop'))
   }
 
   // Only opt-in lifecycle modes need discovery and an eligibility controller.
@@ -486,6 +597,7 @@
   const controllers = new Map()
   const measuredWindows = new Map()
   const geometryObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updatePreviewScale) : null
+  const staticEnhancements = new WeakSet()
   const ownershipHooks = new WeakMap()
   const ownershipTag = 'hinode-preview-owner'
   const registry = window.customElements
@@ -570,7 +682,7 @@
       if (isActivated(container)) loadPane(shownPane(container))
       return
     }
-    if (container.dataset.active === 'true') return
+    if (isActivated(container)) return
     if (!eligible(container)) { cancelActivation(controller); return }
     if (controller.idle !== null) return
     const generation = ++controller.generation
@@ -578,10 +690,11 @@
       if (controllers.get(container) !== controller || generation !== controller.generation) return
       controller.idle = null
       if (!eligible(container)) return
+      controller.admittedGeneration = generation
       container.dataset.active = 'true'
       loadPane(shownPane(container))
       updatePreviewScale()
-      container.closest('section.preview').dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
+      if (isActivated(container)) container.closest('section.preview').dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
     }
     controller.nativeIdle = typeof window.requestIdleCallback === 'function' && typeof window.cancelIdleCallback === 'function'
     controller.idle = controller.nativeIdle ? window.requestIdleCallback(activate, { timeout: 600 }) : setTimeout(activate, 0)
@@ -608,6 +721,22 @@
     }
   }
 
+  function controllerFor (container) {
+    let controller = controllers.get(container)
+    if (!controller) {
+      // Copied activation/ready DOM is not an owning navigation record.
+      resetStatic(container)
+      controller = { idle: null, generation: 0, admittedGeneration: null, observer: null }
+      controllers.set(container, controller)
+      if (typeof IntersectionObserver !== 'undefined') {
+        controller.observer = new IntersectionObserver(() => reconcile(container, controller))
+        controller.observer.observe(container)
+      }
+      observeOwnership(container, controller)
+    }
+    return controller
+  }
+
   function discoverPreviews () {
     measuredWindows.forEach((bar, container) => { if (!owned(container)) releaseOwnership(container) })
     controllers.forEach((controller, container) => { if (!owned(container)) releaseOwnership(container) })
@@ -618,19 +747,11 @@
         geometryObserver.observe(bar)
       }
       if (!enhanced(container)) return
+      if ([...container.querySelectorAll('iframe[data-src]')].some(iframe => !guardTarget(iframe))) { staticEnhancement(container); return }
       // Without native synchronous ownership reactions, enhanced modes stay
       // static. The unconfigured legacy load/click modes retain their defaults.
       if (!ownershipSupported) { resetStatic(container); container.dataset.previewStatic = 'true'; return }
-      let controller = controllers.get(container)
-      if (!controller) {
-        controller = { idle: null, generation: 0, observer: null }
-        controllers.set(container, controller)
-        if (typeof IntersectionObserver !== 'undefined') {
-          controller.observer = new IntersectionObserver(() => reconcile(container, controller))
-          controller.observer.observe(container)
-        }
-      }
-      observeOwnership(container, controller)
+      const controller = controllerFor(container)
       reconcile(container, controller)
     })
   }
@@ -792,13 +913,17 @@
     const section = container && container.closest('section.preview')
     if (!section || isStatic(container)) return
 
+    if (enhanced(container)) {
+      const controller = controllerFor(container)
+      controller.admittedGeneration = ++controller.generation
+    }
     container.dataset.active = 'true'
     const pane = container.dataset.controls === 'false'
       ? showFittingPane(container)
       : container.querySelector(':scope > .tab-pane.active')
     loadPane(pane)
     updatePreviewScale()
-    section.dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
+    if (isActivated(container)) section.dispatchEvent(new CustomEvent('preview:activate', { bubbles: true }))
   })
 
   /**

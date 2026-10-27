@@ -411,3 +411,14 @@ test('explicit false desktop responsive reaches the native public example profil
  assert.equal(result.status,0,result.log)
  assert.match(result.html.native,/data-desktop-responsive="false"/)
 })
+
+
+test('enhanced previews render an empty native guard while legacy source defaults stay unchanged',()=>{
+ const result=build({visible:['activation: visible'],static:['mobile_static: true'],theme:['ready_message: example:ready','theme_message: example:theme'],legacy:[],click:['activation: click']})
+ assert.equal(result.status,0,result.log)
+ for(const name of ['visible','static','theme']){
+  const frames=[...result.html[name].matchAll(/<iframe[^>]*>/g)].map(x=>x[0]);assert.equal(frames.length,3)
+  assert.ok(frames.every(html=>html.includes('srcdoc=""')),'guard contains no script, source or metadata')
+ }
+ for(const name of ['legacy','click'])assert.doesNotMatch(result.html[name],/srcdoc=/)
+})
