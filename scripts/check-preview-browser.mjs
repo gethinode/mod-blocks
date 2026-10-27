@@ -28,6 +28,33 @@ import os from 'node:os'
 import path from 'node:path'
 import test, { after } from 'node:test'
 import util from 'node:util'
+import { pathToFileURL } from 'node:url'
+import { createHash } from 'node:crypto'
+
+// Native qualification is explicit: normal checks need no external tool module.
+const nativeMode = process.env.PREVIEW_NATIVE === '1'
+let nativeTool, nativeFont, nativeFontSHA256
+const nativeBrowsers = new Map()
+if (nativeMode) {
+  const fontPath = process.env.PREVIEW_NATIVE_FONT
+  assert.ok(fontPath, 'Native qualification requires PREVIEW_NATIVE_FONT: a readable existing WOFF2 fixture. No font is downloaded or substituted automatically.')
+  try {
+    nativeFont = fs.readFileSync(fontPath)
+    assert.equal(nativeFont.subarray(0, 4).toString(), 'wOF2', 'The native font fixture must be WOFF2')
+    nativeFontSHA256 = createHash('sha256').update(nativeFont).digest('hex')
+  } catch (error) {
+    throw new Error(`Cannot read the required WOFF2 native fixture: ${error.message}`, { cause: error })
+  }
+  const entry = process.env.PREVIEW_NATIVE_MODULE
+  assert.ok(entry, 'Native qualification requires PREVIEW_NATIVE_MODULE: the ESM entry of an already installed Playwright tool with Chrome and WebKit. No tool is downloaded automatically.')
+  try {
+    const module = await import(pathToFileURL(path.resolve(entry)).href)
+    nativeTool = module.default || module
+    assert.ok(nativeTool.chromium?.launch && nativeTool.webkit?.launch, 'The installed tool must expose chromium and webkit launch methods')
+  } catch (error) {
+    throw new Error(`Cannot load the required installed native tool: ${error.message}`, { cause: error })
+  }
+}
 
 const TARGET = 'https://example.org/'
 const SETTLE_MS = 500
@@ -74,6 +101,8 @@ function childDocument ({ announce, reply, delay = 0, wrong, phone }) {
 
 const PAGES = {
   default: [],
+  'native-window-waiting': { url: '/preview-demo/held/', lines: ['frame: window','devices: [desktop]','controls: false','activation: visible','open_link: true','open_url: /preview-demo/ready/','load_timeout: 30','mode: true','poster:','  desktop: img/preview-demo/ready-desktop.png'] },
+  'native-window-failed': { url: '/preview-demo/unavailable/', lines: ['frame: window','devices: [desktop]','controls: false','activation: visible','open_link: true','open_url: /preview-demo/ready/',"ready_message: 'example:ready'",'load_timeout: 1','mode: true','poster:','  desktop: img/preview-demo/ready-desktop.png'] },
   'window-guard-held': { url: '/preview-demo/held/', lines: ['frame: window','devices: [desktop]','controls: false','activation: visible','open_link: true','load_timeout: 2','mode: true','poster:','  desktop: img/poster-desktop.png'] },
   'window-ready-devices': { url: child('silent'), lines: ['frame: window', `ready_message: '${TOKEN}'`, 'load_timeout: 15'] },
   'window-devices': ['frame: window', 'activation: click', 'open_link: true'],
@@ -191,6 +220,7 @@ function within (promise, ms) {
 
 // Stop Chrome before removing its profile directory, which it writes to while it runs.
 after(async () => {
+  await Promise.all([...nativeBrowsers.values()].map(driver => driver.close()))
   if (browser) {
     const exited = new Promise(resolve => browser.proc.once('exit', resolve))
     const running = () => browser.proc.exitCode === null && browser.proc.signalCode === null
@@ -361,6 +391,7 @@ function serve (root) {
     const pathname=new URL(req.url,'http://x').pathname
     if(req.method==='GET'&&pathname.startsWith('/preview-demo/')&&pathname.endsWith('/'))previewRequests.push(pathname)
     if(pathname==='/preview-demo/held/'){held.push(res);return}
+    if(pathname==='/preview-demo/unavailable/'){res.writeHead(503,{'Content-Type':'text/html'});res.end('<!doctype html><title>Unavailable</title><p>Service unavailable</p>');return}
     let file = path.join(root, decodeURIComponent(pathname))
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html')
     if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404).end(); return }
@@ -663,6 +694,135 @@ if (!skip) {
   }
 }
 if (skip) console.log(`# skipped: ${skip}`)
+
+// This mode uses an installed native tool rather than a DOM hit-test surrogate.
+// Each popup loads the ordinary public child over HTTP; no document is replaced.
+async function nativeWindowCase (engine, state, height, font, t) {
+  assert.ok(!skip && base, `Native qualification needs the real browser fixture: ${skip || 'fixture unavailable'}`)
+  let driver = nativeBrowsers.get(engine)
+  if (!driver) {
+    try {
+      driver = await nativeTool[engine].launch(engine === 'chromium' ? { executablePath: chromePath, headless: true } : { headless: true })
+    } catch (error) {
+      throw new Error(`Required installed ${engine} engine cannot start: ${error.message}`, { cause: error })
+    }
+    nativeBrowsers.set(engine, driver)
+  }
+  const context = await driver.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
+  const page = await context.newPage()
+  const errors = [], scripts = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('response', response => {
+    if (response.request().resourceType() === 'script') scripts.push({ url: response.url(), status: response.status(), mime: response.headers()['content-type'] })
+  })
+  await context.addInitScript(() => {
+    window.nativeWindowEvents = []
+    window.nativeScriptLoads = []
+    document.addEventListener('load', event => {
+      if (event.target.tagName === 'SCRIPT') nativeScriptLoads.push(event.target.src)
+    }, true)
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) document.addEventListener(type, event => {
+      const win = document.querySelector('.preview-window')
+      if (!win) return
+      nativeWindowEvents.push({ type, trusted: event.isTrusted, action: !!event.target.closest?.('.preview-open'),
+        x: event.clientX, y: event.clientY, target: event.target.outerHTML.slice(0, 250),
+        state: win.dataset.previewState, actionRect: win.querySelector('.preview-open').getBoundingClientRect().toJSON(),
+        statusRect: win.querySelector('.preview-window-state').getBoundingClientRect().toJSON(), scrollY })
+    }, true)
+  })
+  try {
+    const route = state === 'ready' ? 'components/preview-window' : `native-window-${state === 'waiting' ? 'waiting' : 'failed'}`
+    await page.goto(`${base}/${route}/`)
+    await page.evaluate(async bytes => {
+      const font = new FontFace('Preview native fixture', new Uint8Array(bytes).buffer)
+      try { await font.load() } catch (error) { throw new Error(`Required native fixture font cannot load: ${error.message}`) }
+      document.fonts.add(font)
+      document.body.style.fontFamily = '"Preview native fixture", sans-serif'
+      await document.fonts.ready
+      if (font.status !== 'loaded' || !document.fonts.check('11px "Preview native fixture"')) throw new Error('Required native fixture font did not load')
+    }, [...nativeFont])
+    await page.locator('.preview-window').scrollIntoViewIfNeeded()
+    await page.waitForFunction(want => document.querySelector('.preview-window').dataset.previewState === want, state)
+    await page.evaluate(({ font, height }) => {
+      const win = document.querySelector('.preview-window')
+      for (let el = win.parentElement; el && el !== document.body; el = el.parentElement) {
+        el.style.width = '100%'; el.style.maxWidth = 'none'; el.style.paddingInline = '0'; el.style.marginInline = '0'
+      }
+      // A generic constrained parent must not conceal an action edge defect.
+      win.style.maxWidth = '90%'
+      document.documentElement.style.fontSize = `${font}px`
+      document.querySelector('.navbar').style.height = `${font === 32 ? 177 : 91}px`
+    }, { font, height })
+    await page.setViewportSize({ width: 1440, height })
+    await page.evaluate(() => document.fonts.ready)
+    await page.waitForTimeout(200)
+    await page.evaluate(() => {
+      const action = document.querySelector('.preview-open')
+      const parent = action.closest('.preview-window').parentElement
+      const top = action.getBoundingClientRect().top
+      // Ordinary fractional text layout can place a target near a pixel edge.
+      const offset = (5 / 64 - (top - Math.floor(top)) + 1) % 1
+      parent.style.setProperty('padding-top', `${parseFloat(getComputedStyle(parent).paddingTop) + offset}px`, 'important')
+      const rect = action.getBoundingClientRect()
+      const nav = document.querySelector('.navbar').getBoundingClientRect()
+      scrollTo({ top: Math.floor(scrollY + rect.top - nav.bottom), behavior: 'instant' })
+    })
+    await page.waitForTimeout(100)
+    const box = await page.evaluate(() => {
+      const win = document.querySelector('.preview-window'), action = win.querySelector('.preview-open'), status = win.querySelector('.preview-window-state')
+      const rect = el => el.getBoundingClientRect().toJSON()
+      return { action: rect(action), status: rect(status), window: rect(win), viewport: rect(win.querySelector('.preview-content')),
+        nav: rect(document.querySelector('.navbar')), height: innerHeight, font: getComputedStyle(document.documentElement).fontSize,
+        fit: win.dataset.previewFit || null, state: win.dataset.previewState, word: status.innerText.trim(), scrollY,
+        statusDisplay: getComputedStyle(status).display, statusVisibility: getComputedStyle(status).visibility,
+        statusFont: getComputedStyle(status).fontSize, statusLine: getComputedStyle(status).lineHeight,
+        statusFamily: getComputedStyle(status).fontFamily, fixtureFontLoaded: document.fonts.check('11px "Preview native fixture"') }
+    })
+    t.diagnostic(JSON.stringify({ engine, state, height, font, nativeFontSHA256, nativeFontBytes: nativeFont.length, box }))
+    assert.ok(box.fixtureFontLoaded && box.statusFamily.includes('Preview native fixture'), 'required inherited fixture font is active')
+    assert.equal(box.state, state)
+    assert.ok(box.action.width >= 28 && box.action.height >= 28, 'complete28px action')
+    assert.ok(box.action.top >= box.nav.bottom && box.action.bottom <= height, 'the whole action is visible below navigation')
+    assert.ok(box.status.top >= box.nav.bottom && box.status.bottom <= height, 'the entire concise state is visible with the action')
+    assert.ok(box.word && box.status.width > 0 && box.status.height > 0 && box.statusDisplay !== 'none' && box.statusVisibility === 'visible', 'visible nonempty state')
+    assert.ok(Math.abs(box.viewport.width / box.viewport.height - 1.6) < .002, 'native16:10 content')
+    const tags = await page.locator('script[src]').evaluateAll(elements => elements.map(element => element.src))
+    assert.ok(scripts.every(script => script.status === 200 && /javascript/.test(script.mime)), 'faithful first-party JavaScript MIME')
+    assert.ok(tags.every(src => scripts.some(script => script.url === src)), 'all parent script responses observed')
+    assert.ok(await page.evaluate(tags => tags.every(src => nativeScriptLoads.includes(src)), tags), 'all parent scripts executed through load')
+    const points = [[box.action.left + 1, box.action.top + 1], [box.action.right - 1, box.action.top + 1],
+      [box.action.left + 1, box.action.bottom - 1], [box.action.right - 1, box.action.bottom - 1],
+      [box.action.left + box.action.width / 2, box.action.top + box.action.height / 2]]
+    for (const [x, y] of points) {
+      await page.bringToFront()
+      await page.evaluate(() => { nativeWindowEvents.length = 0 })
+      const opened = page.waitForEvent('popup', { timeout: 1500 }).catch(() => null)
+      await page.mouse.click(x, y)
+      const popup = await opened
+      const events = await page.evaluate(() => nativeWindowEvents)
+      t.diagnostic(JSON.stringify({ engine, state, height, font, requested: { x, y }, events, popup: popup?.url() || null }))
+      assert.ok(popup, 'each native1px corner and center opens the configured page')
+      try {
+        await popup.waitForLoadState('domcontentloaded')
+        assert.equal(popup.url(), `${base}/preview-demo/ready/`)
+        assert.equal(await popup.locator('h1').innerText(), 'Project workspace')
+      } finally { await popup.close() }
+      assert.ok(events.some(event => event.type === 'click' && event.trusted && event.action), 'actual trusted click reaches the action')
+      assert.ok(events.every(event => event.state === state), 'event-time lifecycle state stays current')
+    }
+    assert.deepEqual(errors, [])
+  } finally { await context.close() }
+}
+
+if (nativeMode) {
+  test('native compact action WebKit Live32 one-pixel edge', async t => nativeWindowCase('webkit', 'ready', 220, 32, t))
+  for (const engine of ['chromium', 'webkit']) for (const state of ['waiting', 'ready', 'failed']) {
+    for (const [height, font] of [[220,16], [240,16], [220,32], [240,32], [120,16], [1000,16]]) {
+      if (engine === 'webkit' && state === 'ready' && height === 220 && font === 32) continue
+      test(`native compact action ${engine} ${state} 1440x${height} font${font}`, async t => nativeWindowCase(engine, state, height, font, t))
+    }
+  }
+}
 
 // Each case opens a page at a width and names the one view that must show. The
 // widths on either side of 1024px and 640px catch the stylesheet and the script

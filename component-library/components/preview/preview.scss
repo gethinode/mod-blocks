@@ -500,19 +500,20 @@ section.preview {
     }
 
     // Reflow decorative chrome before sacrificing the action or visible state.
-    // Column measurement keeps the concise word below the top-right action.
+    // Keep the concise state beside the action in the shortest viewports.
     .preview-window-compact .preview-window-bar {
-        padding: 2px !important;
+        padding: 2px 2px 2px 0 !important;
         min-height: 0 !important;
-        gap: 0 !important;
-        flex-direction: column;
-        align-items: flex-end;
+        gap: 2px !important;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
 
         .preview-window-title,
         .preview-window-dots { display: none; }
 
         .preview-window-state {
-            order: 2;
+            order: 1;
             font-size: 11px;
             line-height: 14px;
 
@@ -521,7 +522,7 @@ section.preview {
         }
 
         .preview-open {
-            order: 1;
+            order: 2;
             flex: 0 0 28px;
             width: 28px;
             height: 28px;
