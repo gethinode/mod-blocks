@@ -795,7 +795,9 @@
     }
     const scroll = availableHeight < minimumHeight()
     const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
-    const fittedWidth = scroll ? maximumWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
+    // Keep the scroll fallback's action clear of native page-edge scrolling.
+    const scrollWidth = Math.min(maximumWidth, Math.max(chrome.minimumWidth, maximumWidth - 2 * margin))
+    const fittedWidth = scroll ? scrollWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
     if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
     win.style.marginBlock = `${margin}px`
     win.style.width = `${fittedWidth}px`

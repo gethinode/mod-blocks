@@ -2202,6 +2202,54 @@ for (const [name,width,height,state] of [['window-visible',1440,220,'waiting'], 
   })
 }
 
+// A full-width scroll fallback must leave room for native page scrolling at
+// the viewport edges. DOM hit queries alone do not establish native routing.
+for (const [height, font, navigationHeight, scroll] of [[220,16,91,false], [240,16,91,false], [220,32,177,true], [240,32,177,true], [120,16,91,true], [1000,16,91,false]]) {
+  test(`window full-width fallback leaves native action clearance at 1440x${height} font ${font}`, { skip }, async t => {
+    const page = await openPage(browser.cdp, base, 'components/preview-window', 1440, { height, beforeScript:CONTROL_IDLE })
+    try {
+      await loadedParent(page)
+      await page.evaluate(`(() => {
+        const section=document.querySelector('section.preview'),win=section.querySelector('.preview-window');
+        for(let el=win.parentElement;el&&el!==document.body;el=el.parentElement){el.style.width='100%';el.style.maxWidth='none';el.style.paddingInline='0';el.style.marginInline='0'}
+        document.documentElement.style.fontSize='${font}px';
+        document.querySelector('.navbar').style.height='${navigationHeight}px';
+        window.nativeActionEvents=[];
+        document.addEventListener('click',e=>{if(e.target.closest('.preview-open'))nativeActionEvents.push({trusted:e.isTrusted})},true);
+        dispatchEvent(new Event('resize'));
+      })()`)
+      await sleep(200)
+      await page.evaluate(`(() => {const open=document.querySelector('.preview-open');open.scrollIntoView({block:'start',behavior:'instant'});const a=open.getBoundingClientRect();scrollBy({top:a.top-document.querySelector('.navbar').getBoundingClientRect().bottom-.25,behavior:'instant'})})()`)
+      await sleep(200)
+      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b))
+      assert.ok(b.open.width>=28&&b.open.height>=28,'whole28px action retained')
+      assert.equal(b.fit==='scroll',scroll,'honest fit/scroll branch')
+      if(scroll){
+        assert.ok(b.win.left>=24&&b.win.right<=1440-24,'scroll fallback keeps24px inline native-scroll clearance')
+        assert.ok(b.viewport.width>=320,'scroll fallback keeps useful native content')
+      }else assert.ok(b.win.height+2*b.margin<=height-navigationHeight+2,'feasible window still fits')
+      assertWindowAction(b)
+      const points=[[.08,.08],[.92,.08],[.08,.92],[.92,.92],[.5,.5]]
+      for(const [fx,fy] of points){
+        const a=await page.evaluate(`document.querySelector('.preview-open').getBoundingClientRect().toJSON()`)
+        const before=new Set((await browser.cdp.send('Target.getTargets')).targetInfos.map(info=>info.targetId))
+        const point={x:a.x+a.width*fx,y:a.y+a.height*fy,button:'left',clickCount:1}
+        await page.send('Input.dispatchMouseEvent',{type:'mousePressed',...point})
+        await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point})
+        const popup=await waitFor(async()=>{
+          const infos=(await browser.cdp.send('Target.getTargets')).targetInfos
+          return infos.find(info=>!before.has(info.targetId)&&info.type==='page'&&info.url===`${base}/preview-demo/ready/`)
+        },'actual local root tab from native action')
+        await browser.cdp.send('Target.closeTarget',{targetId:popup.targetId})
+      }
+      assert.deepEqual(await page.evaluate('nativeActionEvents'),points.map(()=>({trusted:true})))
+      assert.deepEqual(page.localRequests,[],'sole action does not admit the held embedded preview')
+      await page.evaluate("document.querySelector('.preview-open').focus({preventScroll:true})")
+      assert.equal(await page.evaluate("document.activeElement.matches('.preview-open')"),true)
+    } finally {await page.close()}
+  })
+}
+
 test('window impossible height keeps useful uncropped viewport and page-scroll action', { skip }, async t => {
   const page = await openPage(browser.cdp, base, 'window-visible', 1440, { height:120, beforeScript:CONTROL_IDLE })
   try {
