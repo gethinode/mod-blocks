@@ -1486,9 +1486,9 @@ test('ready-items-click: activation and item switches wait for the current frame
     await clickItem(page, 1)
     await until(page, value => value.state === 'waiting', 'the wait for item b')
     await assertWaiting(page, 'item b')
-    await page.evaluate(() => document.querySelector(
+    assert.equal(await page.evaluate(() => document.querySelector(
       'section.preview .preview-content > .tab-pane.active .preview-poster-item:not(.d-none) img'
-    ).decode())
+    ).decode().then(() => true, () => false)), true, 'item b poster decodes')
     assert.match(visiblePoster(await page.state()).image, /^poster-mobile-light-/, 'item b shows its poster')
     assert.equal(await page.evaluate('new MessageEvent(\'message\', { source: window.previewOld }).source === window.previewOld'), true, 'the replaced window can be a message source')
     await page.evaluate(fakeAck('old'))
