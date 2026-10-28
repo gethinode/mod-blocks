@@ -1,16 +1,14 @@
-name: Test
+name: Preview resize diagnostics
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - v*
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
   test:
     uses: gethinode/.github/.github/workflows/test.yml@v1
     with:
       package-manager: pnpm
-    secrets: inherit
+      os-matrix: '["macos-latest"]'
+      node-matrix: '["24.x"]'

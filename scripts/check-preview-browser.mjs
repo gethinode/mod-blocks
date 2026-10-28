@@ -405,16 +405,112 @@ function serve (root) {
 
 // Minimal DevTools protocol client over one browser-level WebSocket, with
 // flattened sessions for page targets.
+// Diagnostic-only passive records; no runtime API or callback is replaced.
+const RESIZE_DIAGNOSTIC_LIMIT = 400
+const resizeDiagnosticURL = value => {
+  if (!value) return null
+  try {
+    const url = new URL(value, 'http://127.0.0.1')
+    return ['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', 'localhost', 'example.org'].includes(url.hostname)
+      ? `${url.origin}${url.pathname}${url.search === '?next' ? '?next' : ''}` : '[non-fixture URL]'
+  } catch { return '[invalid fixture URL]' }
+}
+const resizeDiagnosticExceptionType = details => ['Error', 'TypeError', 'ReferenceError', 'RangeError', 'SyntaxError', 'URIError', 'EvalError', 'DOMException'].includes(details?.exception?.className) ? details.exception.className : 'ReportedError'
+const appendResizeDiagnostic = (diagnostic, entry) => {
+  if (diagnostic.records.length < RESIZE_DIAGNOSTIC_LIMIT) diagnostic.records.push({ wallTime: Date.now(), ...entry })
+  else diagnostic.dropped++
+}
+function installResizeDiagnostics () {
+  const records = []
+  let dropped = 0
+  let narrowNotification = null
+  const fixtureURL = value => {
+    if (!value) return null
+    try {
+      const url = new URL(value, location.href)
+      return ['http:', 'https:'].includes(url.protocol) && ['127.0.0.1', 'localhost', 'example.org'].includes(url.hostname)
+        ? `${url.origin}${url.pathname}${url.search === '?next' ? '?next' : ''}` : '[non-fixture URL]'
+    } catch { return '[invalid fixture URL]' }
+  }
+  const snapshot = () => {
+    const container = document.querySelector('section.preview .preview-content')
+    const frame = container?.querySelector('iframe')
+    const pane = frame?.closest('.tab-pane')
+    const name = frame?.getAttribute('name') || ''
+    return {
+      readyState: document.readyState, visibility: document.visibilityState, focus: document.hasFocus(),
+      narrowNotification, state: pane?.getAttribute('data-preview-state') || null,
+      static: container?.getAttribute('data-preview-static') || null,
+      active: container?.getAttribute('data-active') || null, busy: pane?.getAttribute('aria-busy') || null,
+      src: fixtureURL(frame?.getAttribute('src')),
+      frameName: !name ? 'unset' : name === 'original-preview-frame' ? 'original' : name.startsWith('hinode-preview-theme:') ? 'theme-seed' : 'other'
+    }
+  }
+  const record = (kind, detail = {}) => {
+    if (records.length < 400) records.push({ kind, wallTime: Date.now(), time: performance.now(), ...snapshot(), ...detail })
+    else dropped++
+  }
+  for (const kind of ['resize', 'visibilitychange', 'load']) addEventListener(kind, () => record(kind), { passive: true })
+  matchMedia('(max-width: 1023px)').addEventListener('change', event => {
+    narrowNotification = event.matches
+    record('media-change')
+  }, { passive: true })
+  document.addEventListener('DOMContentLoaded', () => {
+    record('DOMContentLoaded')
+    const section = document.querySelector('section.preview')
+    if (section) new MutationObserver(entries => record('mutation', {
+      attributes: [...new Set(entries.map(entry => entry.attributeName).filter(Boolean))],
+      replacedNodes: entries.some(entry => entry.type === 'childList')
+    })).observe(section, {
+      subtree: true, childList: true, attributes: true,
+      attributeFilter: ['data-preview-state', 'data-preview-static', 'data-active', 'src', 'name', 'aria-busy']
+    })
+  }, { once: true, passive: true })
+  window.previewResizeDiagnostics = { records, snapshot, dropped: () => dropped }
+}
+const RESIZE_DIAGNOSTIC_SOURCE = `(${installResizeDiagnostics.toString()})()`
+async function dumpResizeDiagnostics (page, outcome) {
+  if (!page.resizeDiagnostic) return
+  const capture = async phase => {
+    const browser = await page.evaluate(() => {
+      const diagnostic = window.previewResizeDiagnostics
+      return diagnostic ? {
+        records: diagnostic.records, dropped: diagnostic.dropped(), snapshot: diagnostic.snapshot(),
+        // These viewport reads happen only after the original test outcome.
+        viewport: { width: innerWidth, height: innerHeight, narrow: matchMedia('(max-width: 1023px)').matches }
+      } : { unavailable: true }
+    })
+    console.log('# preview-resize-diagnostic ' + JSON.stringify({
+      label: page.resizeDiagnostic.label, outcome, phase,
+      node: page.resizeDiagnostic.records, nodeDropped: page.resizeDiagnostic.dropped,
+      browser: browser || { unavailable: true }
+    }))
+  }
+  await capture('after-original-outcome')
+  if (outcome === 'failed') {
+    await sleep(250)
+    await capture('post-failure-followup-250ms')
+  }
+}
+
 class CDP {
   constructor (ws) {
     this.ws = ws
     this.nextId = 1
     this.pending = new Map()
     this.handlers = new Set()
+    this.resizeDiagnostics = new Map()
     ws.addEventListener('message', ({ data }) => {
       const msg = JSON.parse(data)
       if (msg.id && this.pending.has(msg.id)) {
-        const { resolve, reject } = this.pending.get(msg.id)
+        const { resolve, reject, diagnostic, method, metric } = this.pending.get(msg.id)
+        if (diagnostic && method === 'Emulation.setDeviceMetricsOverride') appendResizeDiagnostic(diagnostic, { kind: 'metrics-reply', id: msg.id, ...metric })
+        const value = msg.result?.result?.value
+        if (diagnostic && method === 'Runtime.evaluate' && value && typeof value === 'object' &&
+          Object.keys(value).sort().join(',') === 'busy,src,state,static,status') {
+          appendResizeDiagnostic(diagnostic, { kind: 'original-window-state-result', id: msg.id, src: resizeDiagnosticURL(value.src), state: value.state, busy: value.busy, static: value.static })
+        }
+        if (diagnostic && msg.result?.exceptionDetails) appendResizeDiagnostic(diagnostic, { kind: 'evaluation-exception', type: resizeDiagnosticExceptionType(msg.result.exceptionDetails), line: msg.result.exceptionDetails.lineNumber, column: msg.result.exceptionDetails.columnNumber })
         this.pending.delete(msg.id)
         if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`)); else resolve(msg.result)
       } else if (msg.method) {
@@ -430,8 +526,11 @@ class CDP {
 
   send (method, params = {}, sessionId) {
     const id = this.nextId++
+    const diagnostic = this.resizeDiagnostics.get(sessionId)
+    const metric = method === 'Emulation.setDeviceMetricsOverride' ? { width: params.width, height: params.height } : null
+    if (diagnostic && metric) appendResizeDiagnostic(diagnostic, { kind: 'metrics-send', id, ...metric })
     this.ws.send(JSON.stringify({ id, method, params, ...(sessionId && { sessionId }) }))
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
+    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject, ...(diagnostic && { diagnostic, method, metric }) }))
   }
 
   on (fn) { this.handlers.add(fn); return () => this.handlers.delete(fn) }
@@ -524,9 +623,13 @@ const STATE = `(() => {
 // answered and holdScript ms have passed, so the child can announce itself
 // before the script listens. Every page records the src of each iframe whose
 // load event fires in window.previewLoads.
-async function openPage (cdp, base, name, width, { hold = false, height = 900, holdScript = 0, beforeScript = '', skipPreviewScript = false } = {}) {
+async function openPage (cdp, base, name, width, { hold = false, height = 900, holdScript = 0, beforeScript = '', skipPreviewScript = false, resizeDiagnostic = false } = {}) {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
+  if (resizeDiagnostic) {
+    resizeDiagnostic = { label: resizeDiagnostic, records: [], dropped: 0 }
+    cdp.resizeDiagnostics.set(sessionId, resizeDiagnostic)
+  }
   const send = (method, params) => cdp.send(method, params, sessionId)
   const requests = []
   const localRequests = []
@@ -555,6 +658,13 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   const scripts = []
   const off = cdp.on(async msg => {
     if (msg.sessionId !== sessionId) return
+    if (resizeDiagnostic && msg.method === 'Runtime.exceptionThrown') {
+      const details = msg.params.exceptionDetails || {}
+      appendResizeDiagnostic(resizeDiagnostic, { kind: 'javascript-exception', type: resizeDiagnosticExceptionType(details), line: details.lineNumber, column: details.columnNumber, source: resizeDiagnosticURL(details.url) })
+    }
+    if (resizeDiagnostic && msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document') {
+      appendResizeDiagnostic(resizeDiagnostic, { kind: 'document-request', url: resizeDiagnosticURL(msg.params.request.url), protocolTime: msg.params.timestamp })
+    }
     if (msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document') documentRequests.push(msg.params.request.url)
     if (msg.method === 'Network.requestWillBeSent' && msg.params.type === 'Document' && new URL(msg.params.request.url).pathname.startsWith('/preview-demo/')) localRequests.push(msg.params.request.url)
     if (msg.method !== 'Fetch.requestPaused') return
@@ -597,7 +707,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   await send('Page.addScriptToEvaluateOnNewDocument', {
     source: `if (window === window.top) { window.previewLoads = []; document.addEventListener('load', event => {
       if (event.target.tagName === 'IFRAME') window.previewLoads.push(event.target.getAttribute('src'))
-    }, true) }`
+    }, true); ${resizeDiagnostic ? RESIZE_DIAGNOSTIC_SOURCE : ''} }`
   })
   if (hold) {
     await send('Page.addScriptToEvaluateOnNewDocument', {
@@ -615,6 +725,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   const evaluate = async expression => (await send('Runtime.evaluate', { expression: typeof expression === 'function' ? `(${expression})()` : expression, returnByValue: true, awaitPromise: true })).result.value
   return {
     requests,
+    resizeDiagnostic,
     localRequests,
     documentRequests,
     urls,
@@ -644,7 +755,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
       await sleep(SETTLE_MS)
       return evaluate(STATE)
     },
-    async close () { off(); await cdp.send('Target.closeTarget', { targetId }).catch(() => {}) }
+    async close () { cdp.resizeDiagnostics.delete(sessionId); off(); await cdp.send('Target.closeTarget', { targetId }).catch(() => {}) }
   }
 }
 
@@ -2240,7 +2351,8 @@ for (const width of [390, 1440]) {
 
 for (const activation of ['load', 'click']) {
   test(`window static return respects ${activation} activation eligibility`, { skip }, async () => {
-    const page = await openPage(browser.cdp, base, `window-${activation}`, 390)
+    const page = await openPage(browser.cdp, base, `window-${activation}`, 390, { resizeDiagnostic: activation === 'click' ? 'window-static-click' : false })
+    let resizeDiagnosticOutcome = 'failed'
     try {
       await loadedParent(page); await page.evaluate(IN_VIEW); await sleep(100)
       assert.equal(page.requests.length, 0)
@@ -2258,7 +2370,11 @@ for (const activation of ['load', 'click']) {
         await page.evaluate('document.querySelector(".preview-activate").click()')
       }
       await waitFor(() => page.requests.length === 2, 'fresh return navigation')
-    } finally { await page.close() }
+      resizeDiagnosticOutcome = 'passed'
+    } finally {
+      if (activation === 'click') await dumpResizeDiagnostics(page, resizeDiagnosticOutcome).catch(() => console.log('# preview-resize-diagnostic unavailable'))
+      await page.close()
+    }
   })
 }
 
@@ -2583,7 +2699,8 @@ test('theme bridge keeps real current document hidden until correlated applied A
 })
 
 test('theme bridge full navigation uses transient early seed and fresh proof despite same WindowProxy', {skip},async()=>{
-  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})",resizeDiagnostic:'theme-full-navigation'})
+  let resizeDiagnosticOutcome = 'failed'
   try{
     const old=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'initial ACK')
     await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow")
@@ -2606,7 +2723,11 @@ test('theme bridge full navigation uses transient early seed and fresh proof des
     const after=(await themeRequests(page)).at(-1).data;assert.ok(after.requestId>fresh.requestId)
     assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
     await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh desktop ACK')
-  }finally{await page.close()}
+    resizeDiagnosticOutcome = 'passed'
+  }finally{
+    await dumpResizeDiagnostics(page, resizeDiagnosticOutcome).catch(() => console.log('# preview-resize-diagnostic unavailable'))
+    await page.close()
+  }
 })
 
 
