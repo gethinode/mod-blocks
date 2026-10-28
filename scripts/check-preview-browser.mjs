@@ -1095,6 +1095,7 @@ for (const [fade, site, ms] of FADES) {
   test(`with ${fade}, click posters stay visible until their fade ends`, { skip }, async () => {
     const page = await openPage(browser.cdp, site, 'click', 1280)
     try {
+      await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'no-preference' }])
       page.width = 1280
       await page.settle([])
       const { duration, samples, transitions } = await page.evaluate(FADE_SAMPLES)
@@ -1485,6 +1486,9 @@ test('ready-items-click: activation and item switches wait for the current frame
     await clickItem(page, 1)
     await until(page, value => value.state === 'waiting', 'the wait for item b')
     await assertWaiting(page, 'item b')
+    await page.evaluate(() => document.querySelector(
+      'section.preview .preview-content > .tab-pane.active .preview-poster-item:not(.d-none) img'
+    ).decode())
     assert.match(visiblePoster(await page.state()).image, /^poster-mobile-light-/, 'item b shows its poster')
     assert.equal(await page.evaluate('new MessageEvent(\'message\', { source: window.previewOld }).source === window.previewOld'), true, 'the replaced window can be a message source')
     await page.evaluate(fakeAck('old'))
@@ -1551,6 +1555,7 @@ for (const [fade, site, ms] of FADES) {
   test(`with ${fade}, a ready view fades its iframe in and its poster out`, { skip }, async () => {
     const page = await openPage(browser.cdp, site, 'ready-silent', 1280)
     try {
+      await page.emulateMedia([{ name: 'prefers-reduced-motion', value: 'no-preference' }])
       await until(page, value => value.state === 'waiting', 'the wait')
       const { duration, samples, transitions } = await page.evaluate(READY_FADE)
       assert.ok(duration > 0, `the iframe fades (transitions: ${transitions})`)
