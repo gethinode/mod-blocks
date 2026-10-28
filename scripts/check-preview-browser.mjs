@@ -493,6 +493,11 @@ async function dumpResizeDiagnostics (page, outcome) {
   }
 }
 
+// Diagnostic-only command correlation; expression text and returned objects are never logged.
+const previewCommandSite = (method, expression) => method !== 'Runtime.evaluate' ? 'protocol-command'
+  : expression === 'window.oldFrame = document.querySelector(".preview-iframe"); window.oldWindow = oldFrame.contentWindow'
+    ? 'retain-window-reference' : 'other-evaluation'
+
 class CDP {
   constructor (ws) {
     this.ws = ws
@@ -500,10 +505,11 @@ class CDP {
     this.pending = new Map()
     this.handlers = new Set()
     this.resizeDiagnostics = new Map()
+    this.commandErrorCount = 0
     ws.addEventListener('message', ({ data }) => {
       const msg = JSON.parse(data)
       if (msg.id && this.pending.has(msg.id)) {
-        const { resolve, reject, diagnostic, method, metric } = this.pending.get(msg.id)
+        const { resolve, reject, diagnostic, method, metric, commandSite, expressionHash, commandSent } = this.pending.get(msg.id)
         if (diagnostic && method === 'Emulation.setDeviceMetricsOverride') appendResizeDiagnostic(diagnostic, { kind: 'metrics-reply', id: msg.id, ...metric })
         const value = msg.result?.result?.value
         if (diagnostic && method === 'Runtime.evaluate' && value && typeof value === 'object' &&
@@ -512,6 +518,13 @@ class CDP {
         }
         if (diagnostic && msg.result?.exceptionDetails) appendResizeDiagnostic(diagnostic, { kind: 'evaluation-exception', type: resizeDiagnosticExceptionType(msg.result.exceptionDetails), line: msg.result.exceptionDetails.lineNumber, column: msg.result.exceptionDetails.columnNumber })
         this.pending.delete(msg.id)
+        if (msg.error && this.commandErrorCount++ < 8) {
+          try {
+            console.log('# preview-command-error ' + JSON.stringify({ id: msg.id, method, site: commandSite,
+              expressionHash, sent: commandSent, reply: Date.now(), code: msg.error.code,
+              message: msg.error.message === 'Object reference chain is too long' ? msg.error.message : '[protocol error]' }))
+          } catch {}
+        }
         if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`)); else resolve(msg.result)
       } else if (msg.method) {
         this.handlers.forEach(fn => fn(msg))
@@ -526,11 +539,14 @@ class CDP {
 
   send (method, params = {}, sessionId) {
     const id = this.nextId++
+    const commandSent = Date.now()
+    const commandSite = previewCommandSite(method, params.expression)
+    const expressionHash = typeof params.expression === 'string' ? createHash('sha256').update(params.expression).digest('hex') : null
     const diagnostic = this.resizeDiagnostics.get(sessionId)
     const metric = method === 'Emulation.setDeviceMetricsOverride' ? { width: params.width, height: params.height } : null
     if (diagnostic && metric) appendResizeDiagnostic(diagnostic, { kind: 'metrics-send', id, ...metric })
     this.ws.send(JSON.stringify({ id, method, params, ...(sessionId && { sessionId }) }))
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject, ...(diagnostic && { diagnostic, method, metric }) }))
+    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject, method, commandSite, expressionHash, commandSent, ...(diagnostic && { diagnostic, metric }) }))
   }
 
   on (fn) { this.handlers.add(fn); return () => this.handlers.delete(fn) }
