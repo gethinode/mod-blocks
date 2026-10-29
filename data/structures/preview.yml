@@ -165,10 +165,10 @@ arguments:
       before it becomes visible. A view whose frame is ready, or already
       re-proving, re-proves when the frame navigates or the outer theme
       changes: the frame stays shown and interactive, it is not inert and
-      keeps focus, the poster stays hidden, the view is busy, and a window
-      frame shows its waiting state in its title bar (Loading, or Wait in a
-      compact title bar), until the new document or theme is acknowledged
-      the same way. The load-timeout deadline still fails a
+      keeps focus, the poster stays hidden, the view is busy, and the title
+      bar of a window frame keeps its ready state (Live) without a new status
+      announcement, until the new document or theme is acknowledged the same
+      way. The load-timeout deadline still fails a
       re-proof. The first wait of a view, and a wait after it failed, stay
       behind the poster as ready-message describes. A transient iframe name
       seeds the next full document before paint. The complete serialized seed is limited to 512

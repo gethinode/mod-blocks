@@ -85,7 +85,9 @@
  * When that proof is for a new document, or a new outer theme, of a frame
  * that is ready, or already re-proving, the pane re-proves: it waits and is
  * busy, with data-preview-reproof, but its iframe stays shown and not inert,
- * and its poster stays hidden. Any other wait, the first one included, shows the
+ * its poster stays hidden, and a window keeps the title bar state and status
+ * text of a ready pane, so its title bar does not change and nothing is
+ * announced. Any other wait, the first one included, shows the
  * poster as before, and the deadline still fails a re-proof.
  */
 
@@ -278,14 +280,16 @@
     return (seconds > 0 ? seconds : PREVIEW_LOAD_TIMEOUT) * 1000
   }
 
+  // A re-proving pane keeps the title bar and status of a ready one, so the
+  // state word, the window state and the announced status do not change.
   function updateWindowStatus (container) {
     if (container.dataset.frame !== 'window') return
     const win = container.closest('.preview-window')
     const status = win.querySelector('.preview-window-status')
     const visible = win.querySelector('.preview-window-state')
     const pane = container.querySelector(':scope > .tab-pane.active')
-    const state = isStatic(container) ? 'preview' : (pane && pane.dataset.previewState) || (container.querySelector('.preview-error:not(.d-none)') ? 'failed' : 'preview')
-    status.textContent = status.dataset[`${state}Label`]
+    const state = isStatic(container) ? 'preview' : (pane && pane.dataset.previewReproof ? 'ready' : pane && pane.dataset.previewState) || (container.querySelector('.preview-error:not(.d-none)') ? 'failed' : 'preview')
+    if (status.textContent !== status.dataset[`${state}Label`]) status.textContent = status.dataset[`${state}Label`]
     visible.querySelector('.preview-state-word').textContent = visible.dataset[`${state}Label`]
     visible.querySelector('.preview-state-short').textContent = visible.dataset[`compact${state[0].toUpperCase() + state.slice(1)}Label`] || visible.dataset[`${state}Label`]
     win.dataset.previewState = state
@@ -312,7 +316,7 @@
   }
 
   // A new document or outer theme in a frame that is live, or still
-  // re-proving, re-proves without the poster. A frame that is not live yet, or failed, waits as usual.
+  // re-proving, re-proves without the poster and with a ready title bar. A frame that is not live yet, or failed, waits as usual.
   function reprove (record) {
     setState(record, 'waiting', record.state === 'ready' || record.reproof)
   }
