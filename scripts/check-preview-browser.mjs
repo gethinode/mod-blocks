@@ -1482,7 +1482,7 @@ test('ready-items-click: activation and item switches wait for the current frame
     await assertWaiting(page, 'item a after activation')
     assert.equal(await page.evaluate('getComputedStyle(document.querySelector(\'section.preview .preview-content > .tab-pane.active .preview-activate\')).display'), 'none', 'the poster button is gone')
     await assertReady(page, 'item a')
-    await page.evaluate('window.previewOld = [...document.querySelectorAll(\'section.preview .preview-content > .tab-pane\')].find(el => el.offsetParent).querySelector(\'iframe\').contentWindow')
+    await page.evaluate('window.previewOld = [...document.querySelectorAll(\'section.preview .preview-content > .tab-pane\')].find(el => el.offsetParent).querySelector(\'iframe\').contentWindow; void 0')
     await clickItem(page, 1)
     await until(page, value => value.state === 'waiting', 'the wait for item b')
     await assertWaiting(page, 'item b')
@@ -2083,7 +2083,8 @@ for (const waitForReady of [false, true]) {
       await loadedParent(page); await page.evaluate(IN_VIEW); await idlePending(page); await page.evaluate('flushIdle()')
       await waitFor(() => page.requests.length === 1, 'desktop navigation')
       if (waitForReady) await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === 'ready'), 'ready desktop')
-      await page.evaluate('window.oldFrame = document.querySelector(".preview-iframe"); window.oldWindow = oldFrame.contentWindow')
+      // Ends in void 0: returning a same-origin Window by value fails in DevTools.
+      await page.evaluate('window.oldFrame = document.querySelector(".preview-iframe"); window.oldWindow = oldFrame.contentWindow; void 0')
       await page.resize(1023)
       await sleep(100)
       const state = await page.evaluate(WINDOW_STATE)
@@ -2586,7 +2587,7 @@ test('theme bridge full navigation uses transient early seed and fresh proof des
   const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
   try{
     const old=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'initial ACK')
-    await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow")
+    await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow;void 0")
     await themeProbe(page,"(window.invalidate(),location.href='/theme?next',true)")
     await waitFor(()=>themeProbe(page,"location.search==='?next'&&window.themeRequests.length>0").catch(()=>false),'new real child document')
     assert.equal(await page.evaluate("previousThemeFrame===document.querySelector('.preview-iframe').contentWindow"),true)
