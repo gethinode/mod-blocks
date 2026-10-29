@@ -1,0 +1,24 @@
+# Preview
+- id: previewActivate
+  translation: "Vorschau laden"
+- id: previewLoading
+  translation: "Live-Vorschau wird geladen"
+- id: previewUnavailable
+  translation: "Die Live-Vorschau ist gerade nicht verfügbar."
+- id: previewViewSelection
+  translation: "Ansichtsauswahl"
+- id: previewReady
+  translation: "Live-Vorschau bereit"
+
+- id: previewStatePreview
+  translation: "Vorschau"
+- id: previewStateLoading
+  translation: "Laden"
+- id: previewStateLive
+  translation: "Live"
+- id: previewStateUnavailable
+  translation: "Nicht verfügbar"
+- id: previewStateWait
+  translation: "Warten"
+- id: previewStateError
+  translation: "Fehler"

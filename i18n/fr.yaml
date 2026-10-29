@@ -1,0 +1,24 @@
+# Preview
+- id: previewActivate
+  translation: "Charger l'aperçu"
+- id: previewLoading
+  translation: "Chargement de l'aperçu en direct"
+- id: previewUnavailable
+  translation: "L'aperçu en direct n'est pas disponible pour le moment."
+- id: previewViewSelection
+  translation: "Sélection de la vue"
+- id: previewReady
+  translation: "Aperçu en direct prêt"
+
+- id: previewStatePreview
+  translation: "Aperçu"
+- id: previewStateLoading
+  translation: "Chargement"
+- id: previewStateLive
+  translation: "En direct"
+- id: previewStateUnavailable
+  translation: "Indisponible"
+- id: previewStateWait
+  translation: "Attente"
+- id: previewStateError
+  translation: "Erreur"

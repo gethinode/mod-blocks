@@ -46,18 +46,44 @@
 {{ end }}
 
 {{ if not $error }}
+	{{/* Items take the open-url key of the partial from either key format */}}
+	{{ $items := slice }}
+	{{ range .items }}
+		{{ $items = $items | append (dict
+			"title"    .title
+			"url"      .url
+			"open-url" (or .open_url (index . "open-url"))
+			"poster"   .poster
+			"heading"  .heading
+		) }}
+	{{ end }}
+
 	{{/* Main code */}}
 	{{ $raw := partial "assets/preview.html" (dict
 		"page"               $page
 		"heading-level"      (cond (isset . "heading_level") .heading_level (index . "heading-level"))
 		"url"                .url
 		"device"             .device
+		"devices"            .devices
+		"controls"           (cond (isset . "controls") .controls nil)
 		"controls-placement" (or .controls_placement (index . "controls-placement"))
-		"desktop-responsive" (or .desktop_responsive (index . "desktop-responsive"))
+		"frame"              .frame
+		"frame-title"        (or .frame_title (index . "frame-title"))
+		"open-url"           (or .open_url (index . "open-url"))
+		"mobile-static"      (cond (isset . "mobile_static") .mobile_static (index . "mobile-static"))
+		"activation"         .activation
+		"poster"             .poster
+		"items"              $items
+		"desktop-responsive" (cond (isset . "desktop_responsive") .desktop_responsive (index . "desktop-responsive"))
 		"heading"            .heading
 		"image"              .image
 		"mode"               .mode
 		"show-fallback"      (or .show_fallback (index . "show-fallback"))
+		"open-link"          (or .open_link (index . "open-link"))
+		"links"              .links
+		"load-timeout"       (or .load_timeout (index . "load-timeout"))
+		"theme-message"      (cond (isset . "theme_message") .theme_message (index . "theme-message"))
+		"ready-message"      (or .ready_message (index . "ready-message"))
 	) }}
 
 	{{ if $raw }}
@@ -69,6 +95,7 @@
 			"id"             .id
 			"raw"            $raw
 			"background"     .background
+			"padding"        .padding
 			"width"          .width
 			"justify"        .justify
 			"wrapper"        .wrapper

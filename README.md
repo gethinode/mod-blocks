@@ -106,6 +106,26 @@ Visit the Hinode documentation site for [installation instructions][hinode_docs]
 
 This module uses [semantic-release][semantic-release] to automate the release of new versions. The package uses `husky` and `commitlint` to ensure commit messages adhere to the [Conventional Commits][conventionalcommits] specification. You can run `npx git-cz` from the terminal to help prepare the commit message.
 
+### Explicit native browser qualification
+
+The default `pnpm test` command keeps its existing Hugo and Chrome checks. Additional
+one-pixel action checks use an already installed external Playwright tool with Chrome
+and WebKit available, plus an existing WOFF2 code fixture. No package, browser or font
+is downloaded by the check.
+
+Set `PLAYWRIGHT_ENTRY_POINT` to that tool's ESM entry and `WOFF2_FIXTURE` to the font file:
+
+```sh
+PREVIEW_NATIVE=1 PREVIEW_NATIVE_MODULE="$PLAYWRIGHT_ENTRY_POINT" \
+  PREVIEW_NATIVE_FONT="$WOFF2_FIXTURE" \
+  pnpm exec node --test --test-name-pattern="native compact" scripts/check-preview-browser.mjs
+```
+
+This explicit mode fails if a requested prerequisite is missing, invalid or cannot load.
+It reports the exact font SHA-256, inherited font, geometry and trusted native events.
+The fixture uses normal `FontFace` loading; qualification of a consuming site must use
+that site's normally built and served fonts.
+
 <!-- MARKDOWN LINKS -->
 [hugo]: https://gohugo.io
 [hinode_docs]: https://gethinode.com

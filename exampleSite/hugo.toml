@@ -54,3 +54,10 @@ timeout = '180s'
   # timeline, live-pages, ...) that the mod-blocks components call at site build time.
   [[module.imports]]
     path = "github.com/gethinode/hinode/v3"
+
+# The preview block checks each target against the frame-src this site publishes, which is the
+# union of every [params.modules.<name>.csp] entry. This host backs the preview fixtures in
+# content/test-preview.md and the demo page content/components/preview-devices.md, and 'self'
+# the demo pages under static/preview-demo that content/components/preview-ready.md frames.
+[params.modules.test.csp]
+  frame-src = ["https://example.org", "'self'"]

@@ -23,7 +23,42 @@ blueprint:
     color:
     subtle:
   url:
-  device: desktop
+  device:
+  devices:
+    - desktop
+    - tablet
+    - mobile
+  controls: true
+  frame: none
+  frame_title:
+  open_url:
+  mobile_static: false
+  activation: load
+  poster:
+    desktop:
+    tablet:
+    mobile:
+  items:
+    - title:
+      url:
+      open_url:
+      poster:
+        desktop:
+        tablet:
+        mobile:
+      heading:
+        preheading:
+        title:
+        content:
+  open_link: false
+  links:
+    -
+      title:
+      url:
+  load_timeout:
+  ready_message:
+  theme_message:
+  padding:
   image:
   mode:
   show_fallback:

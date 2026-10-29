@@ -1,0 +1,120 @@
+{{- /*
+    Assertions for the preview block (component-library/components/preview/preview.hugo.html).
+
+    Hugo has no template test framework; this page is one, built like test-cards.html. Each
+    fixture in the front matter of content/test-preview.md is rendered through the `bookshop`
+    partial with `_ordinal` and `_page` injected, as layouts/partials/page/blocks.html does for
+    a page's content_blocks. `errorf` is the failure signal: it logs an ERROR and makes `hugo`
+    exit non-zero, which fails `pnpm test`. The PASS/FAIL lines are kept for a human reading
+    the built page.
+
+    Each fixture block is also validated with `utilities/Args.html`, with the bookshop name and
+    strict setting the block uses, and any error or warning counts as a failure.
+
+    After the fixtures, the page checks that the `devices` list in the Bookshop blueprint, which
+    seeds a new block in CloudCannon, matches the `devices` default in the component sidecar, and
+    that the blueprint leaves `device` empty.
+
+    The page sets `build.list: never`, which keeps it out of the sitemap, the RSS feed and the
+    search index; no menu entry points to it.
+
+    Fixture keys (each optional):
+      want    substrings the rendered output must contain.
+      reject  substrings the rendered output must not contain.
+      count   map of needle to the exact number of times it occurs. A needle counts only where
+              it starts the output or follows whitespace, so `src="x"` does not count the
+              tail of `data-src="x"`.
+      order   substrings the rendered output must contain in this order, each found after
+              the end of the one before it.
+*/ -}}
+{{- $fixtures := .Params.fixtures | default slice -}}
+{{- $fail := 0 -}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>{{ .Title }}</title>
+</head>
+<body>
+<pre>
+{{- if not $fixtures }}
+FAIL no fixtures
+{{- $fail = add $fail 1 -}}
+{{- errorf "preview block test: no fixtures in %s" .File.Path -}}
+{{- end -}}
+{{- range $i, $f := $fixtures -}}
+    {{- $case := $f.case -}}
+    {{- $raw := partial "bookshop" (merge $f.block (dict "_ordinal" $i "_page" $)) -}}
+    {{- $html := replaceRE `>\s+<` "><" (replaceRE `\s+` " " $raw) -}}
+    {{- $errs := slice -}}
+    {{- $result := partial "utilities/Args.html" (dict "bookshop" "preview" "args" $f.block "strict" false) -}}
+    {{- with $result.errmsg -}}
+        {{- $errs = $errs | append (printf "validation error: %s" (delimit . ", ")) -}}
+    {{- end -}}
+    {{- with $result.warnmsg -}}
+        {{- $errs = $errs | append (printf "validation warning: %s" (delimit . ", ")) -}}
+    {{- end -}}
+    {{- /* A block that renders nothing would pass every reject check. */ -}}
+    {{- if not (strings.Contains $html "preview-content") -}}
+        {{- $errs = $errs | append "no preview rendered" -}}
+    {{- end -}}
+    {{- range $f.want -}}
+        {{- if not (strings.Contains $html .) -}}
+            {{- $errs = $errs | append (printf "want %q" .) -}}
+        {{- end -}}
+    {{- end -}}
+    {{- range $f.reject -}}
+        {{- if strings.Contains $html . -}}
+            {{- $errs = $errs | append (printf "reject %q" .) -}}
+        {{- end -}}
+    {{- end -}}
+    {{- range $needle, $want := $f.count -}}
+        {{- $pattern := printf `(?:^|\s)%s` (replaceRE `([\\.+*?()|\[\]{}^$])` `\$1` $needle) -}}
+        {{- $got := len (findRE $pattern $html) -}}
+        {{- if ne $got (int $want) -}}
+            {{- $errs = $errs | append (printf "count %q: want %v got %d" $needle $want $got) -}}
+        {{- end -}}
+    {{- end -}}
+    {{- $rest := $html -}}
+    {{- range $f.order -}}
+        {{- $parts := split $rest . -}}
+        {{- if lt (len $parts) 2 -}}
+            {{- $errs = $errs | append (printf "order %q" .) -}}
+            {{- break -}}
+        {{- end -}}
+        {{- $rest = strings.TrimPrefix (printf "%s%s" (index $parts 0) .) $rest -}}
+    {{- end -}}
+    {{- if $errs }}
+FAIL {{ $case }}: {{ delimit $errs "; " }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "test-preview: %s mismatch: %s" $case (delimit $errs "; ") -}}
+    {{- else }}
+PASS {{ $case }}
+    {{- end -}}
+{{- end -}}
+{{- $blueprint := (resources.Get "bookshop/components/preview/preview.bookshop.yml" | transform.Unmarshal).blueprint -}}
+{{- $sidecar := (resources.Get "bookshop/components/preview/preview.yml" | transform.Unmarshal).arguments -}}
+{{- $wantDevices := delimit $sidecar.devices.default " " -}}
+{{- $gotDevices := delimit ($blueprint.devices | default slice) " " -}}
+{{- if ne $gotDevices $wantDevices }}
+FAIL blueprint-devices: want {{ $wantDevices }} got {{ $gotDevices }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "test-preview: blueprint-devices mismatch: want %q got %q" $wantDevices $gotDevices -}}
+{{- else }}
+PASS blueprint-devices
+{{- end }}
+{{- /* An empty device lets the block default to the first offered view without a warning,
+       so a CloudCannon block that offers no desktop view does not warn. */ -}}
+{{- with $blueprint.device }}
+FAIL blueprint-device: want empty got {{ . }}
+    {{- $fail = add $fail 1 -}}
+    {{- errorf "test-preview: blueprint-device mismatch: want empty got %q" . -}}
+{{- else }}
+PASS blueprint-device
+{{- end }}
+
+PREVIEW BLOCK FAILURES: {{ $fail }}
+</pre>
+</body>
+</html>

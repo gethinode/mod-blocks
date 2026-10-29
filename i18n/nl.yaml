@@ -1,0 +1,24 @@
+# Preview
+- id: previewActivate
+  translation: "Voorbeeld laden"
+- id: previewLoading
+  translation: "Live voorbeeld wordt geladen"
+- id: previewUnavailable
+  translation: "Het live voorbeeld is nu niet beschikbaar."
+- id: previewViewSelection
+  translation: "Weergaveselectie"
+- id: previewReady
+  translation: "Live voorbeeld gereed"
+
+- id: previewStatePreview
+  translation: "Voorbeeld"
+- id: previewStateLoading
+  translation: "Laden"
+- id: previewStateLive
+  translation: "Live"
+- id: previewStateUnavailable
+  translation: "Niet beschikbaar"
+- id: previewStateWait
+  translation: "Wacht"
+- id: previewStateError
+  translation: "Fout"

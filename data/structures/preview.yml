@@ -12,6 +12,179 @@ arguments:
     optional: true
   device:
     optional: true
+  devices:
+    type: slice
+    optional: true
+    default: [desktop, tablet, mobile]
+    comment: >-
+      Device views to offer, in the order the views and their buttons render.
+      Each entry is one of desktop, tablet or mobile, and the list must not be
+      empty. A repeated entry is dropped with a warning. When device names a
+      view that is not offered, the first offered view becomes the default
+      view instead.
+    options:
+      values:
+        - desktop
+        - tablet
+        - mobile
+  controls:
+    type: bool
+    optional: true
+    default: true
+    comment: >-
+      Flag indicating if the device switcher renders. Without it, the block
+      shows the largest offered device that fits the viewport, or the smallest
+      offered device when none fits, and swaps views when the viewport crosses
+      a device breakpoint.
+  frame:
+    type: select
+    optional: true
+    default: none
+    comment: >-
+      Window adds a title bar outside a contained native device viewport.
+      None keeps the original preview presentation.
+    options:
+      values:
+        - none
+        - window
+  frame-title:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Optional window title. Also names the frame for a single URL in a window.
+      Item frames keep the title of the selected item.
+  open-url:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Address opened by the single URL preview action, falling back to url.
+      Items keep their own open-url or url.
+  mobile-static:
+    type: bool
+    optional: true
+    default: false
+    comment: >-
+      Below 1024px show only the poster or image without navigating an embedded
+      frame. Returning to desktop starts a fresh eligible navigation.
+  activation:
+    type: select
+    optional: true
+    default: load
+    comment: >-
+      When the live view loads. With load, the shown view loads with the
+      page. With visible, the shown view loads after entering the viewport,
+      parent load and an idle opportunity with a 600ms timeout. With click, every view shows its poster with a button over it, and
+      no view loads until the button is pressed; after that, a view loads when
+      it is first shown. A block that shows its fallback shows no poster.
+    options:
+      values:
+        - load
+        - click
+        - visible
+  poster:
+    type: map[string]interface {}
+    optional: true
+    comment: >-
+      Poster image per device view. With click activation, every view shows
+      its poster until the preview is activated. With ready-message, every view
+      shows its poster, with either activation, until its frame posts the ready
+      message. A view that does not load within load-timeout shows its poster,
+      when it has one, behind its alert. A block that shows its fallback shows
+      no poster. The keys are desktop, tablet and mobile. A view without a
+      poster of its own uses the desktop poster, or a plain background when
+      there is none. The mode argument applies to posters too.
+  items:
+    type:
+      - slice
+      - '[]map[string]interface {}'
+    optional: true
+    comment: >-
+      Views to switch between as tabs above the frame, each with a title and a
+      url, both required, and an optional open-url, poster and heading. The
+      first item shows first, and items replace url, with a warning when both
+      are set. Switching tabs keeps the shown device, and once the block may
+      load its views, loads the item url in the shown view only. open-url
+      defaults to url. An item poster falls back from the view to the desktop
+      poster of the item, then to the block poster. When an item has a
+      heading, each tab shows the heading of its item, or the block heading
+      when its item has none, in place of the block heading. A block that
+      shows its fallback has no tabs and shows that heading of the first item
+      only. When the base URL of the site has a host and the block does not
+      already show its fallback, the build checks each distinct item url once,
+      without its fragment, in order, until one cannot be framed; that url
+      shows the fallback, and its alert names it. A url with a host gets a
+      request for its headers and, unless they refuse framing, a check against
+      the frame-src that the site publishes, if any; a url without a host,
+      such as /path, gets that frame-src check only. The views take the title
+      of the shown item as their title.
+  open-link:
+    type: bool
+    optional: true
+    default: false
+    comment: >-
+      Flag indicating if a link that opens the shown view in a new tab renders
+      under the frame, or only in the title bar with frame window, including
+      fallback. It points at the open-url of the shown item, else at its url,
+      else at open-url or url. Legacy fallback renders no such link.
+  links:
+    optional: true
+    comment: >-
+      Links to render as buttons under the frame, centered.
+  load-timeout:
+    type: int
+    optional: true
+    default: 15
+    comment: >-
+      Seconds a view that the script loads may take before the view shows an
+      alert with a link that opens the shown item in a new tab, over its poster
+      when it has one. The time counts from when the frame first comes into
+      view. Without ready-message, the load event of the frame ends the wait.
+      Chrome fires that event for an error status and a refused connection
+      too, so it catches a target that does not answer, not one that answers
+      with an error. When the base URL of the site has a host and the block
+      does not already show its fallback, the build requests the response
+      headers of a target url with a host, and a target whose headers refuse
+      framing shows the fallback; when the request fails, the build logs a
+      warning instead. It requests no headers for a url without a host, such
+      as /path. The view that loads with the page gets no deadline without
+      ready-message. A block that shows its build-time fallback gets no
+      deadline: the script gives its views no waiting, failed or busy state,
+      even when it gives the hidden frame of a view its src. A value that is
+      not positive counts as 15.
+  theme-message:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Opt-in theme request token. Requires ready-message. The child must answer
+      the normal ready-message query as well as correlated theme requests.
+      The current ready
+      frame must acknowledge the resolved outer theme and unique requestId
+      before it becomes visible. A transient iframe name seeds the next full
+      document before paint. The complete serialized seed is limited to 512
+      characters and requires an HTTP or HTTPS parent origin; invalid seeds
+      retain the poster and failure feedback without navigating. Leave empty
+      to preserve ordinary readiness with no theme requests.
+  ready-message:
+    type: string
+    optional: true
+    default: ""
+    comment: >-
+      Message that the framed page posts to this page when it is ready. When
+      set, a view stays busy behind its poster, with a waiting status and a
+      frame that cannot take focus, until the window of its current frame
+      posts exactly this string, or until load-timeout passes. The script posts
+      the same string to the frame when it loads, and when the script starts
+      for a frame that loaded with the page, so a page that announced itself
+      before the script listened can answer. A late answer still shows the
+      view. Showing another item, or a view for the first time, starts a new
+      wait. A block that shows its build-time fallback keeps data-ready-message
+      on its content but does not wait: its views take no waiting, ready or
+      failed state, busy state or deadline, the script posts no request to its
+      frames, and no message changes them. Leave it empty to end the wait on
+      the load event of the frame.
   controls-placement:
     optional: true
   desktop-responsive:
