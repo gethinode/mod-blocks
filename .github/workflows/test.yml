@@ -13,4 +13,6 @@ jobs:
     uses: gethinode/.github/.github/workflows/test.yml@v1
     with:
       package-manager: pnpm
+      # Hugo differs per OS, so all three stay; Node versions have not mattered.
+      node-matrix: '["lts/*"]'
     secrets: inherit
