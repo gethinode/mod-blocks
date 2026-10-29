@@ -2681,6 +2681,176 @@ test('theme bridge full navigation uses transient early seed and fresh proof des
 })
 
 
+// Samples the shown pane of a window preview on every animation frame and on
+// every attribute change of the pane, so a poster that shows for one frame is
+// seen. The poster counts as shown unless it is hidden and fully transparent.
+const NAV_SAMPLER = `(() => {
+  const pane=document.querySelector('.preview-content > .tab-pane.active'),poster=pane.querySelector('.preview-poster'),frame=pane.querySelector('.preview-iframe')
+  const word=document.querySelector('.preview-window-state .preview-state-word'),win=document.querySelector('.preview-window'),title=win.querySelector('.preview-window-title')
+  const label=()=>[...win.querySelectorAll('.preview-state-word,.preview-state-short')].find(el=>getComputedStyle(el).display!=='none').textContent
+  window.navSamples=[];window.statusChanges=0
+  const sample=()=>{const p=getComputedStyle(poster),f=getComputedStyle(frame),t=title.getBoundingClientRect();navSamples.push({state:pane.dataset.previewState||null,
+    poster:p.visibility!=='hidden'||p.opacity!=='0',frame:f.visibility==='visible'&&f.opacity==='1',inert:frame.inert,busy:pane.getAttribute('aria-busy'),
+    word:word.textContent,label:label(),win:win.dataset.previewState||null,compact:win.classList.contains('preview-window-compact'),titleX:t.x,titleW:t.width,focus:document.activeElement===frame})}
+  window.navObserver=new MutationObserver(sample);navObserver.observe(pane,{attributes:true});navObserver.observe(win,{attributes:true,childList:true,characterData:true,subtree:true})
+  new MutationObserver(records=>{statusChanges+=records.length}).observe(win.parentElement.querySelector('.preview-window-status'),{childList:true,characterData:true,subtree:true})
+  const tick=()=>{sample();window.navTick=requestAnimationFrame(tick)};tick()
+  window.stopNav=()=>{cancelAnimationFrame(navTick);navObserver.disconnect();return navSamples}
+})()`
+const NAV_PANE = `(() => {
+  const pane=document.querySelector('.preview-content > .tab-pane.active'),p=getComputedStyle(pane.querySelector('.preview-poster')),f=pane.querySelector('.preview-iframe')
+  return {state:pane.dataset.previewState||null,poster:p.visibility!=='hidden'||p.opacity!=='0',alert:getComputedStyle(pane.querySelector('.preview-unavailable')).display,
+    frame:getComputedStyle(f).visibility,inert:f.inert,word:document.querySelector('.preview-window-state .preview-state-word').textContent,reproof:[...document.querySelectorAll('.preview-content > .tab-pane')].some(el=>el.hasAttribute('data-preview-reproof'))}
+})()`
+const isReady=page=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready')
+// Records each text the polite window status takes after this point, one entry
+// per mutation of the status region, which is what a screen reader announces.
+const STATUS_LOG = `(() => { const status=document.querySelector('.preview-window-status');window.statusLog=[]
+  new MutationObserver(()=>statusLog.push(status.textContent)).observe(status,{childList:true,characterData:true,subtree:true});return status.textContent })()`
+const UNAVAILABLE_STATUS = 'The live preview is not available right now.'
+const READY_STATUS = 'Live preview ready'
+async function assertAnnouncedReady (page, label) {
+  await sleep(50)
+  const status=await page.evaluate("({text:document.querySelector('.preview-window-status').textContent,log:statusLog})")
+  assert.equal(status.text,READY_STATUS,label);assert.ok(status.log.includes(READY_STATUS),`${label}: announced by a mutation of the status region, got ${JSON.stringify(status.log)}`)
+}
+// loadOnly navigates without the pagehide invalidation and without the name
+// seed, whose startup invalidation would otherwise come first, so the load of
+// the next document alone starts the re-proof. motion is the emulated
+// prefers-reduced-motion: with reduce, the poster has no fade to hide a frame
+// in which it shows.
+async function readyThenNavigate (page, activation = 'visible', { loadOnly = false, motion = null } = {}) {
+  if(activation==='click'){await loadedParent(page);await page.evaluate(IN_VIEW);await page.evaluate("document.querySelector('.preview-activate').click()")}
+  await startThemed(page)
+  const first=await page.evaluate(NAV_PANE)
+  assert.equal(first.state,'waiting');assert.ok(first.poster,'first activation shows the poster until the first proof');assert.equal(first.reproof,false)
+  assert.equal(first.word,'Loading','first activation reads Loading')
+  await waitFor(async()=>(await themeRequests(page)).at(-1).data.theme==='dark','request for the current theme')
+  const old=(await themeRequests(page)).at(-1).data
+  await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'initial ACK')
+  await sleep(SETTLE_MS)
+  await page.evaluate("document.querySelector('.preview-iframe').focus()")
+  if(motion)await page.emulateMedia([{name:'prefers-reduced-motion',value:motion}])
+  await page.evaluate(NAV_SAMPLER)
+  // The old document posts applied:false on pagehide, and the next one on startup from its name
+  // seed, then the iframe loads the next one, unless loadOnly removes those invalidations.
+  await themeProbe(page,loadOnly?"(removeEventListener('pagehide',window.invalidate),window.name='',location.href='/theme?next',true)":"(location.href='/theme?next',true)")
+  await waitFor(()=>themeProbe(page,"location.search==='?next'&&window.themeRequests.length>0").catch(()=>false),'new real child document')
+  const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId,'fresh theme request for the new document')
+  assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','new document needs a new ACK')
+  return fresh
+}
+
+for(const [activation,options] of [['visible',{}],['load',{}],['click',{}],['visible',{loadOnly:true}],['visible',{motion:'reduce'}],['visible',{loadOnly:true,motion:'reduce'}],['visible',{height:200}]])test(`theme bridge ${activation}${options.loadOnly?' load-only':''}${options.motion?` ${options.motion}-motion`:''}${options.height?' compact':''} in-frame navigation after ready keeps the live frame and never shows the poster during re-proof`, {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,activation==='visible'?'themed-ready':`themed-${activation}`,1440,{height:options.height||900,beforeScript:(activation==='visible'?CONTROL_IDLE:'')+CONTROL_DEADLINE})
+  try{
+    await readyThenNavigate(page,activation,options)
+    await sleep(100)
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'new document ACK')
+    await sleep(SETTLE_MS)
+    const samples=await page.evaluate('stopNav()')
+    const waiting=samples.filter(s=>s.state==='waiting')
+    assert.ok(waiting.length>0,'the pane re-proves the new document')
+    if(options.height)assert.ok(samples[0].compact,'the title bar is compact')
+    assert.deepEqual(samples.filter(s=>s.poster),[],'the poster never shows')
+    assert.deepEqual(samples.filter(s=>!s.frame),[],'the live frame stays visible')
+    assert.deepEqual(waiting.filter(s=>s.inert||s.busy!=='true'||!s.focus),[],'re-proof is busy, without inerting the focused frame')
+    assert.equal(samples[0].label,'Live');assert.equal(samples[0].win,'ready')
+    assert.deepEqual(samples.filter(s=>s.label!=='Live'||s.word!=='Live'||s.win!=='ready'||s.compact!==samples[0].compact||s.titleX!==samples[0].titleX||s.titleW!==samples[0].titleW),[],'the title bar keeps its ready state and the title does not move')
+    assert.equal(await page.evaluate('statusChanges'),0,'re-proof announces nothing')
+    assert.deepEqual(samples.at(-1),{...samples.at(-1),state:'ready',word:'Live',inert:false,busy:null,poster:false})
+  }finally{await page.close()}
+})
+
+test('theme bridge outer theme change after ready keeps the live frame and never shows the poster while the new theme is acknowledged', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await startThemed(page)
+    const first=await page.evaluate(NAV_PANE)
+    assert.equal(first.state,'waiting');assert.ok(first.poster,'first activation shows the poster until the first proof')
+    const old=(await themeRequests(page)).at(-1).data
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'initial ACK')
+    await sleep(SETTLE_MS)
+    await page.evaluate("document.querySelector('.preview-iframe').focus()")
+    await page.evaluate(NAV_SAMPLER)
+    await page.evaluate("document.documentElement.dataset.bsTheme='light'")
+    await waitFor(()=>themeRequests(page).then(q=>q.at(-1).data.theme==='light'),'request for the new outer theme')
+    const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId,'fresh theme request')
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','the new theme needs a new ACK')
+    await sleep(100)
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'new theme ACK')
+    assert.equal(await themeProbe(page,'document.documentElement.dataset.bsTheme'),'light')
+    await sleep(SETTLE_MS)
+    const samples=await page.evaluate('stopNav()')
+    const waiting=samples.filter(s=>s.state==='waiting')
+    assert.ok(waiting.length>0,'the pane re-proves the new theme')
+    assert.deepEqual(samples.filter(s=>s.poster),[],'the poster never shows')
+    assert.deepEqual(samples.filter(s=>!s.frame),[],'the live frame stays visible')
+    assert.deepEqual(waiting.filter(s=>s.inert||s.busy!=='true'||!s.focus),[],'re-proof is busy, without inerting the focused frame')
+    assert.equal(samples[0].label,'Live');assert.equal(samples[0].win,'ready')
+    assert.deepEqual(samples.filter(s=>s.label!=='Live'||s.word!=='Live'||s.win!=='ready'||s.compact!==samples[0].compact||s.titleX!==samples[0].titleX||s.titleW!==samples[0].titleW),[],'the title bar keeps its ready state and the title does not move')
+    assert.equal(await page.evaluate('statusChanges'),0,'re-proof announces nothing')
+    assert.deepEqual(samples.at(-1),{...samples.at(-1),state:'ready',word:'Live',inert:false,busy:null,poster:false})
+  }finally{await page.close()}
+})
+
+test('theme bridge in-frame navigation that is never acknowledged fails at the deadline with poster and alert, and a late ACK recovers', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await readyThenNavigate(page)
+    await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:window,origin:${JSON.stringify(framing.allow)},data:'${TOKEN}'}))`)
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','a message from another window changes nothing')
+    await fireDeadline(page)
+    await waitFor(()=>page.evaluate(NAV_PANE).then(s=>s.state==='failed'),'deadline failure')
+    await sleep(SETTLE_MS)
+    assert.deepEqual(await page.evaluate(NAV_PANE),{state:'failed',poster:true,alert:'flex',frame:'hidden',inert:true,word:'Unavailable',reproof:false})
+    assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Unavailable')
+    // A new document of a failed frame waits behind its poster, not as a re-proof.
+    await themeProbe(page,"(location.href='/theme?again',true)")
+    await waitFor(()=>themeProbe(page,"location.search==='?again'&&window.themeRequests.length>0").catch(()=>false),'document after failure')
+    const again=await page.evaluate(NAV_PANE)
+    assert.equal(again.state,'waiting');assert.equal(again.word,'Loading','a wait after failure reads Loading');assert.equal(again.reproof,false);assert.ok(again.poster,'a failed frame shows the poster while its next document proves itself');assert.equal(again.inert,true)
+    await fireDeadline(page);await waitFor(()=>page.evaluate(NAV_PANE).then(s=>s.state==='failed'),'second deadline failure')
+    assert.equal(await page.evaluate(STATUS_LOG),UNAVAILABLE_STATUS,'the failure is the current status')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'late ACK recovers')
+    await assertAnnouncedReady(page,'a late ACK announces the recovery')
+    await page.evaluate('stopNav()')
+  }finally{await page.close()}
+})
+
+test('theme bridge first ready after a failure announces the live preview again', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await readyThenNavigate(page)
+    await page.evaluate('stopNav()')
+    await fireDeadline(page);await waitFor(()=>page.evaluate(NAV_PANE).then(s=>s.state==='failed'),'deadline failure')
+    assert.equal(await page.evaluate(STATUS_LOG),UNAVAILABLE_STATUS,'the failure is the current status')
+    await themeProbe(page,"(location.href='/theme?again',true)")
+    await waitFor(()=>themeProbe(page,"location.search==='?again'&&window.themeRequests.length>0").catch(()=>false),'document after failure')
+    assert.equal((await page.evaluate(NAV_PANE)).state,'waiting')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'first ready after the failure')
+    await assertAnnouncedReady(page,'the first ready after a failure announces the live preview')
+  }finally{await page.close()}
+})
+
+test('theme bridge teardown during re-proof clears it, and the next activation shows the poster until its first proof', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await readyThenNavigate(page)
+    await page.evaluate('stopNav()')
+    assert.equal((await page.evaluate(NAV_PANE)).reproof,true,'re-proof is under way')
+    await page.resize(390,600)
+    assert.equal((await page.evaluate(WINDOW_STATE)).src,null)
+    assert.equal((await page.evaluate(NAV_PANE)).reproof,false,'teardown clears re-proof')
+    await page.resize(1440,900);await page.evaluate(IN_VIEW)
+    await idlePending(page);await page.evaluate('flushIdle()')
+    await waitFor(()=>themeRequests(page).then(q=>q.length>0).catch(()=>false),'new activation document')
+    const next=await page.evaluate(NAV_PANE)
+    assert.equal(next.state,'waiting');assert.equal(next.reproof,false);assert.ok(next.poster,'a new activation shows the poster until its first proof');assert.equal(next.inert,true)
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'new activation ACK')
+  }finally{await page.close()}
+})
+
 for(const activation of ['load','click','visible']){
  test(`theme bridge ${activation} preserves static zero requests and admitted activation`,{skip},async()=>{
   const name=activation==='visible'?'themed-ready':`themed-${activation}`

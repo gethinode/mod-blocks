@@ -162,8 +162,16 @@ arguments:
       the normal ready-message query as well as correlated theme requests.
       The current ready
       frame must acknowledge the resolved outer theme and unique requestId
-      before it becomes visible. A transient iframe name seeds the next full
-      document before paint. The complete serialized seed is limited to 512
+      before it becomes visible. A view whose frame is ready, or already
+      re-proving, re-proves when the frame navigates or the outer theme
+      changes: the frame stays shown and interactive, it is not inert and
+      keeps focus, the poster stays hidden, the view is busy, and the title
+      bar of a window frame keeps its ready state (Live) without a new status
+      announcement, until the new document or theme is acknowledged the same
+      way. The load-timeout deadline still fails a
+      re-proof. The first wait of a view, and a wait after it failed, stay
+      behind the poster as ready-message describes. A transient iframe name
+      seeds the next full document before paint. The complete serialized seed is limited to 512
       characters and requires an HTTP or HTTPS parent origin; invalid seeds
       retain the poster and failure feedback without navigating. Leave empty
       to preserve ordinary readiness with no theme requests.
@@ -175,7 +183,11 @@ arguments:
       Message that the framed page posts to this page when it is ready. When
       set, a view stays busy behind its poster, with a waiting status and a
       frame that cannot take focus, until the window of its current frame
-      posts exactly this string, or until load-timeout passes. The script posts
+      posts exactly this string, or until load-timeout passes. With
+      theme-message, a view whose frame is ready re-proves instead when the
+      frame navigates or the outer theme changes, as theme-message describes;
+      its first wait, and a wait after it failed, stay behind its poster. The
+      script posts
       the same string to the frame when it loads, and when the script starts
       for a frame that loaded with the page, so a page that announced itself
       before the script listened can answer. A late answer still shows the

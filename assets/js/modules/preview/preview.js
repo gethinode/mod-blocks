@@ -82,6 +82,13 @@
  * seed lets a participating child style its next full document before paint;
  * pagehide/startup invalidation and iframe load require fresh proof. Seeds are
  * limited to 512 characters; invalid admission keeps useful failure feedback.
+ * When that proof is for a new document, or a new outer theme, of a frame
+ * that is ready, or already re-proving, the pane re-proves: it waits and is
+ * busy, with data-preview-reproof, but its iframe stays shown and not inert,
+ * its poster stays hidden, and a window keeps the title bar state and status
+ * text of a ready pane, so its title bar does not change and nothing is
+ * announced. Any other wait, the first one included, shows the
+ * poster as before, and the deadline still fails a re-proof.
  */
 
 ;(function () {
@@ -252,7 +259,7 @@
     if (!seedTheme(record)) { setState(record, 'failed'); return }
     record.themeRequest = request
     if (record.state === 'ready' || record.state === null) {
-      setState(record, 'waiting')
+      reprove(record)
       stopDeadline(record)
       startDeadline(record)
     }
@@ -273,14 +280,16 @@
     return (seconds > 0 ? seconds : PREVIEW_LOAD_TIMEOUT) * 1000
   }
 
+  // A re-proving pane keeps the title bar and status of a ready one, so the
+  // state word, the window state and the announced status do not change.
   function updateWindowStatus (container) {
     if (container.dataset.frame !== 'window') return
     const win = container.closest('.preview-window')
     const status = win.querySelector('.preview-window-status')
     const visible = win.querySelector('.preview-window-state')
     const pane = container.querySelector(':scope > .tab-pane.active')
-    const state = isStatic(container) ? 'preview' : (pane && pane.dataset.previewState) || (container.querySelector('.preview-error:not(.d-none)') ? 'failed' : 'preview')
-    status.textContent = status.dataset[`${state}Label`]
+    const state = isStatic(container) ? 'preview' : (pane && pane.dataset.previewReproof ? 'ready' : pane && pane.dataset.previewState) || (container.querySelector('.preview-error:not(.d-none)') ? 'failed' : 'preview')
+    if (status.textContent !== status.dataset[`${state}Label`]) status.textContent = status.dataset[`${state}Label`]
     visible.querySelector('.preview-state-word').textContent = visible.dataset[`${state}Label`]
     visible.querySelector('.preview-state-short').textContent = visible.dataset[`compact${state[0].toUpperCase() + state.slice(1)}Label`] || visible.dataset[`${state}Label`]
     win.dataset.previewState = state
@@ -289,17 +298,27 @@
 
   /**
    * Sets the state of the pane of a navigation, with the busy state and inert
-   * iframe that go with it.
+   * iframe that go with it. A re-proof is a wait that keeps the live iframe
+   * shown and interactive: the pane carries data-preview-reproof, which the
+   * stylesheet reads to keep the poster hidden.
    */
-  function setState (record, state) {
+  function setState (record, state, reproof = false) {
     const { iframe, pane, container } = record
     if (!owned(container) || isStatic(container) || frames.get(iframe) !== record) return
     record.state = state
+    record.reproof = reproof
     pane.dataset.previewState = state
+    if (record.reproof) pane.dataset.previewReproof = 'true'; else delete pane.dataset.previewReproof
     const waiting = state === 'waiting' && readyMessage(container) !== ''
     if (waiting) pane.setAttribute('aria-busy', 'true'); else pane.removeAttribute('aria-busy')
-    if (waiting || state === 'failed') iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
+    if ((waiting && !record.reproof) || state === 'failed') iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
     updateWindowStatus(container)
+  }
+
+  // A new document or outer theme in a frame that is live, or still
+  // re-proving, re-proves without the poster and with a ready title bar. A frame that is not live yet, or failed, waits as usual.
+  function reprove (record) {
+    setState(record, 'waiting', record.state === 'ready' || record.reproof)
   }
 
   function stopDeadline (record) {
@@ -354,7 +373,7 @@
     const record = { iframe, pane, container, state: null, timer: null, observer: null,
       originalName: iframe.getAttribute('name'), seedId: 0, origin: null, themeRequest: null, applied: null,
       guarded: !!context.guarded, controller: context.controller, generation: context.controller && context.controller.generation,
-      guardReady: false, appStarted: false, cancelled: false, loaded: !context.guarded && iframe.hasAttribute('src') }
+      guardReady: false, appStarted: false, cancelled: false, reproof: false, loaded: !context.guarded && iframe.hasAttribute('src') }
     frames.set(iframe, record)
     return record
   }
@@ -397,7 +416,7 @@
         const wasLoaded = record.loaded
         record.loaded = true
         const wasReady = record.state === 'ready'
-        setState(record, 'waiting')
+        reprove(record)
         if (wasLoaded || wasReady) { stopDeadline(record); startDeadline(record) }
       }
       if (readyMessage(record.container)) askReady(record); else markReady(record)
@@ -425,6 +444,7 @@
     if (!record && enhanced(pane.closest('.preview-content')) && (iframe.getAttribute('name') || '').startsWith(THEME_SEED_PREFIX)) iframe.removeAttribute('name')
     frames.delete(iframe)
     delete pane.dataset.previewState
+    delete pane.dataset.previewReproof
     pane.removeAttribute('aria-busy')
     if (readyMessage(pane.closest('.preview-content'))) iframe.setAttribute('inert', ''); else iframe.removeAttribute('inert')
   }
@@ -466,7 +486,7 @@
         record.origin = null
         record.themeRequest = null
         record.applied = null
-        setState(record, 'waiting')
+        reprove(record)
         stopDeadline(record)
         startDeadline(record)
         return
