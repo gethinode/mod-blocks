@@ -2737,6 +2737,35 @@ for(const activation of ['visible','load','click'])test(`theme bridge ${activati
   }finally{await page.close()}
 })
 
+test('theme bridge outer theme change after ready keeps the live frame and never shows the poster while the new theme is acknowledged', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await startThemed(page)
+    const first=await page.evaluate(NAV_PANE)
+    assert.equal(first.state,'waiting');assert.ok(first.poster,'first activation shows the poster until the first proof')
+    const old=(await themeRequests(page)).at(-1).data
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'initial ACK')
+    await sleep(SETTLE_MS)
+    await page.evaluate("document.querySelector('.preview-iframe').focus()")
+    await page.evaluate(NAV_SAMPLER)
+    await page.evaluate("document.documentElement.dataset.bsTheme='light'")
+    await waitFor(()=>themeRequests(page).then(q=>q.at(-1).data.theme==='light'),'request for the new outer theme')
+    const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId,'fresh theme request')
+    assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','the new theme needs a new ACK')
+    await sleep(100)
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'new theme ACK')
+    assert.equal(await themeProbe(page,'document.documentElement.dataset.bsTheme'),'light')
+    await sleep(SETTLE_MS)
+    const samples=await page.evaluate('stopNav()')
+    const waiting=samples.filter(s=>s.state==='waiting')
+    assert.ok(waiting.length>0,'the pane re-proves the new theme')
+    assert.deepEqual(samples.filter(s=>s.poster),[],'the poster never shows')
+    assert.deepEqual(samples.filter(s=>!s.frame),[],'the live frame stays visible')
+    assert.deepEqual(waiting.filter(s=>s.inert||s.busy!=='true'||s.word!=='Loading'||!s.focus),[],'re-proof is busy and reads Loading, without inerting the focused frame')
+    assert.deepEqual(samples.at(-1),{...samples.at(-1),state:'ready',word:'Live',inert:false,busy:null,poster:false})
+  }finally{await page.close()}
+})
+
 test('theme bridge in-frame navigation that is never acknowledged fails at the deadline with poster and alert, and a late ACK recovers', {skip},async()=>{
   const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
   try{

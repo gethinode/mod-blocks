@@ -82,10 +82,10 @@
  * seed lets a participating child style its next full document before paint;
  * pagehide/startup invalidation and iframe load require fresh proof. Seeds are
  * limited to 512 characters; invalid admission keeps useful failure feedback.
- * When that proof is for a new document of a frame that is ready, or already
- * re-proving, the pane re-proves: it waits and is busy, with
- * data-preview-reproof, but its iframe stays shown and not inert, and its
- * poster stays hidden. Any other wait, the first one included, shows the
+ * When that proof is for a new document, or a new outer theme, of a frame
+ * that is ready, or already re-proving, the pane re-proves: it waits and is
+ * busy, with data-preview-reproof, but its iframe stays shown and not inert,
+ * and its poster stays hidden. Any other wait, the first one included, shows the
  * poster as before, and the deadline still fails a re-proof.
  */
 
@@ -257,7 +257,7 @@
     if (!seedTheme(record)) { setState(record, 'failed'); return }
     record.themeRequest = request
     if (record.state === 'ready' || record.state === null) {
-      setState(record, 'waiting')
+      reprove(record)
       stopDeadline(record)
       startDeadline(record)
     }
@@ -311,8 +311,8 @@
     updateWindowStatus(container)
   }
 
-  // A new document in a frame that is live, or still re-proving, re-proves
-  // without the poster. A frame that is not live yet, or failed, waits as usual.
+  // A new document or outer theme in a frame that is live, or still
+  // re-proving, re-proves without the poster. A frame that is not live yet, or failed, waits as usual.
   function reprove (record) {
     setState(record, 'waiting', record.state === 'ready' || record.reproof)
   }
