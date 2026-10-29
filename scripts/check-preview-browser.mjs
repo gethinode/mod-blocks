@@ -316,6 +316,8 @@ function buildDeniedSite () {
   for(const activation of ['load','click'])fs.writeFileSync(path.join(dir,`themed-${activation}.md`),themedMarkdown.replace('activation: visible',`activation: ${activation}`))
   fs.writeFileSync(path.join(dir,'owned-visible.md'),themedMarkdown.replace(/theme_message: demo:theme/, '').replace('/theme','/x'))
   fs.writeFileSync(path.join(dir,'themed-announce.md'),themedMarkdown.replace('/theme','/theme?announce-only'))
+  // ACK correlation takes many DevTools round trips; a slow runner must not hit the deadline.
+  fs.writeFileSync(path.join(dir,'themed-patient.md'),themedMarkdown.replace('load_timeout: 2','load_timeout: 30'))
   const config = path.join(tmp, 'denied.toml')
   fs.writeFileSync(config, `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n[params.modules.framing.csp]\n  frame-src = ["${framing.deny}", "${framing.allow}"]\n`)
   return hugo('public-denied', ['--config', `hugo.toml,${config}`], dir)
@@ -2551,7 +2553,7 @@ async function startThemed (page) {
 }
 
 test('theme bridge keeps real current document hidden until correlated applied ACK and outer theme', {skip},async()=>{
-  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE})
+  const page=await openPage(browser.cdp,deniedBase,'themed-patient',1440,{beforeScript:CONTROL_IDLE})
   try{
     const first=await startThemed(page)
     assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
@@ -2584,7 +2586,7 @@ test('theme bridge keeps real current document hidden until correlated applied A
 })
 
 test('theme bridge full navigation uses transient early seed and fresh proof despite same WindowProxy', {skip},async()=>{
-  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
+  const page=await openPage(browser.cdp,deniedBase,'themed-patient',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
   try{
     const old=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'initial ACK')
     await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow;void 0")
