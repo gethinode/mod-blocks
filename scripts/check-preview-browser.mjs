@@ -664,7 +664,14 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
     state: () => evaluate(STATE),
     releaseScripts,
     send,
-    resize: (w, h = height) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }),
+    // Resolves once the page has handled the new size: Chrome dispatches resize
+    // and media query change events before the next frame's animation callbacks,
+    // so a test never asserts against a resize the page has not seen yet.
+    resize: async (w, h = height) => {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false })
+      await evaluate(`new Promise(resolve => { setTimeout(resolve, 2000)
+        const check = () => innerWidth === ${w} ? requestAnimationFrame(() => setTimeout(resolve)) : requestAnimationFrame(check); check() })`)
+    },
     // Presses Enter on the focused element, as a keyboard does.
     async pressEnter () {
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' })
@@ -2304,7 +2311,7 @@ for (const activation of ['load', 'click']) {
         await page.evaluate('document.querySelector(".preview-activate").click()')
       }
       await waitFor(() => page.requests.length === 1, 'eligible desktop return')
-      await page.resize(390); await sleep(100)
+      await page.resize(390)
       assert.equal((await page.evaluate(WINDOW_STATE)).state, null)
       await page.resize(1024); await page.evaluate(IN_VIEW)
       if (activation === 'click') {
@@ -2392,6 +2399,16 @@ async function positionWindow (page, scrollFallback = false) {
     else scrollBy(0, win.getBoundingClientRect().top - document.querySelector('.navbar').getBoundingClientRect().height - parseFloat(getComputedStyle(win).marginTop)) })()`)
   await sleep(100)
 }
+// The window's layout follows resize and intersection observations, which a
+// slow runner delivers late. Reads it once it meets assertWindowAction, or after
+// three seconds, so the assertion that follows judges a settled layout.
+const windowActionOk = b => b.open.width >= 24 && b.open.height >= 24 && b.contained && b.hit && b.overflow === false &&
+  b.viewport.width > 0 && b.viewport.height > 0 && Math.abs(b.viewport.width / b.viewport.height - 1.6) < 0.002
+async function settledWindowAction (page) {
+  let b
+  await waitFor(async () => windowActionOk(b = await page.evaluate(WINDOW_ACTION)), 'a settled window action', 3000).catch(() => {})
+  return b
+}
 function assertWindowAction (b) {
   const detail = JSON.stringify(b)
   assert.ok(b.open.width >= 24 && b.open.height >= 24, `minimum action target: ${detail}`)
@@ -2410,7 +2427,7 @@ for (const height of [220, 240, 320, 360, 400, 768, 900]) {
         await page.evaluate(`document.querySelector('.navbar').style.height = '${enlarged ? 110 : 91}px';
           ${enlarged ? "document.querySelector('.preview-window-bar').style.cssText = 'font-size:40px;padding:24px 60px;min-height:100px';" : ''}`)
         await sleep(200); await positionWindow(page)
-        const b = await page.evaluate(WINDOW_ACTION)
+        const b = await settledWindowAction(page)
         t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
         assert.notEqual(b.fit, 'scroll', 'feasible short canvas still fits')
         assert.ok(b.win.height + 2*b.margin <= b.height-b.nav+2, 'complete window and margins fit after navigation')
@@ -2435,7 +2452,7 @@ for (const [name,width,height,state] of [['window-visible',1440,220,'waiting'], 
       await sleep(200); await positionWindow(page)
       if (state === 'waiting') { await idlePending(page); await page.evaluate('flushIdle()') }
       if (state) await waitFor(() => page.evaluate(WINDOW_ACTION).then(b => b.state === state), 'short lifecycle state')
-      const b = await page.evaluate(WINDOW_ACTION); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
+      const b = await settledWindowAction(page); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
       assert.equal(await page.evaluate('document.querySelectorAll(".preview-open").length'),1)
       if (width < 1024) assert.deepEqual(page.requests, [], 'static narrow state has zero app requests')
     } finally { await page.close() }
@@ -2461,7 +2478,7 @@ for (const [height, font, navigationHeight, scroll] of [[220,16,91,false], [240,
       await sleep(200)
       await page.evaluate(`(() => {const open=document.querySelector('.preview-open');open.scrollIntoView({block:'start',behavior:'instant'});const a=open.getBoundingClientRect();scrollBy({top:a.top-document.querySelector('.navbar').getBoundingClientRect().bottom-.25,behavior:'instant'})})()`)
       await sleep(200)
-      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b))
+      const b=await settledWindowAction(page);t.diagnostic(JSON.stringify(b))
       assert.ok(b.open.width>=28&&b.open.height>=28,'whole28px action retained')
       assert.equal(b.fit==='scroll',scroll,'honest fit/scroll branch')
       if(scroll){
@@ -2495,13 +2512,13 @@ test('window impossible height keeps useful uncropped viewport and page-scroll a
   try {
     await loadedParent(page); await page.evaluate("document.querySelector('.navbar').style.height='91px'")
     await sleep(200); await positionWindow(page,true)
-    const b = await page.evaluate(WINDOW_ACTION); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
+    const b = await settledWindowAction(page); t.diagnostic(JSON.stringify(b)); assertWindowAction(b)
     assert.equal(b.fit,'scroll','impossible canvas explicitly uses ordinary page scrolling')
     assert.ok(b.viewport.width >= 320 && b.win.height > b.height-b.nav, 'fallback preserves a useful native viewport')
     await page.evaluate("document.querySelector('.preview-open').focus()")
     assert.equal(await page.evaluate("document.activeElement.matches('.preview-open')"),true)
-    await page.resize(1440,900); await sleep(200); await positionWindow(page)
-    const recovered=await page.evaluate(WINDOW_ACTION); assertWindowAction(recovered)
+    await page.resize(1440,900); await positionWindow(page)
+    const recovered=await settledWindowAction(page); assertWindowAction(recovered)
     assert.notEqual(recovered.fit,'scroll','resize restores normal fit')
     assert.equal(recovered.compact,false)
   } finally { await page.close() }
@@ -2515,7 +2532,7 @@ for (const [name,width,height,dark] of [['window-ok',1440,900,false], ['window-o
       await page.evaluate(`document.documentElement.dataset.bsTheme='${dark ? 'dark' : 'light'}';document.querySelector('.navbar').style.height='91px'`)
       await sleep(200);await positionWindow(page)
       if (name==='window-ok'||name==='window-503') await waitFor(() => page.evaluate(WINDOW_ACTION).then(b=>b.state===(name==='window-ok'?'ready':'failed')),'radius runtime state')
-      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b))
+      const b=await settledWindowAction(page);t.diagnostic(JSON.stringify(b))
       assert.ok(b.corners.every(value=>parseFloat(value)>0),`all four independent window radii: ${JSON.stringify(b.corners)}`)
       assertWindowAction(b)
       if(width<1024)assert.deepEqual(page.requests,[])
@@ -2541,7 +2558,7 @@ for (const constrained of [false,true]) {
       await page.evaluate(`document.querySelector('.navbar').style.height='91px';
         ${constrained ? "document.querySelector('.preview-window').parentElement.style.cssText='max-width:100px;padding-inline:16px;margin-inline:auto';dispatchEvent(new Event('resize'))" : ''}`)
       await sleep(200);await positionWindow(page)
-      const b=await page.evaluate(WINDOW_ACTION);t.diagnostic(JSON.stringify(b));assertWindowAction(b)
+      const b=await settledWindowAction(page);t.diagnostic(JSON.stringify(b));assertWindowAction(b)
       assert.equal(b.compact,true)
       assert.notEqual(b.fit,'scroll','feasible constrained window fits')
       assert.ok(b.win.height+2*b.margin <= b.height-b.nav+2,'complete constrained window fits')
@@ -2578,7 +2595,7 @@ test('window static Preview and explicit CSS square token keep action and native
     assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Preview')
     assert.notEqual((await page.evaluate(FEEDBACK_PAINT)).scrim,'rgba(0, 0, 0, 0.3)')
     await page.evaluate("document.querySelector('.preview-window').style.setProperty('--preview-window-border-radius','0')")
-    const b=await page.evaluate(WINDOW_ACTION);assert.ok(b.corners.every(v=>parseFloat(v)===0));assertWindowAction(b);assert.deepEqual(page.requests,[])
+    const b=await settledWindowAction(page);assert.ok(b.corners.every(v=>parseFloat(v)===0));assertWindowAction(b);assert.deepEqual(page.requests,[])
   }finally{await page.close()}
 })
 
@@ -2652,7 +2669,7 @@ test('theme bridge full navigation uses transient early seed and fresh proof des
     await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'new document ACK')
     await page.evaluate(`dispatchEvent(new MessageEvent('message',{source:previousThemeFrame,origin:${JSON.stringify(framing.allow)},data:${JSON.stringify({...old,applied:false})}}))`)
     assert.equal((await page.evaluate(WINDOW_STATE)).state,'ready','superseded invalidation cannot undo fresh proof')
-    await page.resize(390,600);await sleep(100)
+    await page.resize(390,600)
     assert.equal((await page.evaluate(WINDOW_STATE)).src,null);assert.equal(await page.evaluate("document.querySelector('.preview-iframe').getAttribute('name')"),'original-preview-frame')
     await page.resize(1440,900);await page.evaluate(IN_VIEW)
     await idlePending(page);await page.evaluate('flushIdle()')
@@ -2692,7 +2709,7 @@ test('theme seed overflow fails closed before navigation while preserving visibl
   assert.equal(page.documentRequests.filter(u=>u.startsWith(framing.allow)).length,0)
   assert.equal((await page.evaluate(WINDOW_STATE)).src,null)
   assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Unavailable')
-  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+  await positionWindow(page);assertWindowAction(await settledWindowAction(page))
  }finally{await page.close()}
 })
 
@@ -2734,7 +2751,7 @@ for(const height of [220,240,320,768])for(const name of ['window-visible','windo
    await loadedParent(page);await page.evaluate("document.querySelector('.navbar').style.height='91px'");await sleep(100);await positionWindow(page)
    if(name==='window-visible'){await idlePending(page);await page.evaluate('flushIdle()')}
    if(name==='window-ok'||name==='window-503')await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state===(name==='window-ok'?'ready':'failed')),'state')
-   const b=await page.evaluate(WINDOW_ACTION);assertWindowAction(b)
+   const b=await settledWindowAction(page);assertWindowAction(b)
    const word=await page.evaluate("(()=>{const el=document.querySelector('.preview-window-state'),r=el.getBoundingClientRect(),w=el.closest('.preview-window').getBoundingClientRect();return {text:el.innerText,inside:r.left>=w.left&&r.right<=w.right&&r.top>=w.top&&r.bottom<=w.bottom,hit:el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),height:r.height}})()")
    t.diagnostic(JSON.stringify({b,word}));assert.ok(word.text&&word.inside&&word.hit,JSON.stringify(word));assert.ok(word.height>0)
    if(name==='window-fallback'){
@@ -2793,7 +2810,7 @@ test('static phone fallback stays Preview with no error scrim, spinner or child 
   await loadedParent(page);await page.evaluate(IN_VIEW);await sleep(100)
   const value=await page.evaluate("(()=>{const e=document.querySelector('.preview-error:not(.d-none)');return {word:document.querySelector('.preview-window-state').innerText,scrim:getComputedStyle(e,'::after').backgroundColor,status:getComputedStyle(e.querySelector('.preview-fallback-status')).display,src:document.querySelector('.preview-iframe').getAttribute('src')}})()")
   assert.equal(value.word,'Preview');assert.notEqual(value.scrim,'rgba(0, 0, 0, 0.3)');assert.equal(value.status,'none');assert.equal(value.src,null);assert.deepEqual(page.requests,[])
-  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+  await positionWindow(page);assertWindowAction(await settledWindowAction(page))
  }finally{await page.close()}
 })
 
@@ -2866,7 +2883,7 @@ for(const name of ['window-visible','window-load','window-click'])test(`ownershi
   assert.equal(state.static,'true');assert.equal((await page.evaluate(FEEDBACK_PAINT)).word,'Preview')
   assert.equal(await page.evaluate("getComputedStyle(document.querySelector('.preview-iframe')).display"),'none')
   assert.equal(await page.evaluate("document.querySelector('.preview-activate')?getComputedStyle(document.querySelector('.preview-activate')).display:'none'"),'none')
-  await positionWindow(page);assertWindowAction(await page.evaluate(WINDOW_ACTION))
+  await positionWindow(page);assertWindowAction(await settledWindowAction(page))
  }finally{await page.close()}
 })
 for(const name of ['default','click'])test(`ownership capability absence preserves unconfigured legacy ${name}`,{skip},async()=>{
