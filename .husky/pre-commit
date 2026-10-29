@@ -1,1 +1,2 @@
-pnpm test
+# Fast suites only. The preview error builds and the browser suite run in CI.
+pnpm test:bookshop && pnpm test:preview-js
