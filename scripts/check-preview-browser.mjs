@@ -23,13 +23,16 @@
 //
 // Two knobs imitate a slow CI runner, so timing races show up locally:
 // CDP_LAG=<ms> delays every DevTools answer, and IO_LAG=<ms> delays every
-// IntersectionObserver callback of the top page. The suite is expected to pass
-// with CDP_LAG=100 and, in a separate run, with IO_LAG=300: together, the late
-// answers hide the late callbacks. A test whose outcome depends on the load
+// IntersectionObserver callback of the top page, and CPU_SLOW=<rate> throttles
+// each page's CPU by that factor, so the page works slower than the check's own
+// sleeps. The suite is expected to pass with CDP_LAG=100, IO_LAG=300 and
+// CPU_SLOW=4, each in a separate run: together, the late answers hide the late
+// callbacks. A test whose outcome depends on the load
 // deadline takes CONTROL_DEADLINE and fires it, and a test that asserts a
 // transient state holds the page that would end it (serve's hold and release).
 const CDP_LAG = Number(process.env.CDP_LAG) || 0
 const IO_LAG = Number(process.env.IO_LAG) || 0
+const CPU_SLOW = Number(process.env.CPU_SLOW) || 0
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -625,6 +628,7 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   if (IO_LAG) beforeScript = `{ const Native = IntersectionObserver; window.IntersectionObserver = class extends Native {
     constructor (callback, options) { super((entries, observer) => setTimeout(() => callback(entries, observer), ${IO_LAG}), options) } } };` + beforeScript
   if (beforeScript) await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (window === window.top) { ${beforeScript} }` })
+  if (CPU_SLOW) await send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOW })
   await send('Network.enable')
   await send('Page.enable')
   await send('DOM.enable')
@@ -1493,7 +1497,14 @@ test('ready-phone: the acknowledgement of one device view does not reveal anothe
     await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-mobile"]\').click()')
     await until(page, value => value.device === 'mobile' && value.state === 'waiting', 'the mobile wait')
     await assertWaiting(page, 'mobile')
+    // On a timeout, report the desktop pane and the frame requests: CI saw this
+    // view never become ready, and a timeout alone cannot say why.
     await waitFor(() => page.evaluate('document.querySelector(\'section.preview [id$="-desktop"]\').dataset.previewState === \'ready\''), 'the hidden desktop view to become ready')
+      .catch(async error => {
+        const desktop = await page.evaluate(`(() => { const pane = document.querySelector('section.preview [id$="-desktop"]'), frame = pane.querySelector('iframe')
+          return { state: pane.dataset.previewState || null, src: frame.getAttribute('src'), url: (() => { try { return frame.contentWindow.location.href } catch { return 'cross-origin' } })() } })()`)
+        throw new Error(`${error.message}: desktop ${JSON.stringify(desktop)}, requests ${JSON.stringify(page.urls)}`)
+      })
     await assertWaiting(page, 'mobile after the desktop acknowledgement')
     await assertFailed(page, child('phone'), 'mobile')
     await page.evaluate('document.querySelector(\'section.preview .preview-controls [data-bs-target$="-desktop"]\').click()')
@@ -2128,8 +2139,8 @@ for (const waitForReady of [false, true]) {
       // Ends in void 0: returning a same-origin Window by value fails in DevTools.
       await page.evaluate('window.oldFrame = document.querySelector(".preview-iframe"); window.oldWindow = oldFrame.contentWindow; void 0')
       await page.resize(1023)
-      await sleep(100)
-      const state = await page.evaluate(WINDOW_STATE)
+      // The resize is handled on the page's next frame, not when DevTools answers.
+      const state = await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.src === null && s), 'static at 1023').catch(() => page.evaluate(WINDOW_STATE))
       assert.equal(state.src, null); assert.equal(state.state, null); assert.equal(state.busy, null)
       assert.equal(await page.evaluate('oldFrame === document.querySelector(".preview-iframe")'), false)
       await page.evaluate(`dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(TOKEN)}, source: oldWindow }))`)
