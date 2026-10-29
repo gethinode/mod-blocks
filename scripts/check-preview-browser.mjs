@@ -20,6 +20,16 @@
 //
 // Chrome is looked up at CHROME_PATH, then at the usual install locations. When
 // none is found, or it does not start, the check is skipped with the reason.
+//
+// Two knobs imitate a slow CI runner, so timing races show up locally:
+// CDP_LAG=<ms> delays every DevTools answer, and IO_LAG=<ms> delays every
+// IntersectionObserver callback of the top page. The suite is expected to pass
+// with CDP_LAG=100 and, in a separate run, with IO_LAG=300: together, the late
+// answers hide the late callbacks. A test whose outcome depends on the load
+// deadline takes CONTROL_DEADLINE and fires it, and a test that asserts a
+// transient state holds the page that would end it (serve's hold and release).
+const CDP_LAG = Number(process.env.CDP_LAG) || 0
+const IO_LAG = Number(process.env.IO_LAG) || 0
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -316,8 +326,6 @@ function buildDeniedSite () {
   for(const activation of ['load','click'])fs.writeFileSync(path.join(dir,`themed-${activation}.md`),themedMarkdown.replace('activation: visible',`activation: ${activation}`))
   fs.writeFileSync(path.join(dir,'owned-visible.md'),themedMarkdown.replace(/theme_message: demo:theme/, '').replace('/theme','/x'))
   fs.writeFileSync(path.join(dir,'themed-announce.md'),themedMarkdown.replace('/theme','/theme?announce-only'))
-  // ACK correlation takes many DevTools round trips; a slow runner must not hit the deadline.
-  fs.writeFileSync(path.join(dir,'themed-patient.md'),themedMarkdown.replace('load_timeout: 2','load_timeout: 30'))
   const config = path.join(tmp, 'denied.toml')
   fs.writeFileSync(config, `[security.http]\n  urls = ['^https?://127\\.0\\.0\\.1:\\d+/']\n[params.modules.framing.csp]\n  frame-src = ["${framing.deny}", "${framing.allow}"]\n`)
   return hugo('public-denied', ['--config', `hugo.toml,${config}`], dir)
@@ -389,10 +397,14 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/ja
 function serve (root) {
   const previewRequests = []
   const held = []
+  // Paths a test holds until it releases them, so a transient state it asserts
+  // cannot pass before it looks.
+  const holds = new Map()
   const server = http.createServer((req, res) => {
     const pathname=new URL(req.url,'http://x').pathname
     if(req.method==='GET'&&pathname.startsWith('/preview-demo/')&&pathname.endsWith('/'))previewRequests.push(pathname)
     if(pathname==='/preview-demo/held/'){held.push(res);return}
+    if(holds.has(pathname)){holds.get(pathname).push(()=>server.emit('request',req,res));return}
     if(pathname==='/preview-demo/unavailable/'){res.writeHead(503,{'Content-Type':'text/html'});res.end('<!doctype html><title>Unavailable</title><p>Service unavailable</p>');return}
     let file = path.join(root, decodeURIComponent(pathname))
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html')
@@ -401,6 +413,8 @@ function serve (root) {
     fs.createReadStream(file).pipe(res)
   })
   server.releaseHeld=()=>{const body=fs.readFileSync(path.join(root,'preview-demo/ready/index.html'));held.splice(0).forEach(res=>{if(res.destroyed)return;res.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});res.end(body)})}
+  server.hold=pathname=>{holds.set(pathname,[])}
+  server.release=pathname=>{const waiting=holds.get(pathname)||[];holds.delete(pathname);waiting.forEach(fn=>fn())}
   server.previewRequests=previewRequests
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)))
 }
@@ -418,7 +432,8 @@ class CDP {
       if (msg.id && this.pending.has(msg.id)) {
         const { resolve, reject } = this.pending.get(msg.id)
         this.pending.delete(msg.id)
-        if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`)); else resolve(msg.result)
+        const settle = () => { if (msg.error) reject(new Error(`${msg.error.message} (${msg.error.code})`)); else resolve(msg.result) }
+        if (CDP_LAG) setTimeout(settle, CDP_LAG); else settle()
       } else if (msg.method) {
         this.handlers.forEach(fn => fn(msg))
       }
@@ -470,6 +485,18 @@ async function launch (chromePath) {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+// Holds back the load deadlines of the preview script: a timer of the top page
+// whose delay is a data-load-timeout of the page, or the 15 s default. The test
+// fires them with fireDeadlines(), so whether a view has failed, or kept its
+// deadline, never depends on how fast the runner is. Other timers run as usual.
+const CONTROL_DEADLINE = `window.deadlines = new Map();
+  { const set = window.setTimeout, clear = window.clearTimeout;
+    const isDeadline = delay => delay === 15000 || [...document.querySelectorAll('[data-load-timeout]')].some(el => Number(el.dataset.loadTimeout) * 1000 === delay);
+    window.setTimeout = (fn, delay, ...args) => { if (typeof fn !== 'function' || !isDeadline(delay)) return set(fn, delay, ...args);
+      const id = set(() => {}, 2147483647); deadlines.set(id, () => fn(...args)); return id };
+    window.clearTimeout = id => { deadlines.delete(id); clear(id) };
+    window.fireDeadlines = () => { const due = [...deadlines.entries()]; deadlines.clear(); due.forEach(([id, fn]) => { clear(id); fn() }) } };`
+
 async function waitFor (check, what, timeout = 10000) {
   const end = Date.now() + timeout
   for (;;) {
@@ -478,6 +505,13 @@ async function waitFor (check, what, timeout = 10000) {
     if (Date.now() > end) throw new Error(`timed out waiting for ${what}`)
     await sleep(25)
   }
+}
+
+// Fires the pending load deadline of a CONTROL_DEADLINE page. A deadline starts
+// when its iframe intersects, so it is waited for, not assumed.
+async function fireDeadline (page) {
+  await waitFor(() => page.evaluate('deadlines.size === 1'), 'one pending load deadline')
+  await page.evaluate('fireDeadlines()')
 }
 
 // Reports each pane and button of the page's preview: its device, whether it is
@@ -588,6 +622,8 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
     scripts.splice(0).forEach(requestId => send('Fetch.continueRequest', { requestId }).catch(() => {}))
     return childAnswered
   })()
+  if (IO_LAG) beforeScript = `{ const Native = IntersectionObserver; window.IntersectionObserver = class extends Native {
+    constructor (callback, options) { super((entries, observer) => setTimeout(() => callback(entries, observer), ${IO_LAG}), options) } } };` + beforeScript
   if (beforeScript) await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (window === window.top) { ${beforeScript} }` })
   await send('Network.enable')
   await send('Page.enable')
@@ -1781,13 +1817,16 @@ test('nocontrols at 600x1080px without a navbar: the mobile frame stays within 8
 // The readiness demo page of the exampleSite frames its own demo pages: Ready
 // posts example:ready and answers a request, Silent never posts it.
 test('components/preview-ready: the Ready tab shows its view, the Silent tab fails with a link to its page', { skip }, async () => {
-  const page = await openPage(browser.cdp, base, 'components/preview-ready', 1280)
+  const page = await openPage(browser.cdp, base, 'components/preview-ready', 1280, { beforeScript: CONTROL_DEADLINE })
   try {
     await page.settle([])
     assert.equal(await page.evaluate('document.querySelectorAll(\'section.preview iframe[src]\').length'), 0, 'nothing loads before the button')
     assert.equal(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-error\')].some(el => el.offsetParent)'), false, 'the site frame-src allows the demo pages')
+    // Held, the Ready page cannot answer before the wait is seen.
+    servers[0].hold('/preview-demo/ready/')
     await activateWithEnter(page)
     await assertWaiting(page, 'Ready')
+    servers[0].release('/preview-demo/ready/')
     await assertReady(page, 'Ready')
     // The Ready page answers a request with the ready message, and nothing else.
     const replies = await page.evaluate(`new Promise(resolve => {
@@ -1817,13 +1856,14 @@ test('components/preview-ready: the Ready tab shows its view, the Silent tab fai
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/ready/`])
     await clickItem(page, 1)
     await assertWaiting(page, 'Silent')
-    await sleep(3000)
     await assertWaiting(page, 'Silent before its deadline')
+    await fireDeadline(page)
     await assertFailed(page, `${base}/preview-demo/silent/`, 'Silent')
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/silent/`])
     await clickItem(page, 0)
     await assertReady(page, 'Ready again')
   } finally {
+    servers[0].release('/preview-demo/ready/')
     await page.close()
   }
 })
@@ -2553,7 +2593,7 @@ async function startThemed (page) {
 }
 
 test('theme bridge keeps real current document hidden until correlated applied ACK and outer theme', {skip},async()=>{
-  const page=await openPage(browser.cdp,deniedBase,'themed-patient',1440,{beforeScript:CONTROL_IDLE})
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
   try{
     const first=await startThemed(page)
     assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
@@ -2586,7 +2626,7 @@ test('theme bridge keeps real current document hidden until correlated applied A
 })
 
 test('theme bridge full navigation uses transient early seed and fresh proof despite same WindowProxy', {skip},async()=>{
-  const page=await openPage(browser.cdp,deniedBase,'themed-patient',1440,{beforeScript:CONTROL_IDLE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE+"document.addEventListener('DOMContentLoaded',()=>document.querySelector('.preview-iframe').setAttribute('name','original-preview-frame'),{once:true})"})
   try{
     const old=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'initial ACK')
     await page.evaluate("window.previousThemeFrame=document.querySelector('.preview-iframe').contentWindow;void 0")
@@ -2646,14 +2686,14 @@ test('theme seed overflow fails closed before navigation while preserving visibl
 })
 
 test('theme rapid changes supersede pending proof and late matching ACK recovers failure', {skip},async()=>{
- const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE})
+ const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
  try{
   const first=await startThemed(page);await themeProbe(page,'(window.ack(0),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'first ACK')
   await page.evaluate("document.documentElement.dataset.bsTheme='light'");await waitFor(()=>themeRequests(page).then(q=>q.length>=2),'pending light')
   await page.evaluate("document.documentElement.dataset.bsTheme='dark'");await waitFor(()=>themeRequests(page).then(q=>q.length>=3),'superseding dark')
   const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>first.requestId)
   await themeProbe(page,'(window.ack(1),true)');await sleep(30);assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting')
-  await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='failed'),'theme ACK deadline')
+  await fireDeadline(page);assert.equal((await page.evaluate(WINDOW_STATE)).state,'failed','theme ACK deadline')
   await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'late current ACK')
  }finally{await page.close()}
 })
@@ -2857,13 +2897,15 @@ for(const policy of ['no-referrer','same-origin','strict-origin'])test(`guard in
 
 
 test('native blank guard is not app readiness, a restarted navigation or a deadline reset',{skip},async()=>{
- const page=await openPage(browser.cdp,base,'window-guard-held',1440,{beforeScript:CONTROL_IDLE});const before=servers[0].previewRequests.length
+ const page=await openPage(browser.cdp,base,'window-guard-held',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE});const before=servers[0].previewRequests.length
  try{
   await loadedParent(page);await page.evaluate(IN_VIEW);await idlePending(page);await page.evaluate('flushIdle()');await waitFor(()=>servers[0].previewRequests.length===before+1,'one held actual HTTP app request')
   assert.equal(await page.evaluate("document.querySelector('section.preview iframe').contentDocument.URL"),'about:srcdoc')
   assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','blank native load never marks Live without an app load')
-  await sleep(1300);await page.evaluate("document.querySelector('section.preview iframe').dispatchEvent(new Event('load'))")
-  await sleep(900);assert.equal((await page.evaluate(WINDOW_STATE)).state,'failed','blank load cannot reset the real app deadline')
+  await waitFor(()=>page.evaluate('deadlines.size===1'),'the app deadline');const deadline=await page.evaluate('[...deadlines.keys()]')
+  await page.evaluate("document.querySelector('section.preview iframe').dispatchEvent(new Event('load'))")
+  assert.deepEqual(await page.evaluate('[...deadlines.keys()]'),deadline,'blank load cannot reset the real app deadline')
+  await fireDeadline(page);assert.equal((await page.evaluate(WINDOW_STATE)).state,'failed','the original deadline still fails the view')
   assert.equal(servers[0].previewRequests.length,before+1,'blank load never recursively restarts the app')
   servers[0].releaseHeld();await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'actual late HTTP app load recovers normally')
   assert.equal(await page.evaluate("document.querySelector('section.preview iframe').contentDocument.querySelector('h1').textContent"),'Project workspace')
