@@ -2701,7 +2701,12 @@ const NAV_PANE = `(() => {
     frame:getComputedStyle(f).visibility,inert:f.inert,reproof:[...document.querySelectorAll('.preview-content > .tab-pane')].some(el=>el.hasAttribute('data-preview-reproof'))}
 })()`
 const isReady=page=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready')
-async function readyThenNavigate (page, activation = 'visible') {
+// loadOnly navigates without the pagehide invalidation and without the name
+// seed, whose startup invalidation would otherwise come first, so the load of
+// the next document alone starts the re-proof. motion is the emulated
+// prefers-reduced-motion: with reduce, the poster has no fade to hide a frame
+// in which it shows.
+async function readyThenNavigate (page, activation = 'visible', { loadOnly = false, motion = null } = {}) {
   if(activation==='click'){await loadedParent(page);await page.evaluate(IN_VIEW);await page.evaluate("document.querySelector('.preview-activate').click()")}
   await startThemed(page)
   const first=await page.evaluate(NAV_PANE)
@@ -2711,19 +2716,21 @@ async function readyThenNavigate (page, activation = 'visible') {
   await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'initial ACK')
   await sleep(SETTLE_MS)
   await page.evaluate("document.querySelector('.preview-iframe').focus()")
+  if(motion)await page.emulateMedia([{name:'prefers-reduced-motion',value:motion}])
   await page.evaluate(NAV_SAMPLER)
-  // The old document posts applied:false on pagehide, then the iframe loads the next one.
-  await themeProbe(page,"(location.href='/theme?next',true)")
+  // The old document posts applied:false on pagehide, and the next one on startup from its name
+  // seed, then the iframe loads the next one, unless loadOnly removes those invalidations.
+  await themeProbe(page,loadOnly?"(removeEventListener('pagehide',window.invalidate),window.name='',location.href='/theme?next',true)":"(location.href='/theme?next',true)")
   await waitFor(()=>themeProbe(page,"location.search==='?next'&&window.themeRequests.length>0").catch(()=>false),'new real child document')
   const fresh=(await themeRequests(page)).at(-1).data;assert.ok(fresh.requestId>old.requestId,'fresh theme request for the new document')
   assert.equal((await page.evaluate(WINDOW_STATE)).state,'waiting','new document needs a new ACK')
   return fresh
 }
 
-for(const activation of ['visible','load','click'])test(`theme bridge ${activation} in-frame navigation after ready keeps the live frame and never shows the poster during re-proof`, {skip},async()=>{
+for(const [activation,options] of [['visible',{}],['load',{}],['click',{}],['visible',{loadOnly:true}],['visible',{motion:'reduce'}],['visible',{loadOnly:true,motion:'reduce'}]])test(`theme bridge ${activation}${options.loadOnly?' load-only':''}${options.motion?` ${options.motion}-motion`:''} in-frame navigation after ready keeps the live frame and never shows the poster during re-proof`, {skip},async()=>{
   const page=await openPage(browser.cdp,deniedBase,activation==='visible'?'themed-ready':`themed-${activation}`,1440,{beforeScript:(activation==='visible'?CONTROL_IDLE:'')+CONTROL_DEADLINE})
   try{
-    await readyThenNavigate(page,activation)
+    await readyThenNavigate(page,activation,options)
     await sleep(100)
     await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'new document ACK')
     await sleep(SETTLE_MS)
