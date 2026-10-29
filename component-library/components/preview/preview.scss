@@ -131,13 +131,15 @@ section.preview {
     // preview.js sets data-preview-state on a pane to waiting, ready or failed. With a
     // ready message, the poster covers a view until it is ready, also after activation,
     // with a waiting status instead of its button, and the iframe fades in under it.
+    // A pane that re-proves a new document of a live frame, data-preview-reproof,
+    // keeps its poster hidden and its iframe shown.
     .preview-content[data-ready-message] {
         > .tab-pane:not([data-preview-state="ready"]) .preview-poster {
             opacity: 1;
             visibility: visible;
         }
 
-        > .tab-pane[data-preview-state="ready"] .preview-poster {
+        > .tab-pane:is([data-preview-state="ready"], [data-preview-reproof]) .preview-poster {
             opacity: 0;
             visibility: hidden;
         }
@@ -150,7 +152,7 @@ section.preview {
             @include transition($transition-fade);
         }
 
-        > .tab-pane:not([data-preview-state="ready"]) .preview-iframe {
+        > .tab-pane:not([data-preview-state="ready"], [data-preview-reproof]) .preview-iframe {
             opacity: 0;
         }
     }

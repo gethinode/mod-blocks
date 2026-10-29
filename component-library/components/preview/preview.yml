@@ -156,7 +156,10 @@ arguments:
       the normal ready-message query as well as correlated theme requests.
       The current ready
       frame must acknowledge the resolved outer theme and unique requestId
-      before it becomes visible. A transient iframe name seeds the next full
+      before it becomes visible. When a ready frame navigates, its new
+      document stays visible and the view busy while it proves itself the
+      same way; a window frame shows the waiting state in its title bar. A
+      transient iframe name seeds the next full
       document before paint. The complete serialized seed is limited to 512
       characters and requires an HTTP or HTTPS parent origin; invalid seeds
       retain the poster and failure feedback without navigating. Leave empty
