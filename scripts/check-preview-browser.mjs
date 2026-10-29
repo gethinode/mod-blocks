@@ -2703,6 +2703,17 @@ const NAV_PANE = `(() => {
     frame:getComputedStyle(f).visibility,inert:f.inert,word:document.querySelector('.preview-window-state .preview-state-word').textContent,reproof:[...document.querySelectorAll('.preview-content > .tab-pane')].some(el=>el.hasAttribute('data-preview-reproof'))}
 })()`
 const isReady=page=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready')
+// Records each text the polite window status takes after this point, one entry
+// per mutation of the status region, which is what a screen reader announces.
+const STATUS_LOG = `(() => { const status=document.querySelector('.preview-window-status');window.statusLog=[]
+  new MutationObserver(()=>statusLog.push(status.textContent)).observe(status,{childList:true,characterData:true,subtree:true});return status.textContent })()`
+const UNAVAILABLE_STATUS = 'The live preview is not available right now.'
+const READY_STATUS = 'Live preview ready'
+async function assertAnnouncedReady (page, label) {
+  await sleep(50)
+  const status=await page.evaluate("({text:document.querySelector('.preview-window-status').textContent,log:statusLog})")
+  assert.equal(status.text,READY_STATUS,label);assert.ok(status.log.includes(READY_STATUS),`${label}: announced by a mutation of the status region, got ${JSON.stringify(status.log)}`)
+}
 // loadOnly navigates without the pagehide invalidation and without the name
 // seed, whose startup invalidation would otherwise come first, so the load of
 // the next document alone starts the re-proof. motion is the emulated
@@ -2800,8 +2811,25 @@ test('theme bridge in-frame navigation that is never acknowledged fails at the d
     const again=await page.evaluate(NAV_PANE)
     assert.equal(again.state,'waiting');assert.equal(again.word,'Loading','a wait after failure reads Loading');assert.equal(again.reproof,false);assert.ok(again.poster,'a failed frame shows the poster while its next document proves itself');assert.equal(again.inert,true)
     await fireDeadline(page);await waitFor(()=>page.evaluate(NAV_PANE).then(s=>s.state==='failed'),'second deadline failure')
+    assert.equal(await page.evaluate(STATUS_LOG),UNAVAILABLE_STATUS,'the failure is the current status')
     await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'late ACK recovers')
+    await assertAnnouncedReady(page,'a late ACK announces the recovery')
     await page.evaluate('stopNav()')
+  }finally{await page.close()}
+})
+
+test('theme bridge first ready after a failure announces the live preview again', {skip},async()=>{
+  const page=await openPage(browser.cdp,deniedBase,'themed-ready',1440,{beforeScript:CONTROL_IDLE+CONTROL_DEADLINE})
+  try{
+    await readyThenNavigate(page)
+    await page.evaluate('stopNav()')
+    await fireDeadline(page);await waitFor(()=>page.evaluate(NAV_PANE).then(s=>s.state==='failed'),'deadline failure')
+    assert.equal(await page.evaluate(STATUS_LOG),UNAVAILABLE_STATUS,'the failure is the current status')
+    await themeProbe(page,"(location.href='/theme?again',true)")
+    await waitFor(()=>themeProbe(page,"location.search==='?again'&&window.themeRequests.length>0").catch(()=>false),'document after failure')
+    assert.equal((await page.evaluate(NAV_PANE)).state,'waiting')
+    await themeProbe(page,'(window.ack(themeRequests.length-1),true)');await waitFor(()=>isReady(page),'first ready after the failure')
+    await assertAnnouncedReady(page,'the first ready after a failure announces the live preview')
   }finally{await page.close()}
 })
 
