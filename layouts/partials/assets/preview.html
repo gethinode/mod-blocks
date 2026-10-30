@@ -501,10 +501,12 @@
         <div class="preview-window-bar">
             <span class="preview-window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
             <span class="preview-window-title">{{ $args.frameTitle }}</span>
-            <span class="preview-window-state" aria-hidden="true" data-preview-label="{{ T "previewStatePreview" }}" data-waiting-label="{{ T "previewStateLoading" }}" data-ready-label="{{ T "previewStateLive" }}" data-failed-label="{{ T "previewStateUnavailable" }}" data-compact-waiting-label="{{ T "previewStateWait" }}" data-compact-failed-label="{{ T "previewStateError" }}"><span class="preview-state-word">{{ T "previewStatePreview" }}</span><span class="preview-state-short">{{ T "previewStatePreview" }}</span></span>
-            {{- if and $args.openLink $url }}
-            <a class="preview-open" href="{{ $openUrl }}" target="_blank" rel="noopener" aria-label="{{ T "previewOpenTab" }}" title="{{ T "previewOpenTab" }}">{{ partial "assets/icon.html" (dict "icon" $previewOpen "spacing" false "page" $page) }}</a>
-            {{- end }}
+            <span class="preview-window-end">
+                <span class="preview-window-state" aria-hidden="true" data-preview-label="{{ T "previewStatePreview" }}" data-waiting-label="{{ T "previewStateLoading" }}" data-ready-label="{{ T "previewStateLive" }}" data-failed-label="{{ T "previewStateUnavailable" }}" data-compact-waiting-label="{{ T "previewStateWait" }}" data-compact-failed-label="{{ T "previewStateError" }}"><span class="preview-state-word">{{ T "previewStatePreview" }}</span><span class="preview-state-short">{{ T "previewStatePreview" }}</span></span>
+                {{- if and $args.openLink $url }}
+                <a class="preview-open" href="{{ $openUrl }}" target="_blank" rel="noopener" aria-label="{{ T "previewOpenTab" }}" title="{{ T "previewOpenTab" }}">{{ partial "assets/icon.html" (dict "icon" $previewOpen "spacing" false "page" $page) }}</a>
+                {{- end }}
+            </span>
         </div>
     {{- end }}
     {{/* Tab content with iframes */}}
