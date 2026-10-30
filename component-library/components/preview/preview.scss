@@ -444,12 +444,13 @@ section.preview {
         box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.12);
     }
 
-    // Equal flexible flanks center the title on the whole bar, whatever the
-    // widths of the dots, the status and the action. The flanks never shrink
-    // below their content, so a long title truncates before it reaches either.
+    // Equal flexible flanks center the title on the whole bar. The script sets
+    // --preview-window-flank to the wider flank, so the title stays centered
+    // when it truncates; without it, the flanks still never shrink below their
+    // content, so a long title truncates before it reaches either.
     .preview-window-bar {
         display: grid;
-        grid-template-columns: 1fr auto 1fr;
+        grid-template-columns: minmax(var(--preview-window-flank, auto), 1fr) auto minmax(var(--preview-window-flank, auto), 1fr);
         align-items: center;
         gap: 0.75rem;
         padding: 0.5rem 0.75rem;
@@ -467,6 +468,8 @@ section.preview {
             white-space: nowrap;
             text-align: center;
         }
+
+        &.preview-window-untitled .preview-window-title { visibility: hidden; }
 
         // The window fit measures the group as one fixed-width child of the bar.
         .preview-window-end {

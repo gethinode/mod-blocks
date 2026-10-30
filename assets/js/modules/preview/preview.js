@@ -737,6 +737,8 @@
     const bar = measuredWindows.get(container)
     if (bar) {
       geometryObserver.unobserve(bar)
+      const end = bar.querySelector('.preview-window-end')
+      if (end) geometryObserver.unobserve(end)
       measuredWindows.delete(container)
     }
   }
@@ -765,6 +767,9 @@
         const bar = container.closest('.preview-window').querySelector('.preview-window-bar')
         measuredWindows.set(container, bar)
         geometryObserver.observe(bar)
+        // A new state word or a late font resizes the end flank, not the bar.
+        const end = bar.querySelector('.preview-window-end')
+        if (end) geometryObserver.observe(end)
       }
       if (!enhanced(container)) return
       if ([...container.querySelectorAll('iframe[data-src]')].some(iframe => !guardTarget(iframe))) { staticEnhancement(container); return }
@@ -822,7 +827,25 @@
     win.style.marginBlock = `${margin}px`
     win.style.width = `${fittedWidth}px`
     container.style.height = `${container.getBoundingClientRect().width * height / width}px`
+    fitTitle(win, bar)
     return { width, height }
+  }
+
+  // Both flanks reserve the width of the wider one, so the title centers on the
+  // whole bar and truncates evenly. A bar too narrow for two such flanks hides
+  // the title rather than show it off center; the flanks then keep their own
+  // widths, so the status and action stay in place.
+  function fitTitle (win, bar) {
+    const dots = bar.querySelector('.preview-window-dots')
+    const end = bar.querySelector('.preview-window-end')
+    if (!dots || !end || win.classList.contains('preview-window-compact')) return
+    const style = window.getComputedStyle(bar)
+    const flank = Math.max(dots.getBoundingClientRect().width, end.getBoundingClientRect().width)
+    const available = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2 * (parseFloat(style.columnGap) || 0)
+    const fits = 2 * flank <= available
+    if (fits) bar.style.setProperty('--preview-window-flank', `${flank}px`)
+    else bar.style.removeProperty('--preview-window-flank')
+    bar.classList.toggle('preview-window-untitled', !fits)
   }
 
   function updatePreviewScale () {
