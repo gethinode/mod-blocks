@@ -2459,6 +2459,91 @@ for (const [name,width,height,state] of [['window-visible',1440,220,'waiting'], 
   })
 }
 
+// The title centers on the whole bar, not on the space the flanks leave: the
+// status and action are wider than the dots, and the status changes width. A
+// title too long for the space truncates evenly, clear of both flanks; a bar too
+// narrow for two equal flanks hides the title instead of showing it off center.
+const WINDOW_TITLE = `(() => {
+  const bar=document.querySelector('.preview-window-bar'),title=bar.querySelector('.preview-window-title'),dots=bar.querySelector('.preview-window-dots')
+  const state=bar.querySelector('.preview-window-state'),open=bar.querySelector('.preview-open'),r=el=>el.getBoundingClientRect()
+  const b=r(bar),t=r(title),style=getComputedStyle(bar),px=v=>parseFloat(v)||0
+  return {label:[...state.children].find(el=>getComputedStyle(el).display!=='none').textContent,compact:bar.closest('.preview-window').classList.contains('preview-window-compact'),
+    barCenter:b.left+px(style.borderLeftWidth)+(b.width-px(style.borderLeftWidth)-px(style.borderRightWidth))/2,titleCenter:t.left+t.width/2,gap:px(style.columnGap),
+    titleLeft:t.left,titleRight:t.right,dotsRight:r(dots).right,stateLeft:r(state).left,stateRight:r(state).right,openLeft:r(open).left,openRight:r(open).right,
+    contentRight:b.right-px(style.borderRightWidth)-px(style.paddingRight),titleShown:getComputedStyle(title).visibility==='visible'&&t.width>0,
+    truncated:title.scrollWidth>title.clientWidth,ellipsis:getComputedStyle(title).textOverflow,stateVisible:r(state).width>0&&getComputedStyle(state).visibility==='visible'}
+})()`
+const LONG_TITLE = 'A long window title that cannot fit between the flanks '.repeat(8)
+async function setWindowTitle (page, text) {
+  await page.evaluate(`document.querySelector('.preview-window-title').textContent = ${JSON.stringify(text)}`)
+  await sleep(100)
+}
+function assertTitleCentered (b, what) {
+  const detail = JSON.stringify(b)
+  assert.ok(b.titleShown, `${what}: the title shows: ${detail}`)
+  assert.ok(Math.abs(b.titleCenter - b.barCenter) <= 1, `${what}: title center ${b.titleCenter} is the bar center ${b.barCenter} within 1px: ${detail}`)
+}
+function assertTitleBar (b, what) {
+  const detail = JSON.stringify(b)
+  if (b.titleShown) assert.ok(b.titleLeft >= b.dotsRight + b.gap - 0.5 && b.titleRight <= b.stateLeft - b.gap + 0.5, `${what}: the title stays a gap clear of both flanks: ${detail}`)
+  assert.ok(b.stateVisible, `${what}: the status stays visible: ${detail}`)
+  assert.ok(Math.abs(b.openLeft - b.stateRight - b.gap) <= 0.5, `${what}: the action sits one gap after the status: ${detail}`)
+  assert.ok(Math.abs(b.openRight - b.contentRight) <= 0.5, `${what}: the action sits flush at the end of the bar: ${detail}`)
+}
+const titleSettled = b => { try { assertTitleBar(b, ''); if (b.titleShown) assertTitleCentered(b, ''); return true } catch { return false } }
+async function windowTitlePage (name, state, label, width) {
+  const page = await openPage(browser.cdp, base, name, width, { height:900 })
+  await loadedParent(page)
+  await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === state), 'window title state')
+  await waitFor(() => page.evaluate(WINDOW_TITLE).then(b => b.label === label), 'window title label')
+  return page
+}
+for (const [name,state,label] of [['window-ok','ready','Live'], ['window-503','failed','Unavailable']]) {
+  for (const width of [1440, 1024, 400]) {
+    test(`window title centers on the full bar with status ${label} at ${width}`, { skip }, async t => {
+      const page = await windowTitlePage(name, state, label, width)
+      try {
+        await setWindowTitle(page, 'Example workspace')
+        const b = await page.evaluate(WINDOW_TITLE); t.diagnostic(JSON.stringify(b))
+        assert.equal(b.compact, false, 'the normal title bar shows the title')
+        assertTitleCentered(b, 'short title'); assertTitleBar(b, 'short title')
+        await setWindowTitle(page, LONG_TITLE)
+        const long = await page.evaluate(WINDOW_TITLE); t.diagnostic(JSON.stringify(long))
+        assert.equal(long.compact, false, 'a long title does not compact the bar')
+        assert.ok(long.truncated && long.ellipsis === 'ellipsis', 'a long title truncates with an ellipsis')
+        assertTitleCentered(long, 'long title'); assertTitleBar(long, 'long title')
+        // A late font widens the status without resizing the bar or changing state.
+        await page.evaluate("document.querySelector('.preview-window-state').style.letterSpacing = '0.5em'")
+        let wide
+        await waitFor(async () => titleSettled(wide = await page.evaluate(WINDOW_TITLE)), 'a refit after the status widens', 3000).catch(() => {})
+        t.diagnostic(JSON.stringify(wide))
+        assert.ok(wide.stateRight - wide.stateLeft > long.stateRight - long.stateLeft + 5, 'the status is wider')
+        if (width > 400) assert.ok(wide.titleShown, 'a wide bar still shows the title')
+        if (wide.titleShown) assertTitleCentered(wide, 'wider status')
+        assertTitleBar(wide, 'wider status')
+      } finally { await page.close() }
+    })
+  }
+  test(`window title stays centered or gives way as the window narrows with status ${label}`, { skip }, async t => {
+    const page = await windowTitlePage(name, state, label, 1440)
+    try {
+      await setWindowTitle(page, LONG_TITLE)
+      const seen = { centered:0, hidden:0 }
+      for (let width = 440; width >= 120; width -= 2) {
+        await page.evaluate(`document.querySelector('.preview-window').parentElement.style.width = '${width}px'`)
+        // The fit follows a resize observation, which a slow runner delivers late.
+        let b
+        await waitFor(async () => { b = await page.evaluate(WINDOW_TITLE); return b.compact || titleSettled(b) }, `a settled title at ${width}px`, 3000).catch(() => {})
+        if (b.compact) continue
+        assertTitleBar(b, `window ${width}px`)
+        if (b.titleShown) { assertTitleCentered(b, `window ${width}px`); seen.centered++ } else seen.hidden++
+      }
+      t.diagnostic(JSON.stringify(seen))
+      assert.ok(seen.centered > 0 && seen.hidden > 0, `the sweep crosses from a centered title to a hidden one: ${JSON.stringify(seen)}`)
+    } finally { await page.close() }
+  })
+}
+
 // A full-width scroll fallback must leave room for native page scrolling at
 // the viewport edges. DOM hit queries alone do not establish native routing.
 for (const [height, font, navigationHeight, scroll] of [[220,16,91,false], [240,16,91,false], [220,32,177,true], [240,32,177,true], [120,16,91,true], [1000,16,91,false]]) {
