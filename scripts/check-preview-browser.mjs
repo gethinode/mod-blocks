@@ -2459,6 +2459,43 @@ for (const [name,width,height,state] of [['window-visible',1440,220,'waiting'], 
   })
 }
 
+// The title centers on the whole bar, not on the space the flanks leave: the
+// status and action are wider than the dots, and the status changes width. A
+// title too long for the space truncates before it reaches either flank.
+const WINDOW_TITLE = `(() => {
+  const bar=document.querySelector('.preview-window-bar'),title=bar.querySelector('.preview-window-title'),dots=bar.querySelector('.preview-window-dots')
+  const state=bar.querySelector('.preview-window-state'),open=bar.querySelector('.preview-open'),r=el=>el.getBoundingClientRect()
+  const b=r(bar),t=r(title),style=getComputedStyle(bar)
+  return {label:[...state.children].find(el=>getComputedStyle(el).display!=='none').textContent,compact:bar.closest('.preview-window').classList.contains('preview-window-compact'),
+    barCenter:b.left+parseFloat(style.borderLeftWidth)+(b.width-parseFloat(style.borderLeftWidth)-parseFloat(style.borderRightWidth))/2,titleCenter:t.left+t.width/2,
+    titleLeft:t.left,titleRight:t.right,dotsRight:r(dots).right,stateLeft:r(state).left,stateRight:r(state).right,openLeft:r(open).left,openRight:r(open).right,barRight:b.right,
+    truncated:title.scrollWidth>title.clientWidth,ellipsis:getComputedStyle(title).textOverflow,stateVisible:r(state).width>0&&getComputedStyle(state).visibility==='visible'}
+})()`
+for (const [name,state,label] of [['window-ok','ready','Live'], ['window-503','failed','Unavailable']]) {
+  for (const width of [1440, 1024]) {
+    test(`window title centers on the full bar with status ${label} at ${width}`, { skip }, async t => {
+      const page = await openPage(browser.cdp, base, name, width, { height:900 })
+      try {
+        await loadedParent(page)
+        await waitFor(() => page.evaluate(WINDOW_STATE).then(s => s.state === state), 'window title state')
+        await waitFor(() => page.evaluate(WINDOW_TITLE).then(b => b.label === label), 'window title label')
+        await page.evaluate("document.querySelector('.preview-window-title').textContent = 'Example workspace'")
+        await sleep(100)
+        const b = await page.evaluate(WINDOW_TITLE); t.diagnostic(JSON.stringify(b))
+        assert.equal(b.compact, false, 'the normal title bar shows the title')
+        assert.ok(Math.abs(b.titleCenter - b.barCenter) <= 1, `title center ${b.titleCenter} is the bar center ${b.barCenter} within 1px`)
+        await page.evaluate(`document.querySelector('.preview-window-title').textContent = '${'A long window title that cannot fit between the flanks '.repeat(8)}'`)
+        await sleep(100)
+        const long = await page.evaluate(WINDOW_TITLE); t.diagnostic(JSON.stringify(long))
+        assert.equal(long.compact, false, 'a long title does not compact the bar')
+        assert.ok(long.truncated && long.ellipsis === 'ellipsis', 'a long title truncates with an ellipsis')
+        assert.ok(long.titleLeft >= long.dotsRight && long.titleRight <= long.stateLeft, `a long title stays clear of both flanks: ${JSON.stringify(long)}`)
+        assert.ok(long.stateVisible && long.stateRight <= long.openLeft && long.openRight <= long.barRight, 'the status stays visible and the action stays inside the bar')
+      } finally { await page.close() }
+    })
+  }
+}
+
 // A full-width scroll fallback must leave room for native page scrolling at
 // the viewport edges. DOM hit queries alone do not establish native routing.
 for (const [height, font, navigationHeight, scroll] of [[220,16,91,false], [240,16,91,false], [220,32,177,true], [240,32,177,true], [120,16,91,true], [1000,16,91,false]]) {
