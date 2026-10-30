@@ -2512,6 +2512,15 @@ for (const [name,state,label] of [['window-ok','ready','Live'], ['window-503','f
         assert.equal(long.compact, false, 'a long title does not compact the bar')
         assert.ok(long.truncated && long.ellipsis === 'ellipsis', 'a long title truncates with an ellipsis')
         assertTitleCentered(long, 'long title'); assertTitleBar(long, 'long title')
+        // A late font widens the status without resizing the bar or changing state.
+        await page.evaluate("document.querySelector('.preview-window-state').style.letterSpacing = '0.5em'")
+        let wide
+        await waitFor(async () => titleSettled(wide = await page.evaluate(WINDOW_TITLE)), 'a refit after the status widens', 3000).catch(() => {})
+        t.diagnostic(JSON.stringify(wide))
+        assert.ok(wide.stateRight - wide.stateLeft > long.stateRight - long.stateLeft + 5, 'the status is wider')
+        if (width > 400) assert.ok(wide.titleShown, 'a wide bar still shows the title')
+        if (wide.titleShown) assertTitleCentered(wide, 'wider status')
+        assertTitleBar(wide, 'wider status')
       } finally { await page.close() }
     })
   }
