@@ -1,4 +1,6 @@
 # Preview
+- id: previewOpen
+  translation: "Open preview"
 - id: previewActivate
   translation: "Load preview"
 - id: previewLoading

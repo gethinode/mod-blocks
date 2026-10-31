@@ -1,5 +1,5 @@
 {{ range .items -}}
-**{{ .title }}**
+### {{ .title }}
 
 {{ .description }}
 

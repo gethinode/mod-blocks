@@ -1,2 +1,2 @@
-{{ with .url }}Preview of {{ . }}.
+{{ with or .open_url .url }}[{{ T "previewOpen" }}]({{ . }})
 {{ end -}}
