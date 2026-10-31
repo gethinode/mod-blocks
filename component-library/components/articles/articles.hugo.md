@@ -21,6 +21,6 @@
 {{ range $pages -}}
 - [{{ .Title }}]({{ .RelPermalink }})
 {{ end -}}
-{{ with .more }}{{ with .link -}}
+{{ with .more }}{{ with .link }}
 [{{ or $.more.title (i18n "llm-links") }}]({{ . }})
 {{ end }}{{ end -}}
