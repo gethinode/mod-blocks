@@ -26,6 +26,34 @@ content_blocks:
         icon: fas chevron-right
   - _bookshop_name: cards
     heading:
+      preheading: Our approach
+      title: Split layout
+      content: >-
+        With `layout` set to `split`, the heading and links sit beside the
+        cards. Below the `lg` breakpoint, the columns stack.
+      align: start
+    layout: split
+    orientation: horizontal
+    cols: 1
+    padding: 0
+    width: 10
+    justify: center
+    elements:
+      - title: People oriented
+        icon: fas user-group
+        content: People are at the heart of any organization.
+      - title: Value obsessed
+        icon: fas heart
+        content: We ensure your investments bring tangible value.
+      - title: Tech savvy
+        icon: fas microchip
+        content: We help you identify and utilize the right technology.
+    links:
+      - title: All components
+        url: /components/
+        icon: fas chevron-right
+  - _bookshop_name: cards
+    heading:
       preheading: Pricing
       title: Aligned rows
       content: >-
