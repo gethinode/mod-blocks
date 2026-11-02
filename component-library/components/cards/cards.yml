@@ -3,7 +3,9 @@ comment: >-
   accepts an optional subtitle and highlight, rendered as inline markdown
   between the title and the description. Set align_rows with a stacked
   orientation to line up the titles, subtitles, highlights, descriptions and
-  buttons of the cards in each row.
+  buttons of the cards in each row. Set layout to split to place the
+  heading and links beside the cards, in two equal columns from the lg
+  breakpoint up. Combine it with cols: 1 and padding: 0 for a compact stack.
 example: |
   heading:
     title: Our Services

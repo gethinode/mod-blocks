@@ -37,6 +37,8 @@
 
 	{{/* Initialize local variables */}}
 	{{ $raw := "" }}
+	{{ $cards := "" }}
+	{{ $split := eq .layout "split" }}
 	{{ $list := slice }}
 	{{ range .elements }}
 		<!-- TODO: check mode -->
@@ -60,8 +62,8 @@
 		"page"          $page
 		"heading-level" (cond (isset . "heading_level") .heading_level (index . "heading-level"))
 		"heading"       .heading
-		"justify"       .justify
-		"class"         (printf "pb-%d" $padding.y)))
+		"justify"       (cond $split "start" .justify)
+		"class"         (cond $split "" (printf "pb-%d" $padding.y))))
 	-}}
 
 	{{/* Init base arguments for card group */}}
@@ -70,7 +72,7 @@
 		"list"         $list
 		"class"        (or .class "border-0 card-icon-primary")
 		"cols"         .cols
-		"gutter"       "4"
+		"gutter"       (cond $split "3" "4")
 		"padding"      .padding
 		"header-style" "none"
 		"footer-style" "none"
@@ -83,13 +85,13 @@
 	{{- with or .align_rows (index . "align-rows") }}{{ $params = merge $params (dict "align-rows" .) }}{{ end }}
 
 	{{/* Layout for small screens */}}
-	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
+	{{- $cards = printf "%s%s" $cards (partial "assets/card-group.html" (merge $params (dict 
 		"orientation"  (.orientation | default "horizontal-sm")
 		"wrapper"      (printf "d-%s-none" $breakpoint.prev)
 	))) -}}
 
 	{{/* Layout for regular screens */}}
-	{{- $raw = printf "%s%s" $raw (partial "assets/card-group.html" (merge $params (dict 
+	{{- $cards = printf "%s%s" $cards (partial "assets/card-group.html" (merge $params (dict 
 		"orientation"  (.orientation | default "stacked")
 		"wrapper"      (printf "d-none d-%s-block" $breakpoint.prev)
 	))) -}}
@@ -103,7 +105,15 @@
 			"justify"   "start"
 			"link-type" (or .link_type (index . "link-type"))
 		) }}
-		{{ $raw = printf "%s%s" $raw $links }}
+	{{ end }}
+
+	{{/* The split layout sets the heading and links beside the cards, one breakpoint after the
+	     section width applies so tablets keep the full width for both. */}}
+	{{ if $split }}
+		{{ with $links }}{{ $links = printf `<div class="mt-4">%s</div>` . }}{{ end }}
+		{{ $raw = printf `<div class="row g-4 g-%s-5"><div class="col-12 col-%s-6">%s%s</div><div class="col-12 col-%s-6">%s</div></div>` $breakpoint.next $breakpoint.next $raw $links $breakpoint.next $cards }}
+	{{ else }}
+		{{ $raw = printf "%s%s%s" $raw $cards $links }}
 	{{ end }}
 
 	{{ if $raw }}

@@ -44,6 +44,7 @@ blueprint:
       icon:
       force:
   orientation:
+  layout:
   class:
   width:
   justify: start
