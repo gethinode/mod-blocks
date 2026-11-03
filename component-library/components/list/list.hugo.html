@@ -150,8 +150,9 @@
             {{/* Hinode resolves independently. An older table rejects unknown arguments, so
                  use the new list default only when its schema supports it. Explicit settings
                  still require updated Hinode, like the other opt-in table features below. */}}
+            {{ $data := partial "utilities/GetData.html" . }}
             {{ $controlsLayout := or .controls_layout (index . "controls-layout") }}
-            {{ if or $controlsLayout (isset site.Data.structures.table.arguments "controls-layout") }}
+            {{ if or $controlsLayout (isset $data.structures.table.arguments "controls-layout") }}
                 {{ $tableArgs = merge $tableArgs (dict "controls-layout" ($controlsLayout | default "list")) }}
             {{ end }}
             {{ with (or .search_label (index . "search-label")) }}

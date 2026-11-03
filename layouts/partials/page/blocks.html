@@ -28,7 +28,8 @@
          no other candidate exists. Whether such a block will render is unknown here; when every
          candidate hides itself and the first turns out empty while a later one renders, the
          page has no h1. */}}
-    {{ $components := site.Data.structures.components | default dict }}
+    {{ $data := partial "utilities/GetData.html" . }}
+    {{ $components := $data.structures.components | default dict }}
     {{ $lead := -1 }}
     {{ if gt $headingLevel 0 }}
         {{ $fallback := -1 }}
