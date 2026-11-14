@@ -158,6 +158,11 @@ const PAGES = {
     'static_max_height: 500', 'mode: true', 'items:',
     '  - title: View a', `    url: ${TARGET}a`, '    poster:', '      desktop: img/poster-desktop.png',
     '  - title: View b', `    url: ${TARGET}b`, '    poster:', '      desktop: img/poster-mobile.png'] },
+  // A height limit with mobile-static, which keeps its own 1024px width limit.
+  'tabs-mobile-static-height': { url: null, lines: ['frame: window', 'devices: [desktop]', 'controls: false', 'mobile_static: true',
+    'static_max_height: 500', 'mode: true', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    poster:', '      desktop: img/poster-desktop.png',
+    '  - title: View b', `    url: ${TARGET}b`, '    poster:', '      desktop: img/poster-mobile.png'] },
   // A short caption and one longer than the frame is wide, under a window
   // with the tabs above it, and under the content without a window frame.
   ...Object.fromEntries([['caption-window', ['frame: window']], ['caption-plain', []]].map(([name, frame]) => [name, {
@@ -166,6 +171,15 @@ const PAGES = {
       '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of a',
       '  - title: View b', `    url: ${TARGET}b`, `    caption: ${'A caption that runs on for longer than the frame is wide. '.repeat(4).trim()}`]
   }])),
+  // Two blocks on one page, each with item tabs in the title bar, captions and an open link.
+  'tabs-two': {
+    blocks: [1, 2].map(n => ({
+      url: null,
+      lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true', 'items:',
+        `  - title: View a${n}`, `    url: ${TARGET}a${n}`, `    caption: Caption of a${n}`,
+        `  - title: View b${n}`, `    url: ${TARGET}b${n}`, `    caption: Caption of b${n}`]
+    }))
+  },
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true'],
   ...Object.fromEntries(['visible', 'load', 'click'].map(activation => [`window-${activation}`, {
@@ -360,7 +374,8 @@ function buildDeniedSite () {
 }
 
 // A page is the lines of its one block, which also gets url: TARGET, or
-// { url, lines } to give it another url, or none when url is null.
+// { url, lines } to give it another url, or none when url is null, or
+// { blocks } with one such entry per block.
 function buildSite () {
   fs.mkdirSync(content)
   // The readiness demo page of the exampleSite, as it is.
@@ -368,19 +383,24 @@ function buildSite () {
   for (const name of ['preview','preview-devices','preview-click','preview-items','preview-ready','preview-window']) {
     fs.copyFileSync(path.join('exampleSite', 'content', 'components', `${name}.md`), path.join(content, 'components', `${name}.md`))
   }
-  for (const [name, page] of Object.entries(PAGES)) {
+  const block = page => {
     const { url = TARGET, lines } = Array.isArray(page) ? { lines: page } : page
+    return [
+      '  - _bookshop_name: preview',
+      ...(url === null ? [] : [`    url: ${url}`]),
+      ...lines.map(line => `    ${line}`)
+    ].join('\n').replace(`    url: ${TARGET}\n    items:`, '    items:')
+  }
+  for (const [name, page] of Object.entries(PAGES)) {
     fs.writeFileSync(path.join(content, `${name}.md`), [
       '---',
       `title: ${name}`,
       'modules: [preview]',
       'content_blocks:',
-      '  - _bookshop_name: preview',
-      ...(url === null ? [] : [`    url: ${url}`]),
-      ...lines.map(line => `    ${line}`),
+      ...(page.blocks || [page]).map(block),
       '---',
       ''
-    ].join('\n').replace(`    url: ${TARGET}\n    items:`, '    items:'))
+    ].join('\n'))
   }
   return hugo('public')
 }
@@ -3379,6 +3399,26 @@ test('tabs-static-width: a width limit alone shows the poster at 767x400 and sta
   } finally { await page.close() }
 })
 
+test('tabs-mobile-static-height: mobile-static keeps its width limit beside a height limit: the poster shows at 900x900, the shown item loads live at 1280x900 and the poster shows again at 1280x499', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-mobile-static-height', 900, { height: 900 })
+  try {
+    const state = await page.settle([])
+    assert.deepEqual(page.requests, [], 'no frame navigates')
+    assert.equal(state.panes[0].src, false, 'the frame has no src')
+    assert.equal(visiblePoster(state).visible, true, 'the poster shows')
+    assert.equal((await page.evaluate(TABS_STATE)).static, 'true')
+    await page.resize(1280, 900)
+    await waitFor(() => page.urls.length > 0, 'the live item a request')
+    await sleep(SETTLE_MS)
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+    assert.equal((await page.evaluate(TABS_STATE)).static, null)
+    await page.resize(1280, 499)
+    await sleep(SETTLE_MS)
+    assert.equal((await page.evaluate(STATE)).panes[0].src, false, 'the frame drops its src')
+    assert.equal((await page.evaluate(TABS_STATE)).static, 'true')
+  } finally { await page.close() }
+})
+
 // The caption strip of each block and the text of its shown caption, against
 // the frame of the block: its window, or its content without a window frame.
 const CAPTION_BOXES = `[...document.querySelectorAll('section.preview')].map(section => {
@@ -3412,3 +3452,31 @@ for (const [name, width, height] of [['tabs-bar', 1280, 800], ['tabs-bar', 700, 
     } finally { await page.close() }
   })
 }
+
+// Each block of the page: the selected item tab, the shown caption, the URL of
+// the shown frame and the address of the open link.
+const BLOCKS_STATE = `[...document.querySelectorAll('section.preview')].map(section => ({
+  selected: [...section.querySelectorAll('.preview-items [aria-selected="true"]')].map(el => el.textContent.trim()),
+  captions: [...section.querySelectorAll('.preview-caption-item')].filter(el => getComputedStyle(el).display !== 'none').map(el => el.textContent.trim()),
+  src: section.querySelector('.preview-content > .tab-pane.active iframe').getAttribute('src'),
+  open: section.querySelector('.preview-open').getAttribute('href')
+}))`
+
+test('tabs-two at 1280x800: a tab of the second block switches the caption, frame and open link of that block only', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-two', 1280, { height: 800 })
+  try {
+    await page.settle(['desktop'])
+    await waitFor(async () => (await page.evaluate(BLOCKS_STATE)).every(block => block.src), 'both frames given a src')
+    assert.deepEqual(await page.evaluate(BLOCKS_STATE), [1, 2].map(n => ({ selected: [`View a${n}`], captions: [`Caption of a${n}`], src: `${TARGET}a${n}`, open: `${TARGET}a${n}` })))
+    await page.evaluate(`document.querySelectorAll('section.preview')[1].querySelectorAll('.preview-items [data-bs-toggle="tab"]')[1].click()`)
+    await waitFor(async () => (await page.evaluate(BLOCKS_STATE))[1].src === `${TARGET}b2`, 'the item b2 frame').catch(() => {})
+    await sleep(SETTLE_MS)
+    assert.deepEqual(await page.evaluate(BLOCKS_STATE), [
+      { selected: ['View a1'], captions: ['Caption of a1'], src: `${TARGET}a1`, open: `${TARGET}a1` },
+      { selected: ['View b2'], captions: ['Caption of b2'], src: `${TARGET}b2`, open: `${TARGET}b2` }
+    ])
+    assert.ok(!page.urls.some(url => url.endsWith(`${TARGET}b1`)), `the first block requests no other item: ${JSON.stringify(page.urls)}`)
+    const boxes = await page.evaluate(CAPTION_BOXES)
+    boxes.forEach((box, n) => assertCaptionUnder(box, `block ${n + 1}`))
+  } finally { await page.close() }
+})
