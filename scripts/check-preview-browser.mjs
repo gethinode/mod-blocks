@@ -141,6 +141,23 @@ const PAGES = {
   items: ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B')],
   'items-plain': ['items:', '  - title: View a', `    url: ${TARGET}a`, '  - title: View b', `    url: ${TARGET}b`],
   'items-fallback': ['items:', ...item('a', 'Heading A'), ...item('b', 'Heading B'), 'show_fallback: true'],
+  // Item tabs in the title bar of a window, with a caption per item.
+  'tabs-bar': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of **a**', '  - title: View b', `    url: ${TARGET}b`, '    caption: Caption of b'] },
+  // The same, with a poster per item instead of the frame below 768px wide or 500px high.
+  'tabs-static': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true',
+    'static_below: 768', 'static_max_height: 500', 'mode: true', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of **a**', '    poster:', '      desktop: img/poster-desktop.png',
+    '  - title: View b', `    url: ${TARGET}b`, '    caption: Caption of b', '    poster:', '      desktop: img/poster-mobile.png'] },
+  // A width limit only, with no height limit.
+  'tabs-static-width': { url: null, lines: ['frame: window', 'devices: [desktop]', 'controls: false', 'static_below: 768', 'mode: true', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    poster:', '      desktop: img/poster-desktop.png',
+    '  - title: View b', `    url: ${TARGET}b`, '    poster:', '      desktop: img/poster-mobile.png'] },
+  // A height limit only, with no width limit.
+  'tabs-static-height': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false',
+    'static_max_height: 500', 'mode: true', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    poster:', '      desktop: img/poster-desktop.png',
+    '  - title: View b', `    url: ${TARGET}b`, '    poster:', '      desktop: img/poster-mobile.png'] },
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true'],
   ...Object.fromEntries(['visible', 'load', 'click'].map(activation => [`window-${activation}`, {
@@ -3217,4 +3234,134 @@ test('empty guard prevents implicit two-owner wire requests before fresh admissi
   await page.evaluate("document.querySelector('#guard-owner').remove()");await page.evaluate(IN_VIEW);await idlePending(page);assert.equal(servers[0].previewRequests.length,returnBefore);await page.evaluate('flushIdle()');await waitFor(()=>page.evaluate(WINDOW_STATE).then(s=>s.state==='ready'),'fresh original owner ready')
   assert.equal(servers[0].previewRequests.length,returnBefore+1)
  }finally{await page.close()}
+})
+
+// Item tabs in the title bar, captions and static limits. TABS_STATE reports
+// where the item tabs sit against the dots of the title bar, which lead its
+// first row, the selected tab, the shown captions, and whether the content is
+// static. The end group of the bar, with its state and action, shares the row
+// of the dots.
+const TABS_STATE = `(() => {
+  const bar = document.querySelector('section.preview .preview-window-bar')
+  const tabs = document.querySelector('section.preview .preview-items')
+  const box = el => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right } }
+  const shown = el => getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0
+  return {
+    inBar: !!tabs && bar.contains(tabs),
+    bar: box(bar), dots: box(bar.querySelector('.preview-window-dots')), end: box(bar.querySelector('.preview-window-end')), tabs: tabs && box(tabs),
+    selected: [...document.querySelectorAll('section.preview .preview-items [aria-selected="true"]')].map(el => el.textContent.trim()),
+    captions: [...document.querySelectorAll('section.preview .preview-caption-item')].filter(shown).map(el => el.innerHTML.trim()),
+    static: document.querySelector('section.preview .preview-content').dataset.previewStatic || null
+  }
+})()`
+const CAPTION_A = 'Caption of <strong>a</strong>'
+const CAPTION_B = 'Caption of b'
+
+for (const [width, height, row] of [[1280, 800, 'bar'], [768, 900, 'bar'], [767, 900, 'own'], [700, 900, 'own']]) {
+  test(`tabs-bar at ${width}x${height}: the item tabs sit in ${row === 'bar' ? 'the row of the title bar' : 'a row of their own in the title bar'}`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'tabs-bar', width, { height })
+    try {
+      await page.settle(['desktop'])
+      const state = await page.evaluate(TABS_STATE)
+      assert.equal(state.inBar, true, 'the tabs are in the title bar')
+      assert.ok(state.tabs.top >= state.bar.top && state.tabs.bottom <= state.bar.bottom, `the bar holds the tabs: ${JSON.stringify(state)}`)
+      assert.ok(state.tabs.left >= state.bar.left && state.tabs.right <= state.bar.right, `the bar holds the tabs: ${JSON.stringify(state)}`)
+      assert.ok(state.end.top < state.dots.bottom && state.end.bottom > state.dots.top, `the end group shares the row of the dots: ${JSON.stringify(state)}`)
+      if (row === 'bar') {
+        assert.ok(state.tabs.top < state.dots.bottom && state.tabs.bottom > state.dots.top, `the tabs share the row of the dots: ${JSON.stringify(state)}`)
+      } else {
+        assert.ok(state.tabs.top >= Math.max(state.dots.bottom, state.end.bottom), `the tabs sit below the dots and the end group: ${JSON.stringify(state)}`)
+      }
+      assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+    } finally { await page.close() }
+  })
+}
+
+test('tabs-bar at 1280x800: the caption follows the shown tab, by click and by arrow key, and each switch loads the shown view once', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-bar', 1280, { height: 800 })
+  try {
+    await page.settle(['desktop'])
+    let state = await page.evaluate(TABS_STATE)
+    assert.deepEqual({ selected: state.selected, captions: state.captions }, { selected: ['View a'], captions: [CAPTION_A] })
+    await clickItem(page, 1)
+    await waitFor(() => page.urls.length > 1, 'the item b request').catch(() => {})
+    await sleep(SETTLE_MS)
+    state = await page.evaluate(TABS_STATE)
+    assert.deepEqual({ selected: state.selected, captions: state.captions }, { selected: ['View b'], captions: [CAPTION_B] })
+    assert.equal(await page.evaluate("document.querySelector('section.preview .preview-open').getAttribute('href')"), `${TARGET}b`)
+    assert.equal(await page.evaluate('(() => { const tab = document.querySelector(\'section.preview .preview-items .active\'); tab.focus(); return document.activeElement === tab })()'), true)
+    await page.pressArrow('ArrowLeft')
+    await waitFor(() => page.urls.length > 2, 'the item a request').catch(() => {})
+    await sleep(SETTLE_MS)
+    state = await page.evaluate(TABS_STATE)
+    assert.deepEqual({ selected: state.selected, captions: state.captions }, { selected: ['View a'], captions: [CAPTION_A] })
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`, `desktop ${TARGET}b`, `desktop ${TARGET}a`])
+  } finally { await page.close() }
+})
+
+for (const [width, height] of [[390, 844], [1280, 480], [767, 900], [1280, 499]]) {
+  test(`tabs-static at ${width}x${height}: the item poster shows, the frame never navigates, and a tab switches poster and caption`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'tabs-static', width, { height })
+    try {
+      let state = await page.settle([])
+      assert.deepEqual(page.requests, [], 'no frame navigates')
+      assert.equal(state.panes[0].src, false, 'the frame has no src')
+      assert.equal(visiblePoster(state).visible, true, 'the poster shows')
+      assert.match(visiblePoster(state).image, /^poster-desktop-light-/, 'the poster of item a shows')
+      let tabs = await page.evaluate(TABS_STATE)
+      assert.deepEqual({ captions: tabs.captions, static: tabs.static }, { captions: [CAPTION_A], static: 'true' })
+      await clickItem(page, 1)
+      state = await page.settle([])
+      assert.deepEqual(page.requests, [], 'a tab switch navigates no frame')
+      assert.equal(visiblePoster(state).visible, true, 'the poster still shows')
+      assert.match(visiblePoster(state).image, /^poster-mobile-light-/, 'the poster of item b shows')
+      tabs = await page.evaluate(TABS_STATE)
+      assert.deepEqual({ selected: tabs.selected, captions: tabs.captions, static: tabs.static }, { selected: ['View b'], captions: [CAPTION_B], static: 'true' })
+      // Past both limits the shown item starts live.
+      await page.resize(1280, 800)
+      await waitFor(() => page.urls.length > 0, 'the live item b request')
+      await sleep(SETTLE_MS)
+      assert.deepEqual(page.urls, [`desktop ${TARGET}b`])
+    } finally { await page.close() }
+  })
+}
+
+for (const [width, height] of [[768, 900], [1280, 500], [1280, 800]]) {
+  test(`tabs-static at ${width}x${height}: within both limits the shown item loads live`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, 'tabs-static', width, { height })
+    try {
+      await page.settle(['desktop'])
+      assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+      assert.equal((await page.evaluate(TABS_STATE)).static, null)
+    } finally { await page.close() }
+  })
+}
+
+test('tabs-static-height: a height limit alone shows the poster at 390x499 and starts the shown item live at 390x500', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-static-height', 390, { height: 499 })
+  try {
+    const state = await page.settle([])
+    assert.deepEqual(page.requests, [], 'no frame navigates')
+    assert.equal(visiblePoster(state).visible, true, 'the poster shows')
+    assert.equal((await page.evaluate(TABS_STATE)).static, 'true')
+    await page.resize(390, 500)
+    await waitFor(() => page.urls.length > 0, 'the live item a request')
+    await sleep(SETTLE_MS)
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+    assert.equal((await page.evaluate(TABS_STATE)).static, null)
+  } finally { await page.close() }
+})
+
+test('tabs-static-width: a width limit alone shows the poster at 767x400 and starts the shown item live at 768x400', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-static-width', 767, { height: 400 })
+  try {
+    const state = await page.settle([])
+    assert.deepEqual(page.requests, [], 'no frame navigates')
+    assert.equal(visiblePoster(state).visible, true, 'the poster shows')
+    assert.equal((await page.evaluate(TABS_STATE)).static, 'true')
+    await page.resize(768, 400)
+    await waitFor(() => page.urls.length > 0, 'the live item a request')
+    await sleep(SETTLE_MS)
+    assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
+  } finally { await page.close() }
 })

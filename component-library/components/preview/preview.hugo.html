@@ -55,6 +55,7 @@
 			"open-url" (or .open_url (index . "open-url"))
 			"poster"   .poster
 			"heading"  .heading
+			"caption"  .caption
 		) }}
 	{{ end }}
 
@@ -71,6 +72,9 @@
 		"frame-title"        (or .frame_title (index . "frame-title"))
 		"open-url"           (or .open_url (index . "open-url"))
 		"mobile-static"      (cond (isset . "mobile_static") .mobile_static (index . "mobile-static"))
+		"static-below"       (or .static_below (index . "static-below"))
+		"static-max-height"  (or .static_max_height (index . "static-max-height"))
+		"tabs-placement"     (or .tabs_placement (index . "tabs-placement"))
 		"activation"         .activation
 		"poster"             .poster
 		"items"              $items

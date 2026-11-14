@@ -108,6 +108,7 @@ const rules = {
   '.preview-activate': el => el.classList.contains('preview-activate'),
   '.preview-poster': el => el.classList.contains('preview-poster'),
   '.preview-poster-item': el => el.classList.contains('preview-poster-item'),
+  '.preview-caption-item': el => el.classList.contains('preview-caption-item'),
   '.preview-items': el => el.classList.contains('preview-items'),
   '.preview-open': el => el.classList.contains('preview-open'),
   '[data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',

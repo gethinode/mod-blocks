@@ -33,6 +33,11 @@
  * With visible activation the shown view starts after actual viewport entry,
  * parent load and an idle opportunity (600ms timeout). Opt-in mobile-static
  * blocks never navigate below 1024px and forget earlier navigation windows.
+ * data-static-below and data-static-max-height set a width and a height in
+ * pixels below which a block is static the same way; data-static-below
+ * replaces the 1024px of mobile-static. A block past such a limit carries
+ * data-preview-static, which the stylesheet reads, as no media query of the
+ * stylesheet knows the limits of a block.
  * Window framing contains the native viewport below a measured title bar.
  *
  * With items, a tab per item sits above the frame, and every iframe starts with
@@ -44,7 +49,8 @@
  * iframe takes the label of the item tab as its title. When the content is the
  * tab panel of the item tabs, which it is when no item has a heading, the shown
  * tab labels it. The script also shows the poster image of the item in every
- * poster, points every .preview-open link and the link of every failure alert
+ * poster and the caption of the item in the caption strip under the frame,
+ * points every .preview-open link and the link of every failure alert
  * at the open URL of the item, and dispatches a bubbling preview:item event on
  * the section, with the index of the item in its detail.
  *
@@ -604,12 +610,28 @@
         image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
       })
     })
+    section.querySelectorAll('.preview-caption-item').forEach(caption => {
+      caption.classList.toggle('d-none', caption.dataset.previewItem !== String(index))
+    })
     section.querySelectorAll('.preview-open, .preview-unavailable-link').forEach(link => { link.href = tab.dataset.previewOpenUrl })
     section.dispatchEvent(new CustomEvent('preview:item', { bubbles: true, detail: { index } }))
   }
 
+  /**
+   * Reports whether the viewport is past a static limit of the block: narrower
+   * than data-static-below or shorter than data-static-max-height, in pixels,
+   * or, for mobile-static without data-static-below, too narrow for desktop.
+   */
+  function pastStaticLimit (container) {
+    const below = Number(container.dataset.staticBelow)
+    const maxHeight = Number(container.dataset.staticMaxHeight)
+    if (below > 0 && window.matchMedia(`(max-width: ${below - 1}px)`).matches) return true
+    if (maxHeight > 0 && window.matchMedia(`(max-height: ${maxHeight - 1}px)`).matches) return true
+    return container.dataset.mobileStatic === 'true' && !deviceFits('desktop')
+  }
+
   function isStatic (container) {
-    return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || (container.dataset.mobileStatic === 'true' && !deviceFits('desktop'))
+    return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || pastStaticLimit(container)
   }
 
   // Only opt-in lifecycle modes need discovery and an eligibility controller.
@@ -647,7 +669,8 @@
   }
 
   function enhanced (container) {
-    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' || themeMessage(container) !== ''
+    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' ||
+      'staticBelow' in container.dataset || 'staticMaxHeight' in container.dataset || themeMessage(container) !== ''
   }
 
   function inViewport (container) {

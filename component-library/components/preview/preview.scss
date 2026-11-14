@@ -391,6 +391,14 @@ section.preview {
         }
     }
 
+    // The caption of the shown item, under the frame
+    .preview-caption {
+        margin-top: 0.75rem;
+        text-align: center;
+        font-size: $font-size-sm;
+        color: var(--#{$prefix}secondary-color);
+    }
+
     // Responsive behavior for small screens
     @media (max-width: 639px) {
         // Keep a fifth of the small viewport to scroll the page with: the 400px minimum
@@ -487,6 +495,39 @@ section.preview {
             min-width: 28px;
             min-height: 28px;
             flex-shrink: 0;
+        }
+    }
+
+    // Item tabs in the title bar (tabs-placement bar) take the place of the
+    // title and wrap within its column. Below 768px they take a row of their
+    // own under the dots and the end group of the bar.
+    .preview-window-bar .preview-window-tabs {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+        min-width: 0;
+
+        .nav-link {
+            padding: 0.125rem 0.625rem;
+            font-size: inherit;
+            line-height: inherit;
+            white-space: nowrap;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .preview-window-bar .preview-window-tabs {
+            grid-column: 1 / -1;
+            grid-row: 2;
+        }
+    }
+
+    .preview-window-compact .preview-window-bar {
+        flex-wrap: wrap;
+
+        .preview-window-tabs {
+            order: 3;
+            flex: 1 0 100%;
         }
     }
 
