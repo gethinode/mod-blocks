@@ -38,10 +38,12 @@
  * replaces the 1024px of mobile-static. A block past such a limit carries
  * data-preview-static, which the stylesheet reads, as no media query of the
  * stylesheet knows the limits of a block.
- * Window framing contains the native viewport below a measured title bar.
+ * Window framing contains the native viewport below a measured title bar, and
+ * gives a caption strip under the window the width of the window.
  *
- * With items, a tab per item sits above the frame, and every iframe starts with
- * the URL of the first item in data-src. Showing an item tab gives every iframe
+ * With items, a tab per item sits above the frame, or in the title bar of a
+ * window frame with tabs-placement bar, and every iframe starts with the URL
+ * of the first item in data-src. Showing an item tab gives every iframe
  * the item URL in data-src, and loads it in the shown view when the block may
  * load its views; another view drops the URL it loaded, so it loads the item
  * URL when it is next shown. An iframe that has loaded is replaced by a copy
@@ -849,6 +851,9 @@
     if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
     win.style.marginBlock = `${margin}px`
     win.style.width = `${fittedWidth}px`
+    // A caption centres and wraps under the window, not across the block.
+    const caption = win.closest('section.preview').querySelector('.preview-caption')
+    if (caption) caption.style.width = win.style.width
     container.style.height = `${container.getBoundingClientRect().width * height / width}px`
     fitTitle(win, bar)
     return { width, height }

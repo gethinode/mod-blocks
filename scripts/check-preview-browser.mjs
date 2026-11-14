@@ -158,6 +158,14 @@ const PAGES = {
     'static_max_height: 500', 'mode: true', 'items:',
     '  - title: View a', `    url: ${TARGET}a`, '    poster:', '      desktop: img/poster-desktop.png',
     '  - title: View b', `    url: ${TARGET}b`, '    poster:', '      desktop: img/poster-mobile.png'] },
+  // A short caption and one longer than the frame is wide, under a window
+  // with the tabs above it, and under the content without a window frame.
+  ...Object.fromEntries([['caption-window', ['frame: window']], ['caption-plain', []]].map(([name, frame]) => [name, {
+    url: null,
+    lines: [...frame, 'devices: [desktop]', 'controls: false', 'items:',
+      '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of a',
+      '  - title: View b', `    url: ${TARGET}b`, `    caption: ${'A caption that runs on for longer than the frame is wide. '.repeat(4).trim()}`]
+  }])),
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true'],
   ...Object.fromEntries(['visible', 'load', 'click'].map(activation => [`window-${activation}`, {
@@ -3240,7 +3248,8 @@ test('empty guard prevents implicit two-owner wire requests before fresh admissi
 // where the item tabs sit against the dots of the title bar, which lead its
 // first row, the selected tab, the shown captions, and whether the content is
 // static. The end group of the bar, with its state and action, shares the row
-// of the dots.
+// of the dots and ends where the content box of the bar ends, at barEnd, as
+// the dots start where it starts, at barStart.
 const TABS_STATE = `(() => {
   const bar = document.querySelector('section.preview .preview-window-bar')
   const tabs = document.querySelector('section.preview .preview-items')
@@ -3249,6 +3258,8 @@ const TABS_STATE = `(() => {
   return {
     inBar: !!tabs && bar.contains(tabs),
     bar: box(bar), dots: box(bar.querySelector('.preview-window-dots')), end: box(bar.querySelector('.preview-window-end')), tabs: tabs && box(tabs),
+    barStart: bar.getBoundingClientRect().left + parseFloat(getComputedStyle(bar).paddingLeft),
+    barEnd: bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight),
     selected: [...document.querySelectorAll('section.preview .preview-items [aria-selected="true"]')].map(el => el.textContent.trim()),
     captions: [...document.querySelectorAll('section.preview .preview-caption-item')].filter(shown).map(el => el.innerHTML.trim()),
     static: document.querySelector('section.preview .preview-content').dataset.previewStatic || null
@@ -3257,8 +3268,8 @@ const TABS_STATE = `(() => {
 const CAPTION_A = 'Caption of <strong>a</strong>'
 const CAPTION_B = 'Caption of b'
 
-for (const [width, height, row] of [[1280, 800, 'bar'], [768, 900, 'bar'], [767, 900, 'own'], [700, 900, 'own']]) {
-  test(`tabs-bar at ${width}x${height}: the item tabs sit in ${row === 'bar' ? 'the row of the title bar' : 'a row of their own in the title bar'}`, { skip }, async () => {
+for (const [width, height, row] of [[1280, 800, 'bar'], [768, 900, 'bar'], [767, 900, 'own'], [700, 900, 'own'], [500, 900, 'own']]) {
+  test(`tabs-bar at ${width}x${height}: the item tabs sit in ${row === 'bar' ? 'the row of the title bar' : 'a row of their own in the title bar'}, and the end group at the end of the bar`, { skip }, async () => {
     const page = await openPage(browser.cdp, base, 'tabs-bar', width, { height })
     try {
       await page.settle(['desktop'])
@@ -3267,6 +3278,8 @@ for (const [width, height, row] of [[1280, 800, 'bar'], [768, 900, 'bar'], [767,
       assert.ok(state.tabs.top >= state.bar.top && state.tabs.bottom <= state.bar.bottom, `the bar holds the tabs: ${JSON.stringify(state)}`)
       assert.ok(state.tabs.left >= state.bar.left && state.tabs.right <= state.bar.right, `the bar holds the tabs: ${JSON.stringify(state)}`)
       assert.ok(state.end.top < state.dots.bottom && state.end.bottom > state.dots.top, `the end group shares the row of the dots: ${JSON.stringify(state)}`)
+      assert.ok(Math.abs(state.end.right - state.barEnd) <= 2, `the end group ends at the end of the bar: ${JSON.stringify(state)}`)
+      assert.ok(Math.abs(state.dots.left - state.barStart) <= 2, `the dots start at the start of the bar: ${JSON.stringify(state)}`)
       if (row === 'bar') {
         assert.ok(state.tabs.top < state.dots.bottom && state.tabs.bottom > state.dots.top, `the tabs share the row of the dots: ${JSON.stringify(state)}`)
       } else {
@@ -3365,3 +3378,37 @@ test('tabs-static-width: a width limit alone shows the poster at 767x400 and sta
     assert.deepEqual(page.urls, [`desktop ${TARGET}a`])
   } finally { await page.close() }
 })
+
+// The caption strip of each block and the text of its shown caption, against
+// the frame of the block: its window, or its content without a window frame.
+const CAPTION_BOXES = `[...document.querySelectorAll('section.preview')].map(section => {
+  const frame = section.querySelector('.preview-window') || section.querySelector('.preview-content')
+  const strip = section.querySelector('.preview-caption')
+  const text = document.createRange()
+  text.selectNodeContents([...strip.children].find(el => !el.classList.contains('d-none')))
+  const box = el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right } }
+  return { frame: box(frame), strip: box(strip), text: box(text) }
+})`
+
+// Asserts that the caption strip spans the frame, within its box, and that
+// the text of the shown caption is centred under it.
+function assertCaptionUnder (box, label) {
+  const centre = ({ left, right }) => (left + right) / 2
+  assert.ok(box.strip.left >= box.frame.left - 1 && box.strip.right <= box.frame.right + 1, `${label}: the caption strip is within the frame: ${JSON.stringify(box)}`)
+  assert.ok(box.strip.right - box.strip.left >= box.frame.right - box.frame.left - 2, `${label}: the caption strip spans the frame: ${JSON.stringify(box)}`)
+  assert.ok(Math.abs(centre(box.text) - centre(box.frame)) <= 2, `${label}: the caption is centred under the frame: ${JSON.stringify(box)}`)
+}
+
+for (const [name, width, height] of [['tabs-bar', 1280, 800], ['tabs-bar', 700, 900], ['tabs-bar', 390, 844],
+  ['caption-window', 1280, 800], ['caption-window', 700, 900], ['caption-plain', 1280, 800], ['caption-plain', 700, 900]]) {
+  test(`${name} at ${width}x${height}: the caption strip spans the frame and centres the caption of either item under it`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, name, width, { height })
+    try {
+      await page.settle(['desktop'])
+      assertCaptionUnder((await page.evaluate(CAPTION_BOXES))[0], `${name} at ${width}x${height}, item a`)
+      await clickItem(page, 1)
+      await sleep(SETTLE_MS)
+      assertCaptionUnder((await page.evaluate(CAPTION_BOXES))[0], `${name} at ${width}x${height}, item b`)
+    } finally { await page.close() }
+  })
+}

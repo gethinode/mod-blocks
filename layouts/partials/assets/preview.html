@@ -493,10 +493,12 @@
         ) }}
     {{ end }}
 
-    {{/* Item tabs — every tab names the URL its views show and the address of the item. Their
-         bottom margin spaces the content from the heading when the controls are below it. A tab
-         controls the heading pane of its item; without item headings, every tab controls the
-         content, which the script labels with the shown tab. */}}
+    {{/* Item tabs — every tab names the URL its views show and the address of the item. Above
+         the frame, their bottom margin spaces the content from the heading when the controls are
+         below it; in the title bar of a window (tabs-placement bar), they take the place of the
+         frame title and have no such margin. A tab controls the heading pane of its item; without
+         item headings, every tab controls the content, which the script labels with the shown
+         tab. */}}
     {{- $sharedPanel := and $itemTabs (not $headed) -}}
     {{- $barTabs := and $itemTabs $window (eq $args.tabsPlacement "bar") -}}
     {{- if and $itemTabs (not $barTabs) }}
@@ -630,8 +632,8 @@
     </div>
     {{- end }}
 
-    {{- /* Caption strip under the window — the caption of every item, of which only the
-         shown one lacks d-none */}}
+    {{- /* Caption strip under the frame, a window or the plain content — the caption of every
+         item, of which only the shown one lacks d-none */}}
     {{- $captioned := false -}}
     {{- range $items }}{{ if .caption }}{{ $captioned = true }}{{ end }}{{ end -}}
     {{- if $captioned }}

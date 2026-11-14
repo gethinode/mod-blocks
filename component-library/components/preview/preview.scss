@@ -391,9 +391,12 @@ section.preview {
         }
     }
 
-    // The caption of the shown item, under the frame
+    // The caption of the shown item, in a strip centred under the frame and as
+    // wide as it: the content spans the block, and the script gives the strip
+    // the width of a window frame.
     .preview-caption {
-        margin-top: 0.75rem;
+        width: 100%;
+        margin: 0.75rem auto 0;
         text-align: center;
         font-size: $font-size-sm;
         color: var(--#{$prefix}secondary-color);
@@ -515,10 +518,25 @@ section.preview {
         }
     }
 
+    // The dots and the end group keep the first and the last column of the
+    // first row, where auto-placement would put the end group in the middle
+    // column once the tabs leave it.
     @media (max-width: 767px) {
         .preview-window-bar .preview-window-tabs {
             grid-column: 1 / -1;
             grid-row: 2;
+        }
+
+        .preview-window-bar:has(> .preview-window-tabs) {
+            .preview-window-dots {
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .preview-window-end {
+                grid-column: -2;
+                grid-row: 1;
+            }
         }
     }
 
