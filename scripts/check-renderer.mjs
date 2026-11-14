@@ -38,7 +38,8 @@ const partials = {
 }
 
 // The preview block renders through the real mod-utils argument utilities, with the Hinode
-// partials it calls stubbed: an icon or image reports nothing, a section title its title.
+// partials it calls stubbed: an icon, a section title and links render nothing, and an image
+// renders an img element with its class and, in data-src, its source.
 const MOD_UTILS = '_vendor/github.com/gethinode/mod-utils/v6'
 const PREVIEW = 'layouts/partials/assets/preview.html'
 const PREVIEW_BLOCK = 'component-library/components/preview/preview.hugo.html'

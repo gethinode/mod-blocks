@@ -180,6 +180,19 @@ const PAGES = {
         `  - title: View b${n}`, `    url: ${TARGET}b${n}`, `    caption: Caption of b${n}`]
     }))
   },
+  // Three, four and six item tabs in the title bar of a window.
+  ...Object.fromEntries([['three', ['Discover', 'Move', 'History']], ['four', ['Discover', 'Move', 'Changes', 'History']],
+    ['six', [1, 2, 3, 4, 5, 6].map(n => `Longer view title ${n}`)]].map(([count, titles]) => [`tabs-bar-${count}`, {
+    url: null,
+    lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true', 'items:',
+      ...titles.flatMap((title, n) => [`  - title: ${title}`, `    url: ${TARGET}${n}`])]
+  }])),
+  // Four item tabs in the title bar, with a poster per item instead of the
+  // frame below 768px wide or 500px high.
+  'tabs-static-four': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true',
+    'static_below: 768', 'static_max_height: 500', 'mode: true', 'items:',
+    ...['Discover', 'Move', 'Changes', 'History'].flatMap((title, n) => [`  - title: ${title}`, `    url: ${TARGET}${n}`,
+      `    caption: Caption of ${title.toLowerCase()}`, '    poster:', '      desktop: img/poster-desktop.png'])] },
   'items-click': ['items:', ...item('a', 'Heading A', 'img/poster-desktop.png'), ...item('b', 'Heading B', 'img/poster-mobile.png'),
     'activation: click', 'mode: true'],
   ...Object.fromEntries(['visible', 'load', 'click'].map(activation => [`window-${activation}`, {
@@ -3480,3 +3493,162 @@ test('tabs-two at 1280x800: a tab of the second block switches the caption, fram
     boxes.forEach((box, n) => assertCaptionUnder(box, `block ${n + 1}`))
   } finally { await page.close() }
 })
+
+// The item tabs of the title bar, each with the inline margins it takes in its
+// row, against the rest of the bar: the dots, unless the compact bar hides
+// them, the end group, the content box of the bar, its column gap and the gap
+// between the tabs; and the window against the height that the viewport leaves
+// under the navigation.
+const BAR_TABS = `(() => {
+  const win = document.querySelector('section.preview .preview-window')
+  const bar = win.querySelector('.preview-window-bar')
+  const nav = bar.querySelector('.preview-window-tabs')
+  const dots = bar.querySelector('.preview-window-dots')
+  const box = el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+  const style = getComputedStyle(bar)
+  const navigation = document.querySelector('.navbar, header[role="banner"]')
+  return {
+    theme: document.documentElement.getAttribute('data-bs-theme'),
+    viewport: innerWidth,
+    compact: win.classList.contains('preview-window-compact'),
+    scroll: win.dataset.previewFit === 'scroll',
+    win: box(win),
+    margin: parseFloat(getComputedStyle(win).marginTop),
+    available: innerHeight - (navigation ? navigation.getBoundingClientRect().height : 0),
+    bar: box(bar),
+    start: bar.getBoundingClientRect().left + parseFloat(style.paddingLeft),
+    end: bar.getBoundingClientRect().right - parseFloat(style.paddingRight),
+    gap: parseFloat(style.columnGap) || 0,
+    tabGap: parseFloat(getComputedStyle(nav).columnGap) || 0,
+    dots: getComputedStyle(dots).display === 'none' ? null : box(dots),
+    group: box(bar.querySelector('.preview-window-end')),
+    tabs: [...nav.querySelectorAll('.nav-link')].map(el => ({ ...box(el), marginLeft: parseFloat(getComputedStyle(el).marginLeft), marginRight: parseFloat(getComputedStyle(el).marginRight) }))
+  }
+})()`
+
+// Waits two frames, past the resize observations of a layout change.
+const nextFrames = page => page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50))))')
+
+// Asserts that no item tab covers the dots or the end group, or leaves the
+// content box of the bar with its margins, and that the tabs either share one line in the row
+// of the dots and the end group, or sit under both on a row of their own. At
+// 768px wide or more, a bar that is not compact gives the tabs a row of their
+// own only when they would not fit its first row centred between two flanks
+// as wide as the wider of the dots and the end group. On a row of their own,
+// a line of tabs breaks only where the next tab would not fit the bar. Unless
+// the window falls back to page scroll, it fits the height under the
+// navigation.
+function assertBarTabs (s, label) {
+  const at = `${label}: ${JSON.stringify(s)}`
+  const width = el => el.right - el.left
+  // The width a tab takes in its row.
+  const outer = tab => width(tab) + tab.marginLeft + tab.marginRight
+  const overlaps = (a, b) => a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5
+  const chrome = [s.dots, s.group].filter(Boolean)
+  s.tabs.forEach((tab, n) => {
+    chrome.forEach(el => assert.ok(!overlaps(tab, el), `tab ${n + 1} covers ${el === s.dots ? 'the dots' : 'the end group'}, ${at}`))
+    assert.ok(tab.left - tab.marginLeft >= s.start - 0.5 && tab.right + tab.marginRight <= s.end + 0.5 && tab.top >= s.bar.top - 0.5 && tab.bottom <= s.bar.bottom + 0.5, `tab ${n + 1} leaves the bar, ${at}`)
+  })
+  const lines = []
+  s.tabs.forEach(tab => { const line = lines.find(l => Math.abs(l[0].top - tab.top) < 1); if (line) line.push(tab); else lines.push([tab]) })
+  const ownRow = s.tabs.every(tab => tab.top >= Math.max(...chrome.map(el => el.bottom)) - 0.5)
+  if (!ownRow) {
+    assert.equal(lines.length, 1, `the tabs in the row of the dots and the end group wrap, ${at}`)
+  } else if (!s.compact && s.viewport >= 768) {
+    const tabsWidth = s.tabs.reduce((sum, tab) => sum + outer(tab), 0) + (s.tabs.length - 1) * s.tabGap
+    assert.ok(tabsWidth + 2 * Math.max(...chrome.map(width)) + 2 * s.gap > s.end - s.start - 0.5, `the tabs take a row of their own although they fit the row of the dots, ${at}`)
+  }
+  if (ownRow) {
+    for (let n = 1; n < lines.length; n++) {
+      const used = lines[n - 1].reduce((sum, tab) => sum + outer(tab), 0) + (lines[n - 1].length - 1) * s.tabGap
+      assert.ok(used + s.tabGap + outer(lines[n][0]) > s.end - s.start - 0.5, `line ${n + 1} of the tabs starts before the bar is full, ${at}`)
+    }
+  }
+  if (!s.scroll) assert.ok(s.win.bottom - s.win.top + 2 * s.margin <= s.available + 1, `the window does not fit the height under the navigation, ${at}`)
+}
+
+for (const [name, sizes] of [
+  ['tabs-bar', [[1280, 300], [1280, 480], [1280, 800]]],
+  ['tabs-bar-three', [[1280, 300], [780, 360], [812, 375], [844, 390], [896, 414], [1440, 500]]],
+  ['tabs-bar-four', [[780, 360], [812, 375], [844, 390], [896, 414], [1440, 500]]],
+  ['tabs-bar-six', [[1280, 300], [1280, 800]]],
+  ['tabs-static-four', [[780, 360], [812, 375], [844, 390], [896, 414], [1280, 400], [1440, 500]]]
+]) {
+  for (const [width, height] of sizes) {
+    test(`${name} at ${width}x${height} in light and dark mode: the item tabs clear the dots and the end group, on one line in the row of the bar or on a row of their own`, { skip }, async () => {
+      const page = await openPage(browser.cdp, base, name, width, { height })
+      try {
+        await page.settle([])
+        for (const theme of ['light', 'dark']) {
+          await page.evaluate(`document.documentElement.setAttribute('data-bs-theme', '${theme}'); dispatchEvent(new Event('resize'))`)
+          await nextFrames(page)
+          const state = await page.evaluate(BAR_TABS)
+          assert.equal(state.theme, theme)
+          assertBarTabs(state, `${name} at ${width}x${height} ${theme}`)
+        }
+      } finally { await page.close() }
+    })
+  }
+}
+
+// Resizes the viewport to a size where the item tabs need a row of their own
+// and back, so the tabs leave the row of the bar and return to it.
+test('tabs-bar-three resized 1280x800 to 844x390 and back: the item tabs take a row of their own and return to the row of the bar', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-bar-three', 1280, { height: 800 })
+  const inRow = state => state.tabs.every(tab => tab.top < state.dots.bottom && tab.bottom > state.dots.top)
+  try {
+    await page.settle([])
+    let state = await page.evaluate(BAR_TABS)
+    assertBarTabs(state, 'at 1280x800')
+    assert.equal(inRow(state), true, `the tabs share the row of the dots at 1280x800: ${JSON.stringify(state)}`)
+    await page.resize(844, 390)
+    await nextFrames(page)
+    state = await page.evaluate(BAR_TABS)
+    assertBarTabs(state, 'at 844x390')
+    assert.equal(inRow(state), false, `the tabs leave the row of the dots at 844x390: ${JSON.stringify(state)}`)
+    await page.resize(1280, 800)
+    await nextFrames(page)
+    state = await page.evaluate(BAR_TABS)
+    assertBarTabs(state, 'back at 1280x800')
+    assert.equal(inRow(state), true, `the tabs share the row of the dots again at 1280x800: ${JSON.stringify(state)}`)
+  } finally { await page.close() }
+})
+
+// Narrows the column of the window step by step, so the bar crosses from tabs
+// that fit its row to tabs that need a row of their own.
+test('tabs-bar-three at 1280x800: as the window narrows, the item tabs leave the row of the bar when they stop fitting it, and not before', { skip }, async t => {
+  const page = await openPage(browser.cdp, base, 'tabs-bar-three', 1280, { height: 800 })
+  try {
+    await page.settle([])
+    const seen = { bar: 0, row: 0 }
+    for (let width = 520; width >= 200; width -= 3) {
+      await page.evaluate(`document.querySelector('.preview-window').parentElement.style.width = '${width}px'`)
+      await nextFrames(page)
+      const state = await page.evaluate(BAR_TABS)
+      if (state.compact) continue
+      assertBarTabs(state, `window column ${width}px`)
+      if (state.tabs.every(tab => tab.top >= Math.max(state.dots.bottom, state.group.bottom) - 0.5)) seen.row++; else seen.bar++
+    }
+    t.diagnostic(JSON.stringify(seen))
+    assert.ok(seen.bar > 0 && seen.row > 0, `the sweep crosses from tabs in the row of the bar to tabs on a row of their own: ${JSON.stringify(seen)}`)
+  } finally { await page.close() }
+})
+
+// A viewport this short makes the bar compact. Its tabs then take a row of
+// their own under the end group, and the window still fits the viewport. At
+// 1280x320 the two tabs of tabs-bar sit beside the end group when the compact
+// bar does not give them a flex basis of 100%.
+for (const [name, width, height] of [['tabs-bar', 1280, 240], ['tabs-bar', 1280, 320], ['tabs-bar-three', 1280, 280], ['tabs-bar-four', 1280, 300], ['tabs-bar-four', 1280, 320]]) {
+  test(`${name} at ${width}x${height}: the compact window fits the height under the navigation, with the item tabs on a row of their own under the end group`, { skip }, async () => {
+    const page = await openPage(browser.cdp, base, name, width, { height })
+    try {
+      await page.settle([])
+      const state = await page.evaluate(BAR_TABS)
+      const at = JSON.stringify(state)
+      assert.equal(state.compact, true, `the bar is compact: ${at}`)
+      assert.equal(state.scroll, false, `the window does not fall back to page scroll: ${at}`)
+      assert.ok(state.tabs.every(tab => tab.top >= state.group.bottom - 0.5), `the tabs sit under the end group: ${at}`)
+      assertBarTabs(state, `${name} at ${width}x${height}`)
+    } finally { await page.close() }
+  })
+}
