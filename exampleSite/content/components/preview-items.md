@@ -43,9 +43,9 @@ content_blocks:
       title: Tabs in the title bar
       content: >-
         The item tabs sit in the title bar of the window, and take a row of
-        their own on a narrow screen. A caption under the window describes
-        the shown view. Below 768px wide or 500px high, the poster of the
-        shown item replaces the live view.
+        their own on a narrow screen or in a bar too narrow for them. A
+        caption under the window describes the shown view. Below 768px wide
+        or 500px high, the poster of the shown item replaces the live view.
     frame: window
     tabs_placement: bar
     static_below: 768

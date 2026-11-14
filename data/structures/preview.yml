@@ -75,7 +75,8 @@ arguments:
     comment: >-
       Where the item tabs render. With above, they sit above the frame. With
       bar and frame window, they sit in the title bar of the window in place
-      of its title, and take a row of their own in the title bar below 768px.
+      of its title, and take a row of their own in the title bar below 768px
+      or when they do not fit between the dots and the end of the bar.
       Without frame window, bar keeps the tabs above the frame.
     options:
       values:

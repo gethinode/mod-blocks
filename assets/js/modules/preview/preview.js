@@ -39,7 +39,11 @@
  * data-preview-static, which the stylesheet reads, as no media query of the
  * stylesheet knows the limits of a block.
  * Window framing contains the native viewport below a measured title bar, and
- * gives a caption strip under the window the width of the window.
+ * gives a caption strip under the window the width of the window. A compact
+ * title bar always gives item tabs a row of their own. Another title bar does
+ * when they do not fit its first row between the dots and the end group, in
+ * the window as fitted: the script then sets data-preview-tabs="row" on the
+ * bar, which the stylesheet reads beside its own 768px breakpoint.
  *
  * With items, a tab per item sits above the frame, or in the title bar of a
  * window frame with tabs-placement bar, and every iframe starts with the URL
@@ -813,6 +817,7 @@
   function fitWindow (container) {
     const win = container.closest('.preview-window')
     const bar = win.querySelector('.preview-window-bar')
+    const tabs = bar.querySelector(':scope > .preview-window-tabs')
     const pane = container.querySelector(':scope > .tab-pane.active')
     const iframe = pane && pane.querySelector('.preview-iframe')
     const device = iframe && Object.keys(PREVIEW_DEVICE_DIMS).find(cls => iframe.classList.contains(cls))
@@ -821,42 +826,94 @@
     const navigationHeight = navigation ? navigation.getBoundingClientRect().height : 0
     const availableHeight = window.innerHeight - navigationHeight
     win.classList.remove('preview-window-compact')
-    win.style.width = `${Math.min(win.parentElement.clientWidth, width + 2)}px`
+    const widest = `${Math.min(win.parentElement.clientWidth, width + 2)}px`
+    win.style.width = widest
     const maximumWidth = win.getBoundingClientRect().width
     const insets = maximumWidth - container.getBoundingClientRect().width
     const winStyle = window.getComputedStyle(win)
     const borderHeight = parseFloat(winStyle.borderTopWidth) + parseFloat(winStyle.borderBottomWidth)
     const measure = () => {
       const style = window.getComputedStyle(bar)
-      const children = [...bar.children].filter(el => window.getComputedStyle(el).display !== 'none')
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      // The tabs of a compact bar take a row of their own, so they add no
+      // width to the row of the end group.
+      const compact = win.classList.contains('preview-window-compact')
+      const children = [...bar.children].filter(el => !(compact && el === tabs) && window.getComputedStyle(el).display !== 'none')
       const column = style.flexDirection === 'column'
       const chromeWidth = children.reduce((sum, el) => {
         const childStyle = window.getComputedStyle(el)
         const fixedWidth = childStyle.flexShrink === '0' ? el.getBoundingClientRect().width : parseFloat(childStyle.minWidth) || 0
         return column ? Math.max(sum, fixedWidth) : sum + fixedWidth
-      }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-      return { minimumWidth: Math.max(32, chromeWidth) + insets, barHeight: bar.getBoundingClientRect().height }
+      }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + padding
+      // Tabs on a row of their own wrap there down to the widest tab.
+      const tabWidth = tabs ? Math.max(0, ...[...tabs.children].map(outerWidth)) + padding : 0
+      return { minimumWidth: Math.max(32, chromeWidth, tabWidth) + insets, barHeight: bar.getBoundingClientRect().height }
     }
-    let chrome = measure()
+    let chrome
     const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.minimumWidth - insets) * height / width
-    if (maximumWidth < chrome.minimumWidth || availableHeight - 48 < minimumHeight()) {
-      win.classList.add('preview-window-compact')
-      chrome = measure()
+    const place = () => {
+      const scroll = availableHeight < minimumHeight()
+      const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
+      // Keep the scroll fallback's action clear of native page-edge scrolling.
+      const scrollWidth = Math.min(maximumWidth, Math.max(chrome.minimumWidth, maximumWidth - 2 * margin))
+      const fittedWidth = scroll ? scrollWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
+      if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
+      win.style.marginBlock = `${margin}px`
+      win.style.width = `${fittedWidth}px`
     }
-    const scroll = availableHeight < minimumHeight()
-    const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
-    // Keep the scroll fallback's action clear of native page-edge scrolling.
-    const scrollWidth = Math.min(maximumWidth, Math.max(chrome.minimumWidth, maximumWidth - 2 * margin))
-    const fittedWidth = scroll ? scrollWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
-    if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
-    win.style.marginBlock = `${margin}px`
-    win.style.width = `${fittedWidth}px`
+    // Normal chrome that does not fit, here or after a refit, gives way to
+    // compact chrome, which is measured afresh in the widest window.
+    const tooTall = () => maximumWidth < chrome.minimumWidth || availableHeight - 48 < minimumHeight()
+    const size = compact => {
+      win.classList.toggle('preview-window-compact', compact)
+      win.style.width = widest
+      chrome = measure()
+      if (!compact && tooTall()) return size(true)
+      place()
+      // Item tabs that do not fit the first row of the bar in the window as
+      // fitted take a row of their own, and the window is fitted again.
+      if (tabs && !compact && !bar.dataset.previewTabs && !tabsFit(bar, tabs)) {
+        bar.dataset.previewTabs = 'row'
+        return size(false)
+      }
+      // A row of tabs of their own can wrap onto more lines in the narrower
+      // window, so refit to the bar as it renders there, at most once per tab.
+      for (let n = 0; tabs && n < tabs.children.length; n++) {
+        const barHeight = bar.getBoundingClientRect().height
+        if (barHeight <= chrome.barHeight + 0.5) break
+        chrome.barHeight = barHeight
+        if (!compact && tooTall()) return size(true)
+        place()
+      }
+    }
+    if (tabs) delete bar.dataset.previewTabs
+    size(false)
     // A caption centres and wraps under the window, not across the block.
     const caption = win.closest('section.preview').querySelector('.preview-caption')
     if (caption) caption.style.width = win.style.width
     container.style.height = `${container.getBoundingClientRect().width * height / width}px`
     fitTitle(win, bar)
     return { width, height }
+  }
+
+  // The width a tab takes in its row: its box and its inline margins.
+  function outerWidth (el) {
+    const style = window.getComputedStyle(el)
+    return el.getBoundingClientRect().width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0)
+  }
+
+  // Whether the item tabs fit the first row of the bar between two flanks as
+  // wide as the wider of the dots and the end group, the flanks that fitTitle
+  // gives a title, at the width the bar has now.
+  function tabsFit (bar, tabs) {
+    const style = window.getComputedStyle(bar)
+    const flank = Math.max(0, ...[bar.querySelector('.preview-window-dots'), bar.querySelector('.preview-window-end')]
+      .filter(Boolean).map(el => el.getBoundingClientRect().width))
+    const links = [...tabs.children]
+    const tabsWidth = links.reduce((sum, el) => sum + outerWidth(el), 0) +
+      Math.max(0, links.length - 1) * (parseFloat(window.getComputedStyle(tabs).columnGap) || 0)
+    const available = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2 * (parseFloat(style.columnGap) || 0)
+    return 2 * flank + tabsWidth <= available
   }
 
   // Both flanks reserve the width of the wider one, so the title centers on the
