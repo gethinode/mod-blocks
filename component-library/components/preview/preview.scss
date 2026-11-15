@@ -391,6 +391,17 @@ section.preview {
         }
     }
 
+    // The caption of the shown item, in a strip centred under the frame and as
+    // wide as it: the content spans the block, and the script gives the strip
+    // the width of a window frame.
+    .preview-caption {
+        width: 100%;
+        margin: 0.75rem auto 0;
+        text-align: center;
+        font-size: $font-size-sm;
+        color: var(--#{$prefix}secondary-color);
+    }
+
     // Responsive behavior for small screens
     @media (max-width: 639px) {
         // Keep a fifth of the small viewport to scroll the page with: the 400px minimum
@@ -487,6 +498,55 @@ section.preview {
             min-width: 28px;
             min-height: 28px;
             flex-shrink: 0;
+        }
+    }
+
+    // Item tabs in the title bar (tabs-placement bar) take the place of the
+    // title, in the middle column of the bar. Below 768px, and wherever the
+    // script marks the bar with data-preview-tabs="row" because the tabs do
+    // not fit that column between the dots and the end group, they take a row
+    // of their own under the dots and the end group, and wrap there.
+    .preview-window-bar .preview-window-tabs {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.25rem;
+        min-width: 0;
+
+        .nav-link {
+            padding: 0.125rem 0.625rem;
+            font-size: inherit;
+            line-height: inherit;
+            white-space: nowrap;
+        }
+    }
+
+    // Once the tabs leave the middle column, auto-placement would put the end
+    // group there, so it keeps the last column. Auto-placement still puts the
+    // dots and the end group in the first row, the dots in its first column.
+    @mixin preview-tabs-row {
+        .preview-window-tabs {
+            grid-column: 1 / -1;
+            grid-row: 2;
+        }
+
+        .preview-window-tabs ~ .preview-window-end {
+            grid-column: -2;
+        }
+    }
+
+    @media (max-width: 767px) {
+        .preview-window-bar { @include preview-tabs-row; }
+    }
+
+    .preview-window-bar[data-preview-tabs="row"] { @include preview-tabs-row; }
+
+    // A compact bar puts the tabs on a row of their own under the end group.
+    .preview-window-compact .preview-window-bar {
+        flex-wrap: wrap;
+
+        .preview-window-tabs {
+            order: 3;
+            flex: 1 0 100%;
         }
     }
 

@@ -68,6 +68,39 @@ arguments:
     comment: >-
       Below 1024px show only the poster or image without navigating an embedded
       frame. Returning to desktop starts a fresh eligible navigation.
+  tabs-placement:
+    type: select
+    optional: true
+    default: above
+    comment: >-
+      Where the item tabs render. With above, they sit above the frame. With
+      bar and frame window, they sit in the title bar of the window in place
+      of its title, and take a row of their own in the title bar below 768px
+      or when they do not fit between the dots and the end of the bar.
+      Without frame window, bar keeps the tabs above the frame.
+    options:
+      values:
+        - above
+        - bar
+  static-below:
+    type: int
+    optional: true
+    default: 0
+    comment: >-
+      Viewport width in pixels below which the block shows the poster or
+      image of the shown item instead of a live frame, and navigates no
+      embedded frame. Replaces the 1024px width of mobile-static. Switching
+      items switches the poster. Returning past the limit starts a fresh
+      eligible navigation. A value that is not positive sets no limit.
+  static-max-height:
+    type: int
+    optional: true
+    default: 0
+    comment: >-
+      Viewport height in pixels below which the block shows the poster as
+      static-below describes. Combines with the width limit of static-below
+      or mobile-static: the block is static when either applies. A value
+      that is not positive sets no limit.
   activation:
     type: select
     optional: true
@@ -101,8 +134,11 @@ arguments:
       - '[]map[string]interface {}'
     optional: true
     comment: >-
-      Views to switch between as tabs above the frame, each with a title and a
-      url, both required, and an optional open-url, poster and heading. The
+      Views to switch between as tabs, placed by tabs-placement, each with a
+      title and a url, both required, and an optional open-url, poster,
+      heading and caption. A caption is inline Markdown that renders in a
+      strip under the frame while its item shows; without any caption, no
+      strip renders. The
       first item shows first, and items replace url, with a warning when both
       are set. Switching tabs keeps the shown device, and once the block may
       load its views, loads the item url in the shown view only. open-url

@@ -35,6 +35,18 @@
     </div>
 {{- end -}}
 
+{{/* Inline partial — renders the item tabs, above the frame or in the title bar of a window */}}
+{{- define "_partials/inline/preview-item-tabs.html" -}}
+    {{- $id := .id -}}
+    {{- $headed := .headed -}}
+    <div class="nav nav-pills {{ if .bar }}preview-items preview-window-tabs{{ else }}justify-content-center mb-3 preview-items{{ end }}" role="tablist" aria-label="{{ T "previewViewSelection" }}">
+        {{- range $n, $item := .items }}
+            {{- $isActive := eq $n 0 }}
+                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}">{{ $item.title }}</button>
+        {{- end }}
+        </div>
+{{- end -}}
+
 {{/* Inline partial — normalizes a URL into a comparable origin (scheme, host, port) */}}
 {{- define "_partials/inline/preview-origin.html" -}}
     {{- $url := urls.Parse . -}}
@@ -320,7 +332,11 @@
 {{- $click := eq $args.activation "click" -}}
 {{- $visible := eq $args.activation "visible" -}}
 {{- $window := eq $args.frame "window" -}}
-{{- $static := $args.mobileStatic -}}
+{{/* The width and height below which the block shows posters only. An explicit static-below
+     replaces the 1024px width limit of mobile-static. */}}
+{{- $staticBelow := cond (gt (int ($args.staticBelow | default 0)) 0) (int $args.staticBelow) 0 -}}
+{{- $staticMaxHeight := cond (gt (int ($args.staticMaxHeight | default 0)) 0) (int $args.staticMaxHeight) 0 -}}
+{{- $static := or $args.mobileStatic (gt $staticBelow 0) (gt $staticMaxHeight 0) -}}
 {{- $posters := $args.poster | default dict -}}
 {{- $items := $args.items | default slice -}}
 {{- $url := $args.url -}}
@@ -477,18 +493,16 @@
         ) }}
     {{ end }}
 
-    {{/* Item tabs — every tab names the URL its views show and the address of the item. Their
-         bottom margin spaces the content from the heading when the controls are below it. A tab
-         controls the heading pane of its item; without item headings, every tab controls the
-         content, which the script labels with the shown tab. */}}
+    {{/* Item tabs — every tab names the URL its views show and the address of the item. Above
+         the frame, their bottom margin spaces the content from the heading when the controls are
+         below it; in the title bar of a window (tabs-placement bar), they take the place of the
+         frame title and have no such margin. A tab controls the heading pane of its item; without
+         item headings, every tab controls the content, which the script labels with the shown
+         tab. */}}
     {{- $sharedPanel := and $itemTabs (not $headed) -}}
-    {{- if $itemTabs }}
-        <div class="nav nav-pills justify-content-center mb-3 preview-items" role="tablist" aria-label="{{ T "previewViewSelection" }}">
-            {{- range $n, $item := $items }}
-                {{- $isActive := eq $n 0 }}
-                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}">{{ $item.title }}</button>
-            {{- end }}
-        </div>
+    {{- $barTabs := and $itemTabs $window (eq $args.tabsPlacement "bar") -}}
+    {{- if and $itemTabs (not $barTabs) }}
+        {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" false) }}
     {{- end }}
 
     {{/* Device selection button group — rendered above or below the preview */}}
@@ -500,7 +514,11 @@
     <div class="preview-window">
         <div class="preview-window-bar">
             <span class="preview-window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            {{- if $barTabs }}
+            {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" true) }}
+            {{- else }}
             <span class="preview-window-title">{{ $args.frameTitle }}</span>
+            {{- end }}
             <span class="preview-window-end">
                 <span class="preview-window-state" aria-hidden="true" data-preview-label="{{ T "previewStatePreview" }}" data-waiting-label="{{ T "previewStateLoading" }}" data-ready-label="{{ T "previewStateLive" }}" data-failed-label="{{ T "previewStateUnavailable" }}" data-compact-waiting-label="{{ T "previewStateWait" }}" data-compact-failed-label="{{ T "previewStateError" }}"><span class="preview-state-word">{{ T "previewStatePreview" }}</span><span class="preview-state-short">{{ T "previewStatePreview" }}</span></span>
                 {{- if and $args.openLink $url }}
@@ -510,7 +528,7 @@
         </div>
     {{- end }}
     {{/* Tab content with iframes */}}
-    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if $window }} preview-window-viewport{{ end }}{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}"{{ if $sharedPanel }} id="{{ $id }}-items-panel" role="tabpanel" aria-labelledby="{{ $id }}-item-0-tab"{{ end }} data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if ne $args.activation "load" }} data-activation="{{ $args.activation }}"{{ end }}{{ if $window }} data-frame="window"{{ end }}{{ if $static }} data-mobile-static="true"{{ end }} data-load-timeout="{{ $args.loadTimeout }}"{{ with $ready }} data-ready-message="{{ . }}"{{ end }}{{ with $themeMessage }} data-theme-message="{{ . }}"{{ end }}>
+    <div class="tab-content preview-content bg-body-tertiary border width-100{{ if $window }} preview-window-viewport{{ end }}{{ if and $controlsBelow $hasHeading (not $itemTabs) }} mt-3{{ end }}"{{ if $sharedPanel }} id="{{ $id }}-items-panel" role="tabpanel" aria-labelledby="{{ $id }}-item-0-tab"{{ end }} data-desktop-responsive="{{ $args.desktopResponsive }}" data-devices="{{ delimit $devices " " }}"{{ if not $controls }} data-controls="false"{{ end }}{{ if ne $args.activation "load" }} data-activation="{{ $args.activation }}"{{ end }}{{ if $window }} data-frame="window"{{ end }}{{ if and $args.mobileStatic (not $staticBelow) }} data-mobile-static="true"{{ end }}{{ with $staticBelow }} data-static-below="{{ . }}"{{ end }}{{ with $staticMaxHeight }} data-static-max-height="{{ . }}"{{ end }} data-load-timeout="{{ $args.loadTimeout }}"{{ with $ready }} data-ready-message="{{ . }}"{{ end }}{{ with $themeMessage }} data-theme-message="{{ . }}"{{ end }}>
         {{- range $index, $device := $devices -}}
             {{- $isActive := eq $device $defaultDevice -}}
             <div class="tab-pane fade{{ if $isActive }} show active{{ end }}"
@@ -612,6 +630,18 @@
     {{- if $window }}
         <div class="preview-window-status visually-hidden" role="status" data-preview-label="{{ T "previewStatePreview" }}" data-waiting-label="{{ T "previewLoading" }}" data-failed-label="{{ T "previewUnavailable" }}" data-ready-label="{{ T "previewReady" }}"></div>
     </div>
+    {{- end }}
+
+    {{- /* Caption strip under the frame, a window or the plain content — the caption of every
+         item, of which only the shown one lacks d-none */}}
+    {{- $captioned := false -}}
+    {{- range $items }}{{ if .caption }}{{ $captioned = true }}{{ end }}{{ end -}}
+    {{- if $captioned }}
+        <div class="preview-caption">
+            {{- range $n, $item := $items }}
+            <div class="preview-caption-item{{ if gt $n 0 }} d-none{{ end }}" data-preview-item="{{ $n }}">{{ with $item.caption }}{{ $page.RenderString (dict "display" "inline") . }}{{ end }}</div>
+            {{- end }}
+        </div>
     {{- end }}
 
     {{- if and (not $showFallback) $controls $controlsBelow -}}

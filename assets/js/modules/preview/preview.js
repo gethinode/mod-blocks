@@ -33,10 +33,21 @@
  * With visible activation the shown view starts after actual viewport entry,
  * parent load and an idle opportunity (600ms timeout). Opt-in mobile-static
  * blocks never navigate below 1024px and forget earlier navigation windows.
- * Window framing contains the native viewport below a measured title bar.
+ * data-static-below and data-static-max-height set a width and a height in
+ * pixels below which a block is static the same way; data-static-below
+ * replaces the 1024px of mobile-static. A block past such a limit carries
+ * data-preview-static, which the stylesheet reads, as no media query of the
+ * stylesheet knows the limits of a block.
+ * Window framing contains the native viewport below a measured title bar, and
+ * gives a caption strip under the window the width of the window. A compact
+ * title bar always gives item tabs a row of their own. Another title bar does
+ * when they do not fit its first row between the dots and the end group, in
+ * the window as fitted: the script then sets data-preview-tabs="row" on the
+ * bar, which the stylesheet reads beside its own 768px breakpoint.
  *
- * With items, a tab per item sits above the frame, and every iframe starts with
- * the URL of the first item in data-src. Showing an item tab gives every iframe
+ * With items, a tab per item sits above the frame, or in the title bar of a
+ * window frame with tabs-placement bar, and every iframe starts with the URL
+ * of the first item in data-src. Showing an item tab gives every iframe
  * the item URL in data-src, and loads it in the shown view when the block may
  * load its views; another view drops the URL it loaded, so it loads the item
  * URL when it is next shown. An iframe that has loaded is replaced by a copy
@@ -44,7 +55,8 @@
  * iframe takes the label of the item tab as its title. When the content is the
  * tab panel of the item tabs, which it is when no item has a heading, the shown
  * tab labels it. The script also shows the poster image of the item in every
- * poster, points every .preview-open link and the link of every failure alert
+ * poster and the caption of the item in the caption strip under the frame,
+ * points every .preview-open link and the link of every failure alert
  * at the open URL of the item, and dispatches a bubbling preview:item event on
  * the section, with the index of the item in its detail.
  *
@@ -604,12 +616,28 @@
         image.classList.toggle('d-none', image.dataset.previewItem !== String(index))
       })
     })
+    section.querySelectorAll('.preview-caption-item').forEach(caption => {
+      caption.classList.toggle('d-none', caption.dataset.previewItem !== String(index))
+    })
     section.querySelectorAll('.preview-open, .preview-unavailable-link').forEach(link => { link.href = tab.dataset.previewOpenUrl })
     section.dispatchEvent(new CustomEvent('preview:item', { bubbles: true, detail: { index } }))
   }
 
+  /**
+   * Reports whether the viewport is past a static limit of the block: narrower
+   * than data-static-below or shorter than data-static-max-height, in pixels,
+   * or, for mobile-static without data-static-below, too narrow for desktop.
+   */
+  function pastStaticLimit (container) {
+    const below = Number(container.dataset.staticBelow)
+    const maxHeight = Number(container.dataset.staticMaxHeight)
+    if (below > 0 && window.matchMedia(`(max-width: ${below - 1}px)`).matches) return true
+    if (maxHeight > 0 && window.matchMedia(`(max-height: ${maxHeight - 1}px)`).matches) return true
+    return container.dataset.mobileStatic === 'true' && !deviceFits('desktop')
+  }
+
   function isStatic (container) {
-    return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || (container.dataset.mobileStatic === 'true' && !deviceFits('desktop'))
+    return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || pastStaticLimit(container)
   }
 
   // Only opt-in lifecycle modes need discovery and an eligibility controller.
@@ -647,7 +675,8 @@
   }
 
   function enhanced (container) {
-    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' || themeMessage(container) !== ''
+    return container.dataset.activation === 'visible' || container.dataset.mobileStatic === 'true' ||
+      'staticBelow' in container.dataset || 'staticMaxHeight' in container.dataset || themeMessage(container) !== ''
   }
 
   function inViewport (container) {
@@ -783,11 +812,13 @@
 
   // Measure normal chrome first on every pass, then choose one final layout.
   // This makes resize observation deterministic when compact chrome is shorter.
-  // When even minimum chrome cannot fit, retain useful native content and let
-  // the page scroll instead of clipping the action or collapsing the viewport.
+  // When no width gives a compact window that fits, retain useful native
+  // content and let the page scroll instead of clipping the action or
+  // collapsing the viewport.
   function fitWindow (container) {
     const win = container.closest('.preview-window')
     const bar = win.querySelector('.preview-window-bar')
+    const tabs = bar.querySelector(':scope > .preview-window-tabs')
     const pane = container.querySelector(':scope > .tab-pane.active')
     const iframe = pane && pane.querySelector('.preview-iframe')
     const device = iframe && Object.keys(PREVIEW_DEVICE_DIMS).find(cls => iframe.classList.contains(cls))
@@ -796,39 +827,135 @@
     const navigationHeight = navigation ? navigation.getBoundingClientRect().height : 0
     const availableHeight = window.innerHeight - navigationHeight
     win.classList.remove('preview-window-compact')
-    win.style.width = `${Math.min(win.parentElement.clientWidth, width + 2)}px`
+    const widest = `${Math.min(win.parentElement.clientWidth, width + 2)}px`
+    win.style.width = widest
     const maximumWidth = win.getBoundingClientRect().width
     const insets = maximumWidth - container.getBoundingClientRect().width
     const winStyle = window.getComputedStyle(win)
     const borderHeight = parseFloat(winStyle.borderTopWidth) + parseFloat(winStyle.borderBottomWidth)
     const measure = () => {
       const style = window.getComputedStyle(bar)
-      const children = [...bar.children].filter(el => window.getComputedStyle(el).display !== 'none')
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      // The tabs of a compact bar take a row of their own, so they add no
+      // width to the row of the end group.
+      const compact = win.classList.contains('preview-window-compact')
+      const children = [...bar.children].filter(el => !(compact && el === tabs) && window.getComputedStyle(el).display !== 'none')
       const column = style.flexDirection === 'column'
       const chromeWidth = children.reduce((sum, el) => {
         const childStyle = window.getComputedStyle(el)
         const fixedWidth = childStyle.flexShrink === '0' ? el.getBoundingClientRect().width : parseFloat(childStyle.minWidth) || 0
         return column ? Math.max(sum, fixedWidth) : sum + fixedWidth
-      }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-      return { minimumWidth: Math.max(32, chromeWidth) + insets, barHeight: bar.getBoundingClientRect().height }
+      }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + padding
+      // Tabs on a row of their own wrap there down to the widest tab.
+      const tabWidth = tabs ? Math.max(0, ...[...tabs.children].map(outerWidth)) + padding : 0
+      const minimumWidth = Math.max(32, chromeWidth, tabWidth) + insets
+      return { minimumWidth, narrowest: minimumWidth, barHeight: bar.getBoundingClientRect().height }
     }
-    let chrome = measure()
-    const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.minimumWidth - insets) * height / width
-    if (maximumWidth < chrome.minimumWidth || availableHeight - 48 < minimumHeight()) {
-      win.classList.add('preview-window-compact')
+    let chrome
+    // The height of the window at its narrowest width with the bar as tall as
+    // it is now. That width is the minimum width of the chrome, unless
+    // fitLines() finds a width at which a compact window with tabs fits the
+    // height: then it is the narrowest width at which the tabs keep as many
+    // lines, to within a pixel. The margins of a window that cannot keep 24px
+    // come from it.
+    const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.narrowest - insets) * height / width
+    const barAt = barWidth => {
+      win.style.width = `${barWidth}px`
+      return bar.getBoundingClientRect().height
+    }
+    // The tabs of a compact bar wrap onto more lines as the window narrows, so
+    // a narrower window can be taller. From the bar of the widest window, each
+    // pass sets the window to the width at which it would fit the height
+    // without margins with the bar as tall as it is now, and takes the bar as
+    // it renders there. Once that bar is no taller, no wider window fits. A
+    // pass that goes on adds a line of tabs or more, so the walk ends by the
+    // last tab. place() then takes the margins from the narrowest width with
+    // as many lines, which a search between the minimum width and that width
+    // finds to within a pixel.
+    const fitLines = () => {
+      for (let n = 0; n < tabs.children.length; n++) {
+        const fit = (availableHeight - chrome.barHeight - borderHeight) * width / height + insets
+        // No window fits: place() falls back to page scroll.
+        if (fit < chrome.minimumWidth) return
+        const barHeight = barAt(fit)
+        if (barHeight > chrome.barHeight + 0.5) {
+          chrome.barHeight = barHeight
+          continue
+        }
+        let low = chrome.minimumWidth
+        let high = fit
+        while (high - low > 1) {
+          const middle = (low + high) / 2
+          if (barAt(middle) <= chrome.barHeight + 0.5) high = middle; else low = middle
+        }
+        chrome.narrowest = high
+        return
+      }
+    }
+    const place = () => {
+      const scroll = availableHeight < minimumHeight()
+      const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
+      // Keep the scroll fallback's action clear of native page-edge scrolling.
+      const scrollWidth = Math.min(maximumWidth, Math.max(chrome.minimumWidth, maximumWidth - 2 * margin))
+      const fittedWidth = scroll ? scrollWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
+      if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
+      win.style.marginBlock = `${margin}px`
+      win.style.width = `${fittedWidth}px`
+    }
+    // Normal chrome that does not fit, here or after a refit, gives way to
+    // compact chrome, which is measured afresh in the widest window.
+    const tooTall = () => maximumWidth < chrome.minimumWidth || availableHeight - 48 < minimumHeight()
+    const size = compact => {
+      win.classList.toggle('preview-window-compact', compact)
+      win.style.width = widest
       chrome = measure()
+      if (!compact && tooTall()) return size(true)
+      if (compact && tabs) fitLines()
+      place()
+      // Item tabs that do not fit the first row of the bar in the window as
+      // fitted take a row of their own, and the window is fitted again.
+      if (tabs && !compact && !bar.dataset.previewTabs && !tabsFit(bar, tabs)) {
+        bar.dataset.previewTabs = 'row'
+        return size(false)
+      }
+      // A row of tabs of their own can wrap onto more lines in the narrower
+      // window, so refit to the bar as it renders there, at most once per tab.
+      for (let n = 0; tabs && n < tabs.children.length; n++) {
+        const barHeight = bar.getBoundingClientRect().height
+        if (barHeight <= chrome.barHeight + 0.5) break
+        chrome.barHeight = barHeight
+        if (!compact && tooTall()) return size(true)
+        place()
+      }
     }
-    const scroll = availableHeight < minimumHeight()
-    const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
-    // Keep the scroll fallback's action clear of native page-edge scrolling.
-    const scrollWidth = Math.min(maximumWidth, Math.max(chrome.minimumWidth, maximumWidth - 2 * margin))
-    const fittedWidth = scroll ? scrollWidth : Math.min(maximumWidth, (availableHeight - 2 * margin - chrome.barHeight - borderHeight) * width / height + insets)
-    if (scroll) win.dataset.previewFit = 'scroll'; else delete win.dataset.previewFit
-    win.style.marginBlock = `${margin}px`
-    win.style.width = `${fittedWidth}px`
+    if (tabs) delete bar.dataset.previewTabs
+    size(false)
+    // A caption centres and wraps under the window, not across the block.
+    const caption = win.closest('section.preview').querySelector('.preview-caption')
+    if (caption) caption.style.width = win.style.width
     container.style.height = `${container.getBoundingClientRect().width * height / width}px`
     fitTitle(win, bar)
     return { width, height }
+  }
+
+  // The width a tab takes in its row: its box and its inline margins.
+  function outerWidth (el) {
+    const style = window.getComputedStyle(el)
+    return el.getBoundingClientRect().width + (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0)
+  }
+
+  // Whether the item tabs fit the first row of the bar between two flanks as
+  // wide as the wider of the dots and the end group, the flanks that fitTitle
+  // gives a title, at the width the bar has now.
+  function tabsFit (bar, tabs) {
+    const style = window.getComputedStyle(bar)
+    const flank = Math.max(0, ...[bar.querySelector('.preview-window-dots'), bar.querySelector('.preview-window-end')]
+      .filter(Boolean).map(el => el.getBoundingClientRect().width))
+    const links = [...tabs.children]
+    const tabsWidth = links.reduce((sum, el) => sum + outerWidth(el), 0) +
+      Math.max(0, links.length - 1) * (parseFloat(window.getComputedStyle(tabs).columnGap) || 0)
+    const available = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - 2 * (parseFloat(style.columnGap) || 0)
+    return 2 * flank + tabsWidth <= available
   }
 
   // Both flanks reserve the width of the wider one, so the title centers on the

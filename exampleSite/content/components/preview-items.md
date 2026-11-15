@@ -37,4 +37,35 @@ content_blocks:
           content: >-
             This view has matching native screenshots for every offered
             device and follows the same outer theme.
+  - _bookshop_name: preview
+    heading:
+      preheading: Live preview
+      title: Tabs in the title bar
+      content: >-
+        The item tabs sit in the title bar of the window, and take a row of
+        their own on a narrow screen or in a bar too narrow for them. A
+        caption under the window describes the shown view. Below 768px wide
+        or 500px high, the poster of the shown item replaces the live view.
+    frame: window
+    tabs_placement: bar
+    static_below: 768
+    static_max_height: 500
+    devices: [desktop]
+    controls: false
+    activation: visible
+    open_link: true
+    ready_message: example:ready
+    theme_message: example:theme
+    mode: true
+    items:
+      - title: Workspace
+        url: /preview-demo/ready/
+        caption: The workspace view, with **ready** and theme messages.
+        poster:
+          desktop: img/preview-demo/ready-desktop.png
+      - title: Activity
+        url: /preview-demo/activity/
+        caption: The activity view, with a poster of its own.
+        poster:
+          desktop: img/preview-demo/activity-desktop.png
 ---

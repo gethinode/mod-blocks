@@ -279,6 +279,39 @@ fixtures:
       'title="View A"': 3
       'title="View B"': 0
       'Block heading': 0
+  - case: items-tabs-bar-caption-static
+    block:
+      _bookshop_name: preview
+      frame: window
+      tabs_placement: bar
+      static_below: 768
+      static_max_height: 500
+      items:
+        - title: View A
+          url: https://example.org/a
+          caption: Caption of **A**
+        - title: View B
+          url: https://example.org/b
+          caption: Caption of B
+    want:
+      - 'data-static-below="768" data-static-max-height="500"'
+      - '<div class="preview-caption-item" data-preview-item="0">Caption of <strong>A</strong></div>'
+      - '<div class="preview-caption-item d-none" data-preview-item="1">Caption of B</div>'
+    reject:
+      - 'data-mobile-static='
+      - 'preview-window-title'
+    order:
+      - 'class="preview-window-bar"'
+      - 'class="nav nav-pills preview-items preview-window-tabs" role="tablist"'
+      - '>View A</button>'
+      - '>View B</button>'
+      - 'class="preview-window-end"'
+      - 'preview-content'
+      - 'preview-window-status'
+      - 'class="preview-caption"'
+    count:
+      'src="https://example.org/a"': 0
+      'class="preview-poster"': 3
   - case: items-heading-fallback
     block:
       _bookshop_name: preview
