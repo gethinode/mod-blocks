@@ -853,9 +853,11 @@
     }
     let chrome
     // The height of the window at its narrowest width with the bar as tall as
-    // it is now: the minimum width of the chrome, or for a compact bar with
-    // tabs, the narrowest width at which they keep as many lines. The margins
-    // of a window that cannot keep 24px come from it.
+    // it is now. That width is the minimum width of the chrome, unless
+    // fitLines() finds a width at which a compact window with tabs fits the
+    // height: then it is the narrowest width at which the tabs keep as many
+    // lines, to within a pixel. The margins of a window that cannot keep 24px
+    // come from it.
     const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.narrowest - insets) * height / width
     const barAt = barWidth => {
       win.style.width = `${barWidth}px`
