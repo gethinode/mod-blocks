@@ -812,8 +812,9 @@
 
   // Measure normal chrome first on every pass, then choose one final layout.
   // This makes resize observation deterministic when compact chrome is shorter.
-  // When even minimum chrome cannot fit, retain useful native content and let
-  // the page scroll instead of clipping the action or collapsing the viewport.
+  // When no width gives a compact window that fits, retain useful native
+  // content and let the page scroll instead of clipping the action or
+  // collapsing the viewport.
   function fitWindow (container) {
     const win = container.closest('.preview-window')
     const bar = win.querySelector('.preview-window-bar')
@@ -847,10 +848,48 @@
       }, 0) + (column ? 0 : Math.max(0, children.length - 1) * (parseFloat(style.columnGap) || 0)) + padding
       // Tabs on a row of their own wrap there down to the widest tab.
       const tabWidth = tabs ? Math.max(0, ...[...tabs.children].map(outerWidth)) + padding : 0
-      return { minimumWidth: Math.max(32, chromeWidth, tabWidth) + insets, barHeight: bar.getBoundingClientRect().height }
+      const minimumWidth = Math.max(32, chromeWidth, tabWidth) + insets
+      return { minimumWidth, narrowest: minimumWidth, barHeight: bar.getBoundingClientRect().height }
     }
     let chrome
-    const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.minimumWidth - insets) * height / width
+    // The height of the window at its narrowest width with the bar as tall as
+    // it is now: the minimum width of the chrome, or for a compact bar with
+    // tabs, the narrowest width at which they keep as many lines. The margins
+    // of a window that cannot keep 24px come from it.
+    const minimumHeight = () => chrome.barHeight + borderHeight + (chrome.narrowest - insets) * height / width
+    const barAt = barWidth => {
+      win.style.width = `${barWidth}px`
+      return bar.getBoundingClientRect().height
+    }
+    // The tabs of a compact bar wrap onto more lines as the window narrows, so
+    // a narrower window can be taller. From the bar of the widest window, each
+    // pass sets the window to the width at which it would fit the height
+    // without margins with the bar as tall as it is now, and takes the bar as
+    // it renders there. Once that bar is no taller, no wider window fits. A
+    // pass that goes on adds a line of tabs or more, so the walk ends by the
+    // last tab. place() then takes the margins from the narrowest width with
+    // as many lines, which a search between the minimum width and that width
+    // finds to within a pixel.
+    const fitLines = () => {
+      for (let n = 0; n < tabs.children.length; n++) {
+        const fit = (availableHeight - chrome.barHeight - borderHeight) * width / height + insets
+        // No window fits: place() falls back to page scroll.
+        if (fit < chrome.minimumWidth) return
+        const barHeight = barAt(fit)
+        if (barHeight > chrome.barHeight + 0.5) {
+          chrome.barHeight = barHeight
+          continue
+        }
+        let low = chrome.minimumWidth
+        let high = fit
+        while (high - low > 1) {
+          const middle = (low + high) / 2
+          if (barAt(middle) <= chrome.barHeight + 0.5) high = middle; else low = middle
+        }
+        chrome.narrowest = high
+        return
+      }
+    }
     const place = () => {
       const scroll = availableHeight < minimumHeight()
       const margin = scroll ? 24 : Math.min(24, Math.max(0, (availableHeight - minimumHeight()) / 2))
@@ -869,6 +908,7 @@
       win.style.width = widest
       chrome = measure()
       if (!compact && tooTall()) return size(true)
+      if (compact && tabs) fitLines()
       place()
       // Item tabs that do not fit the first row of the bar in the window as
       // fitted take a row of their own, and the window is fitted again.

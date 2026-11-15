@@ -180,9 +180,11 @@ const PAGES = {
         `  - title: View b${n}`, `    url: ${TARGET}b${n}`, `    caption: Caption of b${n}`]
     }))
   },
-  // Three, four and six item tabs in the title bar of a window.
+  // Three, four and six item tabs in the title bar of a window, and six
+  // shorter ones.
   ...Object.fromEntries([['three', ['Discover', 'Move', 'History']], ['four', ['Discover', 'Move', 'Changes', 'History']],
-    ['six', [1, 2, 3, 4, 5, 6].map(n => `Longer view title ${n}`)]].map(([count, titles]) => [`tabs-bar-${count}`, {
+    ['six', [1, 2, 3, 4, 5, 6].map(n => `Longer view title ${n}`)],
+    ['six-short', ['Discover', 'Move', 'Changes', 'History', 'Lineage', 'Settings']]].map(([count, titles]) => [`tabs-bar-${count}`, {
     url: null,
     lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true', 'items:',
       ...titles.flatMap((title, n) => [`  - title: ${title}`, `    url: ${TARGET}${n}`])]
@@ -3634,21 +3636,99 @@ test('tabs-bar-three at 1280x800: as the window narrows, the item tabs leave the
   } finally { await page.close() }
 })
 
+// Sweeps the width of the compact window a pixel at a time, from 40px to the
+// width of its column, and keeps each width at which the item tabs, with their
+// margins, and the end group stay inside the content box of the bar. Each kept
+// width has the height of the window there: the bar as it renders at that
+// width, the borders of the window and a desktop view at 1440 by 900. Returns
+// the widest kept width whose window fits the height under the navigation
+// without margins, and the narrowest kept width whose bar is as tall as at that
+// widest one, so with as many lines of tabs. Restores the width of the window.
+const COMPACT_FITS = `(() => {
+  const win = document.querySelector('section.preview .preview-window')
+  const bar = win.querySelector('.preview-window-bar')
+  const content = win.querySelector('.preview-content')
+  const navigation = document.querySelector('.navbar, header[role="banner"]')
+  const available = innerHeight - (navigation ? navigation.getBoundingClientRect().height : 0)
+  const style = getComputedStyle(win)
+  const border = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth)
+  const insets = win.getBoundingClientRect().width - content.getBoundingClientRect().width
+  const barStyle = getComputedStyle(bar)
+  const saved = win.style.width
+  const kept = []
+  for (let width = 40; width <= win.parentElement.clientWidth; width++) {
+    win.style.width = width + 'px'
+    const box = bar.getBoundingClientRect()
+    const start = box.left + parseFloat(barStyle.paddingLeft)
+    const end = box.right - parseFloat(barStyle.paddingRight)
+    const inside = [...bar.querySelectorAll('.preview-window-tabs .nav-link'), bar.querySelector('.preview-window-end')].every(el => {
+      const r = el.getBoundingClientRect()
+      const s = getComputedStyle(el)
+      return r.left - parseFloat(s.marginLeft) >= start - 0.01 && r.right + parseFloat(s.marginRight) <= end + 0.01
+    })
+    if (inside) kept.push({ width, bar: box.height, height: box.height + border + (width - insets) * 900 / 1440 })
+  }
+  win.style.width = saved
+  const widest = kept.filter(fit => fit.height <= available).pop() || null
+  const narrowest = widest && kept.find(fit => Math.abs(fit.bar - widest.bar) < 0.5)
+  return { available, widest, narrowest }
+})()`
+
 // A viewport this short makes the bar compact. Its tabs then take a row of
 // their own under the end group, and the window still fits the viewport. At
 // 1280x320 the two tabs of tabs-bar sit beside the end group when the compact
 // bar does not give them a flex basis of 100%.
-for (const [name, width, height] of [['tabs-bar', 1280, 240], ['tabs-bar', 1280, 320], ['tabs-bar-three', 1280, 280], ['tabs-bar-four', 1280, 300], ['tabs-bar-four', 1280, 320]]) {
-  test(`${name} at ${width}x${height}: the compact window fits the height under the navigation, with the item tabs on a row of their own under the end group`, { skip }, async () => {
+//
+// A row of tabs wraps onto more lines as the window narrows, so a narrower
+// window can be taller. Each size here has a compact window that fits the
+// height without margins, so the window does not fall back to page scroll.
+// With as many lines of tabs, the bar is as tall at every width, so a window
+// that keeps a margin m above and below fits 2m * 1440 / 900 less width than
+// one without margins. The window is to be as wide as the widest that fits,
+// less what its margins take. Its margins are to be 24px where a window with
+// as many lines of tabs as the widest fits with them, and otherwise half of
+// what the narrowest such window leaves of the height, as a window without
+// tabs keeps. The sweep steps a pixel at a time, so both checks allow a
+// pixel. At 1280x292 the three tabs of tabs-bar-three keep one line only in a
+// window within a pixel of the narrowest that holds them on one line.
+for (const [name, width, height] of [['tabs-bar', 1280, 240], ['tabs-bar', 1280, 320], ['tabs-bar-three', 1280, 280], ['tabs-bar-four', 1280, 300], ['tabs-bar-four', 1280, 320],
+  ['tabs-bar-four', 1280, 290], ['tabs-bar-four', 844, 290], ['tabs-bar', 1280, 230], ['tabs-bar-six-short', 1280, 320], ['tabs-bar-six-short', 1280, 330],
+  ['tabs-static-four', 1280, 300], ['tabs-bar-three', 1280, 292]]) {
+  test(`${name} at ${width}x${height}: the compact window fits the height under the navigation, with the item tabs on a row of their own under the end group, as wide as the widest that fits less its margins`, { skip }, async t => {
     const page = await openPage(browser.cdp, base, name, width, { height })
     try {
       await page.settle([])
       const state = await page.evaluate(BAR_TABS)
       const at = JSON.stringify(state)
+      const fits = await page.evaluate(COMPACT_FITS)
+      const settled = { width: state.win.right - state.win.left, height: state.win.bottom - state.win.top, margin: state.margin }
+      t.diagnostic(JSON.stringify({ settled, ...fits }))
       assert.equal(state.compact, true, `the bar is compact: ${at}`)
       assert.equal(state.scroll, false, `the window does not fall back to page scroll: ${at}`)
       assert.ok(state.tabs.every(tab => tab.top >= state.group.bottom - 0.5), `the tabs sit under the end group: ${at}`)
       assertBarTabs(state, `${name} at ${width}x${height}`)
+      assert.ok(fits.widest, `a compact window fits the height: ${JSON.stringify(fits)}`)
+      assert.ok(settled.width + 2 * settled.margin * 1440 / 900 >= fits.widest.width - 1, `the window is as wide as the widest that fits less its margins: ${JSON.stringify({ settled, ...fits })}`)
+      const margin = Math.min(24, (fits.available - fits.narrowest.height) / 2)
+      assert.ok(settled.margin >= margin - 1, `the window keeps margins of ${margin}px: ${JSON.stringify({ settled, ...fits })}`)
+    } finally { await page.close() }
+  })
+}
+
+// At these sizes the sweep finds no compact window that fits the height, so
+// the window falls back to page scroll. At 1280x120 the height under the
+// navigation is shorter than the bar.
+for (const [name, width, height] of [['tabs-bar-three', 1280, 260], ['tabs-bar-six', 1280, 330], ['tabs-bar-four', 1280, 120]]) {
+  test(`${name} at ${width}x${height}: no compact window fits the height under the navigation, so the window falls back to page scroll`, { skip }, async t => {
+    const page = await openPage(browser.cdp, base, name, width, { height })
+    try {
+      await page.settle([])
+      const state = await page.evaluate(BAR_TABS)
+      const fits = await page.evaluate(COMPACT_FITS)
+      t.diagnostic(JSON.stringify(fits))
+      assert.equal(fits.widest, null, `no compact window fits the height: ${JSON.stringify(fits)}`)
+      assert.equal(state.compact, true, `the bar is compact: ${JSON.stringify(state)}`)
+      assert.equal(state.scroll, true, `the window falls back to page scroll: ${JSON.stringify(state)}`)
     } finally { await page.close() }
   })
 }
