@@ -61,7 +61,11 @@
  * the section, with the index of the item in its detail. With
  * caption-placement tooltip, an item tab with a caption carries
  * data-preview-tooltip, and the script gives it a Bootstrap tooltip that shows
- * the caption on hover and on keyboard focus, and hides on Escape.
+ * the caption on hover and on keyboard focus. Escape, wherever the focus is in
+ * the page outside a frame, hides every caption tooltip that shows, whether
+ * hover or focus showed it, and does not move the focus. The script disposes
+ * the tooltip of a tab that leaves the page. Without the Bootstrap tooltip
+ * component, such a tab gets its caption as a native title instead.
  *
  * Each navigation the script starts gets a deadline of data-load-timeout
  * seconds, 15 when that is not a positive number, which starts when the iframe
@@ -791,6 +795,10 @@
     return controller
   }
 
+  function tooltipsLoaded () {
+    return typeof bootstrap !== 'undefined' && !!bootstrap.Tooltip
+  }
+
   /**
    * With caption-placement tooltip, gives every item tab that carries
    * data-preview-tooltip a Bootstrap tooltip, which shows its data-bs-title on
@@ -798,24 +806,46 @@
    * a script that looks for data-bs-toggle="tooltip" does not pick it up. Runs
    * on every discovery pass, as Bootstrap may load after this script, and
    * creates a tooltip once per tab. Without the Bootstrap tooltip component,
-   * the tabs get no tooltip.
+   * the tab gets its data-bs-title as a native title, so the caption is not
+   * lost; a later pass that creates the tooltip removes that title first.
    */
   function initCaptionTooltips () {
-    if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return
+    const loaded = tooltipsLoaded()
     document.querySelectorAll('section.preview [data-preview-tooltip]').forEach(tab => {
+      if (!loaded) { tab.setAttribute('title', tab.getAttribute('data-bs-title')); return }
+      tab.removeAttribute('title')
       bootstrap.Tooltip.getOrCreateInstance(tab)
     })
   }
 
-  // Escape hides the caption tooltip of the focused item tab, so a keyboard
-  // user can dismiss it without moving focus.
+  /**
+   * Disposes the caption tooltip of each item tab in node, or of node itself,
+   * that is no longer in the page. Bootstrap appends a tooltip to the body, so
+   * one that shows when its tab is removed would stay. A tab that was moved,
+   * and so is in the page again, keeps its tooltip.
+   */
+  function disposeCaptionTooltips (node) {
+    if (!tooltipsLoaded()) return
+    const tabs = [...node.querySelectorAll('[data-preview-tooltip]')]
+    if (node.matches('[data-preview-tooltip]')) tabs.push(node)
+    tabs.forEach(tab => {
+      const tooltip = !tab.isConnected && bootstrap.Tooltip.getInstance(tab)
+      if (tooltip) tooltip.dispose()
+    })
+  }
+
+  // Escape hides every caption tooltip that shows, by hover or by focus, so it
+  // can be dismissed without moving the pointer or the focus, which stays where
+  // it is. Bootstrap tooltips do not hide on Escape themselves. The listener
+  // captures, so an element that stops Escape from bubbling does not keep the
+  // tooltip open.
   document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return
-    const tab = event.target
-    if (!tab || !tab.hasAttribute || !tab.hasAttribute('data-preview-tooltip')) return
-    const tooltip = bootstrap.Tooltip.getInstance(tab)
-    if (tooltip) tooltip.hide()
-  })
+    if (event.key !== 'Escape' || !tooltipsLoaded()) return
+    document.querySelectorAll('section.preview [data-preview-tooltip]').forEach(tab => {
+      const tooltip = bootstrap.Tooltip.getInstance(tab)
+      if (tooltip) tooltip.hide()
+    })
+  }, true)
 
   function discoverPreviews () {
     initCaptionTooltips()
@@ -1152,6 +1182,7 @@
           if (node.nodeType !== 1) return
           if (node.matches('.preview-content')) releaseOwnership(node)
           node.querySelectorAll('.preview-content').forEach(releaseOwnership)
+          disposeCaptionTooltips(node)
         }))
         const changed = records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
           node.nodeType === 1 && (node.matches(`section.preview, .preview-content, .preview-window, ${ownershipTag}`) || node.querySelector('section.preview, .preview-content, .preview-window'))))

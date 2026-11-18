@@ -54,6 +54,9 @@ class FakeElement {
   }
   get isConnected () { return this.ownerDocument !== null }
 
+  // An element node, which a MutationObserver record holds.
+  get nodeType () { return 1 }
+  matches (selector) { return matches(this, selector) }
   hasAttribute (name) { return name in this.attrs }
   removeAttribute (name) { delete this.attrs[name] }
   getAttribute (name) { return name in this.attrs ? this.attrs[name] : null }
@@ -119,6 +122,9 @@ const rules = {
   '.preview-controls [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab',
   'section.preview [data-preview-tooltip]': el => 'data-preview-tooltip' in el.attrs && !!el.closest('section.preview'),
+  '[data-preview-tooltip]': el => 'data-preview-tooltip' in el.attrs,
+  'section.preview, .preview-content, .preview-window': el => ['preview', 'preview-content', 'preview-window'].some(name => el.classList.contains(name)),
+  'section.preview, .preview-content, .preview-window, hinode-preview-owner': el => ['preview', 'preview-content', 'preview-window'].some(name => el.classList.contains(name)),
   '.preview-items [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab' && !!el.parent.closest('.preview-items'),
   '.preview-error:not(.d-none)': el => el.classList.contains('preview-error') && !el.classList.contains('d-none'),
   '.preview-open, .preview-unavailable-link': el => el.classList.contains('preview-open') || el.classList.contains('preview-unavailable-link'),
@@ -965,24 +971,46 @@ test('with a ready message and click activation, a message before activation cha
 
 // With caption-placement tooltip, every item tab with a caption carries data-preview-tooltip and
 // its caption in data-bs-title. The fake Tooltip records the tabs it was created for, once each,
-// as Bootstrap's getOrCreateInstance does, and the tabs it hid.
+// as Bootstrap's getOrCreateInstance does, with the config of each, and the tabs it hid and
+// disposed. A disposed tooltip has no instance any more, as in Bootstrap.
 function fakeBootstrap () {
   const instances = new Map()
+  const configs = []
   const hidden = []
+  const disposed = []
   const Tooltip = {
-    getOrCreateInstance (el) {
-      if (!instances.has(el)) instances.set(el, { hide () { hidden.push(el) } })
+    getOrCreateInstance (el, config) {
+      if (!instances.has(el)) {
+        configs.push(config)
+        instances.set(el, { hide () { hidden.push(el) }, dispose () { disposed.push(el); instances.delete(el) } })
+      }
       return instances.get(el)
     },
     getInstance: el => instances.get(el) || null
   }
-  return { bootstrap: { Tooltip }, instances, hidden }
+  return { bootstrap: { Tooltip }, instances, configs, hidden, disposed }
 }
 function tooltipPreview () {
   const preview = buildPreview({ devices: ['desktop'], active: 'desktop', controls: false, items: ITEMS })
   preview.itemButtons[0].setAttribute('data-preview-tooltip', '')
   preview.itemButtons[0].setAttribute('data-bs-title', 'Caption of A')
   return preview
+}
+
+// A MutationObserver whose records the test delivers by hand.
+function fakeMutations () {
+  const observers = []
+  class MutationObserver {
+    constructor (callback) { this.callback = callback; observers.push(this) }
+    observe () {}
+  }
+  const deliver = ({ addedNodes = [], removedNodes = [] }) => observers.forEach(observer => observer.callback([{ addedNodes, removedNodes }]))
+  return { MutationObserver, deliver }
+}
+// Takes an element out of the fake page.
+function detach (el) {
+  el.parent.children.splice(el.parent.children.indexOf(el), 1)
+  el.parent = null
 }
 
 test('caption tooltips: each item tab with data-preview-tooltip gets one Bootstrap tooltip', () => {
@@ -993,6 +1021,16 @@ test('caption tooltips: each item tab with data-preview-tooltip gets one Bootstr
   page.load()
   page.resize(1000)
   assert.equal(fake.instances.size, 1, 'later passes reuse the tooltip')
+  assert.equal(preview.itemButtons[0].getAttribute('title'), null, 'with the tooltip, the tab has no native title')
+})
+
+test('caption tooltips: the tooltip shows its caption as plain text, not as HTML', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
+  assert.equal(fake.configs.length, 1)
+  assert.ok(!(fake.configs[0] && fake.configs[0].html), `created with ${JSON.stringify(fake.configs[0])}`)
+  assert.equal(preview.itemButtons[0].getAttribute('data-bs-html'), null)
 })
 
 test('caption tooltips: a tooltip is created at window load when Bootstrap arrives after DOMContentLoaded', () => {
@@ -1000,32 +1038,72 @@ test('caption tooltips: a tooltip is created at window load when Bootstrap arriv
   const fake = fakeBootstrap()
   const page = run(preview, 1280, { until: 'ready' })
   assert.equal(fake.instances.size, 0)
+  assert.equal(preview.itemButtons[0].getAttribute('title'), 'Caption of A', 'until then, the caption is the native title')
   page.context.bootstrap = fake.bootstrap
   page.load()
   assert.deepEqual([...fake.instances.keys()], [preview.itemButtons[0]])
+  assert.equal(preview.itemButtons[0].getAttribute('title'), null, 'the tooltip replaces the native title')
 })
 
-test('caption tooltips: Escape on a tab hides its tooltip, another key or element does not', () => {
+test('caption tooltips: Escape anywhere on the page hides every caption tooltip, another key or tooltip is left alone', () => {
   const preview = tooltipPreview()
+  preview.itemButtons[1].setAttribute('data-preview-tooltip', '')
+  preview.itemButtons[1].setAttribute('data-bs-title', 'Caption of B')
   const fake = fakeBootstrap()
-  run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
+  const page = run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
   // A tooltip of another element on the page keeps its own Escape handling.
   fake.bootstrap.Tooltip.getOrCreateInstance(preview.open)
-  preview.open.dispatch('keydown', { key: 'Escape' })
   preview.itemButtons[0].dispatch('keydown', { key: 'Enter' })
-  preview.itemButtons[1].dispatch('keydown', { key: 'Escape' })
+  page.document.dispatch('keydown', { key: 'Esc' })
   assert.deepEqual(fake.hidden, [])
-  preview.itemButtons[0].dispatch('keydown', { key: 'Escape' })
-  assert.deepEqual(fake.hidden, [preview.itemButtons[0]])
+  // Focus on an element that is no item tab, as with a tooltip that hover shows.
+  preview.open.dispatch('keydown', { key: 'Escape' })
+  assert.deepEqual(fake.hidden, preview.itemButtons)
+  fake.hidden.length = 0
+  page.document.dispatch('keydown', { key: 'Escape' })
+  assert.deepEqual(fake.hidden, preview.itemButtons)
+})
+
+test('caption tooltips: a tab that leaves the page disposes its tooltip, a tab that is moved keeps it', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  const mutations = fakeMutations()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap, MutationObserver: mutations.MutationObserver } })
+  // A tooltip of another element in the block is not the script's to dispose.
+  fake.bootstrap.Tooltip.getOrCreateInstance(preview.open)
+  // Moved: taken out and put back before the observer runs.
+  mutations.deliver({ removedNodes: [preview.section], addedNodes: [preview.section] })
+  assert.deepEqual(fake.disposed, [])
+  detach(preview.section)
+  mutations.deliver({ removedNodes: [{ nodeType: 3 }, preview.section] })
+  assert.deepEqual(fake.disposed, [preview.itemButtons[0]])
+  assert.equal(fake.bootstrap.Tooltip.getInstance(preview.open) !== null, true)
+})
+
+test('caption tooltips: a tab taken out of the page by itself disposes its tooltip', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  const mutations = fakeMutations()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap, MutationObserver: mutations.MutationObserver } })
+  const tab = preview.itemButtons[0]
+  detach(tab)
+  mutations.deliver({ removedNodes: [tab] })
+  assert.deepEqual(fake.disposed, [tab])
 })
 
 for (const [label, globals] of [['without Bootstrap', {}], ['without the Bootstrap tooltip component', { bootstrap: {} }]]) {
-  test(`caption tooltips: ${label}, the block still works`, () => {
+  test(`caption tooltips: ${label}, the block still works, and a captioned tab has its caption as native title`, () => {
     const preview = tooltipPreview()
-    run(preview, 1280, { globals })
+    const mutations = fakeMutations()
+    run(preview, 1280, { globals: { ...globals, MutationObserver: mutations.MutationObserver } })
     assert.deepEqual(loaded(preview), ['desktop'])
+    assert.equal(preview.itemButtons[0].getAttribute('title'), 'Caption of A')
+    assert.equal(preview.itemButtons[1].getAttribute('title'), null, 'a tab without a caption gets no title')
     preview.itemButtons[0].dispatch('keydown', { key: 'Escape' })
     preview.itemButtons[1].click()
     assert.equal(src(preview.panes.desktop), B)
+    const tab = preview.itemButtons[0]
+    detach(tab)
+    mutations.deliver({ removedNodes: [tab] })
   })
 }

@@ -84,6 +84,8 @@ arguments:
       keyboard focus, and no caption strip renders. Use tooltip when the
       strip would fall below the viewport, such as on a full-height preview.
       A block that shows its fallback has no item tabs, and keeps the strip.
+      Without the Bootstrap tooltip component, the caption is the native
+      title of the item tab instead.
     options:
       values:
         - below
