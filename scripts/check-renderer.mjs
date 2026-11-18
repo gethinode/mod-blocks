@@ -279,6 +279,14 @@ test('preview: a tooltip caption is plain text, and an item without a caption ge
   assert.equal(html.match(/data-preview-tooltip/g).length, 1)
 })
 
+test('preview: a block that shows its fallback has no item tabs, and keeps the caption strip with caption_placement tooltip', () => {
+  const { error, output } = renderPreview({ caption_placement: 'tooltip', show_fallback: true, items: ITEMS })
+  assert.equal(error, null)
+  const html = squash(output)
+  assert.doesNotMatch(html, /preview-items|data-preview-tooltip/)
+  assert.match(html, /<div class="preview-caption"><div class="preview-caption-item" data-preview-item="0">First <strong>view<\/strong><\/div>/)
+})
+
 test('preview: caption_placement below keeps the caption strip and adds no tooltips', () => {
   const { error, output } = renderPreview({ frame: 'window', caption_placement: 'below', items: ITEMS })
   assert.equal(error, null)

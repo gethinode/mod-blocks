@@ -1024,6 +1024,7 @@ for (const [label, globals] of [['without Bootstrap', {}], ['without the Bootstr
     const preview = tooltipPreview()
     run(preview, 1280, { globals })
     assert.deepEqual(loaded(preview), ['desktop'])
+    preview.itemButtons[0].dispatch('keydown', { key: 'Escape' })
     preview.itemButtons[1].click()
     assert.equal(src(preview.panes.desktop), B)
   })
