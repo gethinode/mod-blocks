@@ -3832,3 +3832,114 @@ test('tabs-tooltip at 1280x800: a tooltip that hover shows leaves the page with 
     await waitFor(async () => (await page.evaluate(TOOLTIP_STATE)).tips.length === 0, 'the tooltip to leave the page')
   } finally { await page.close() }
 })
+
+// Records each uncaught exception of the page, by its message, in pageErrors. As a beforeScript,
+// it adds the first capture listener, which runs before any listener of the page.
+const RECORD_ERRORS = "window.pageErrors = []; addEventListener('error', event => pageErrors.push(String(event.message)), true)"
+// Removes the block of the shown tooltip gap ms after the tooltip starts to fade out. The page
+// times it, so the gap does not depend on how fast the check talks to Chrome. window.removal
+// resolves with whether the tooltip still faded out then.
+const REMOVE_WHILE_FADING = gap => `(() => {
+  const tip = document.querySelector('.tooltip.show')
+  window.removal = new Promise(resolve => new MutationObserver((records, observer) => {
+    if (tip.classList.contains('show')) return
+    observer.disconnect()
+    setTimeout(() => {
+      const fading = tip.isConnected && !tip.classList.contains('show')
+      document.querySelector('[data-preview-tooltip]').closest('section.preview').remove()
+      resolve(fading)
+    }, ${gap})
+  }).observe(tip, { attributes: true, attributeFilter: ['class'] }))
+})()`
+const REMOVAL = 'Promise.race([window.removal, new Promise(resolve => setTimeout(() => resolve("timed out"), 5000))])'
+const LEAVE = page => page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 790 })
+const ESCAPE = async page => {
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+}
+// Hovers item tab 1 until Bootstrap reports that its tooltip has shown, with the fade-in over:
+// a fade-out that interrupts the fade-in is shorter.
+async function hoverUntilShown (page) {
+  await page.evaluate(`(() => { window.tooltipShown = new Promise(resolve => document.querySelectorAll('section.preview .preview-items [role="tab"]')[1]
+    .addEventListener('shown.bs.tooltip', () => resolve(true), { once: true })) })()`)
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...(await page.evaluate(tabCentre(1))) })
+  assert.equal(await page.evaluate('Promise.race([window.tooltipShown, new Promise(resolve => setTimeout(() => resolve("timed out"), 5000))])'), true, 'the hover tooltip shows')
+}
+
+// Bootstrap ends the fade-out of a tooltip once the transition of the tooltip ends, or 5 ms
+// after its duration, with a step that throws when the tooltip was disposed before.
+for (const [trigger, hide] of [['the pointer leaving its tab', LEAVE], ['Escape', ESCAPE]]) {
+  for (const gap of [0, 80]) {
+    test(`tabs-tooltip at 1280x800: a block removed ${gap} ms into the tooltip fade-out that ${trigger} starts leaves no tooltip and throws nothing`, { skip }, async () => {
+      const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800, beforeScript: RECORD_ERRORS })
+      try {
+        await page.settle(['desktop'])
+        await hoverUntilShown(page)
+        await page.evaluate(REMOVE_WHILE_FADING(gap))
+        await hide(page)
+        assert.equal(await page.evaluate(REMOVAL), true, 'the block was removed while the tooltip faded out')
+        await sleep(SETTLE_MS)
+        assert.deepEqual({ tips: (await page.evaluate(TOOLTIP_STATE)).tips, errors: await page.evaluate('pageErrors') }, { tips: [], errors: [] })
+      } finally { await page.close() }
+    })
+  }
+}
+
+// When the tooltip shows again during its fade-out, Bootstrap replaces its element, and the step
+// that ends the fade-out of the old element still runs later.
+test('tabs-tooltip at 1280x800: a block removed after its tooltip shows again during its fade-out leaves no tooltip and throws nothing', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800, beforeScript: RECORD_ERRORS })
+  try {
+    await page.settle(['desktop'])
+    await hoverUntilShown(page)
+    // Once the tooltip starts to fade out, focus on its tab shows it again, and the block is
+    // removed as soon as the new tooltip element is in. window.removal resolves with whether
+    // that element replaced the old one and the removal came before the fade-out would have ended.
+    await page.evaluate(`(() => {
+      const tab = document.querySelectorAll('section.preview .preview-items [role="tab"]')[1]
+      const tip = document.querySelector('.tooltip.show')
+      const fade = parseFloat(getComputedStyle(tip).transitionDuration) * 1000
+      let start
+      window.removal = new Promise(resolve => {
+        tab.addEventListener('inserted.bs.tooltip', () => setTimeout(() => {
+          const replaced = !tip.isConnected && !!document.querySelector('.tooltip.show')
+          const early = performance.now() - start < fade
+          tab.closest('section.preview').remove()
+          resolve(replaced && early)
+        }), { once: true })
+        new MutationObserver((records, observer) => {
+          if (tip.classList.contains('show')) return
+          observer.disconnect()
+          start = performance.now()
+          tab.focus()
+        }).observe(tip, { attributes: true, attributeFilter: ['class'] })
+      })
+    })()`)
+    await LEAVE(page)
+    assert.equal(await page.evaluate(REMOVAL), true, 'the block was removed after the tooltip showed again, before the fade-out would have ended')
+    await sleep(SETTLE_MS)
+    assert.deepEqual({ tips: (await page.evaluate(TOOLTIP_STATE)).tips, errors: await page.evaluate('pageErrors') }, { tips: [], errors: [] })
+  } finally { await page.close() }
+})
+
+test('tabs-tooltip at 1280x800: Escape still reaches the other listeners of the page, with its default action', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800 })
+  try {
+    await page.settle(['desktop'])
+    // Listeners the page adds after the preview script: on the document in the capture phase,
+    // on the focused tab and on the document in the bubble phase.
+    await page.evaluate(`(() => {
+      window.heard = []
+      const listen = name => event => { if (event.key === 'Escape') heard.push(name + ' ' + (event.defaultPrevented ? 'prevented' : 'default')) }
+      const tab = document.querySelectorAll('section.preview .preview-items [role="tab"]')[1]
+      document.addEventListener('keydown', listen('document capture'), true)
+      tab.addEventListener('keydown', listen('tab'))
+      document.addEventListener('keydown', listen('document'))
+      tab.focus()
+    })()`)
+    await waitFor(async () => shownTips(await page.evaluate(TOOLTIP_STATE)).includes(CAPTION_B), 'the focus tooltip')
+    await ESCAPE(page)
+    await waitFor(async () => (await page.evaluate(TOOLTIP_STATE)).tips.length === 0, 'Escape to hide the tooltip')
+    assert.deepEqual(await page.evaluate('heard'), ['document capture default', 'tab default', 'document default'])
+  } finally { await page.close() }
+})

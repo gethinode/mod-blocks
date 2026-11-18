@@ -74,12 +74,39 @@ class FakeElement {
   }
   get src () { return this.attrs.src }
   set src (value) { this.attrs.src = value; this.srcSets = (this.srcSets || 0) + 1 }
-  addEventListener (type, fn) { (this.listeners[type] ||= []).push(fn) }
-  removeEventListener (type, fn) { this.listeners[type] = (this.listeners[type] || []).filter(listener => listener !== fn) }
-  // Events bubble from the element up to the document, as Bootstrap's do.
+  // A listener added with true or { capture: true } as its options is a capture listener.
+  addEventListener (type, fn, options) {
+    const capture = options === true || !!(options && options.capture)
+    ;(this.listeners[type] ||= []).push({ fn, capture })
+  }
+  removeEventListener (type, fn) { this.listeners[type] = (this.listeners[type] || []).filter(listener => listener.fn !== fn) }
+  // As in the DOM, the capture listeners run from the document down to the element, then the
+  // other listeners from the element up to the document: events bubble, as Bootstrap's do.
+  // stopPropagation ends the dispatch once the listeners of the current element have run,
+  // stopImmediatePropagation at once, and preventDefault sets defaultPrevented.
   dispatch (type, event = {}) {
-    const evt = { target: this, ...event }
-    for (let el = this; el; el = el.parent) (el.listeners[type] || []).forEach(fn => fn(evt))
+    let stopped = false
+    let immediate = false
+    const evt = {
+      target: this,
+      defaultPrevented: false,
+      preventDefault () { this.defaultPrevented = true },
+      stopPropagation () { stopped = true },
+      stopImmediatePropagation () { stopped = immediate = true },
+      ...event
+    }
+    const path = []
+    for (let el = this; el; el = el.parent) path.push(el)
+    for (const [elements, capture] of [[[...path].reverse(), true], [path, false]]) {
+      for (const el of elements) {
+        for (const listener of (el.listeners[type] || []).filter(listener => listener.capture === capture)) {
+          if (immediate) return evt
+          listener.fn(evt)
+        }
+        if (stopped) return evt
+      }
+    }
+    return evt
   }
 
   click () { this.dispatch('click') }
@@ -278,13 +305,16 @@ function run (preview, width, { until = 'load', readyState = 'loading', globals 
   class CustomEvent {
     constructor (type, { bubbles = false, detail } = {}) { Object.assign(this, { type, bubbles, detail }) }
   }
+  class Event {
+    constructor (type, { bubbles = false } = {}) { Object.assign(this, { type, bubbles }) }
+  }
   // Timers wait until elapse() runs them; delays records the delay of each.
   const timers = new Map()
   const delays = []
   let nextTimer = 1
   const setTimeout = (fn, ms) => { delays.push(ms); timers.set(nextTimer, fn); return nextTimer++ }
   const clearTimeout = timer => { timers.delete(timer) }
-  const context = { window, document, CustomEvent, setTimeout, clearTimeout, ...globals }
+  const context = { window, document, CustomEvent, Event, setTimeout, clearTimeout, ...globals }
   vm.runInNewContext(source, context)
 
   // Bootstrap's tab plugin: registered after preview.js, as the deferred core
@@ -972,28 +1002,44 @@ test('with a ready message and click activation, a message before activation cha
 // With caption-placement tooltip, every item tab with a caption carries data-preview-tooltip and
 // its caption in data-bs-title. The fake Tooltip records the tabs it was created for, once each,
 // as Bootstrap's getOrCreateInstance does, with the config of each, and the tabs it hid and
-// disposed. A disposed tooltip has no instance any more, as in Bootstrap.
+// disposed. A disposed tooltip has no instance and no tip any more, as in Bootstrap. tip(el)
+// gives the tooltip of el a tip, the element Bootstrap shows; log records each event dispatched
+// on a tip and each dispose, in order, with the label of the element of the tooltip.
 function fakeBootstrap () {
+  const label = el => (el.textContent || '').trim() || [...el.classList.set].join('.')
   const instances = new Map()
   const configs = []
   const hidden = []
   const disposed = []
+  const log = []
   const Tooltip = {
     getOrCreateInstance (el, config) {
       if (!instances.has(el)) {
         configs.push(config)
-        instances.set(el, { hide () { hidden.push(el) }, dispose () { disposed.push(el); instances.delete(el) } })
+        instances.set(el, {
+          tip: null,
+          hide () { hidden.push(el) },
+          dispose () { disposed.push(el); log.push(['dispose', label(el)]); instances.delete(el); this.tip = null }
+        })
       }
       return instances.get(el)
     },
     getInstance: el => instances.get(el) || null
   }
-  return { bootstrap: { Tooltip }, instances, configs, hidden, disposed }
+  const tip = el => { instances.get(el).tip = { dispatchEvent: event => log.push([event.type, label(el)]) } }
+  return { bootstrap: { Tooltip }, instances, configs, hidden, disposed, log, tip }
 }
 function tooltipPreview () {
   const preview = buildPreview({ devices: ['desktop'], active: 'desktop', controls: false, items: ITEMS })
   preview.itemButtons[0].setAttribute('data-preview-tooltip', '')
   preview.itemButtons[0].setAttribute('data-bs-title', 'Caption of A')
+  return preview
+}
+// The same, with a caption for the second item as well.
+function twoTooltipPreview () {
+  const preview = tooltipPreview()
+  preview.itemButtons[1].setAttribute('data-preview-tooltip', '')
+  preview.itemButtons[1].setAttribute('data-bs-title', 'Caption of B')
   return preview
 }
 
@@ -1046,9 +1092,7 @@ test('caption tooltips: a tooltip is created at window load when Bootstrap arriv
 })
 
 test('caption tooltips: Escape anywhere on the page hides every caption tooltip, another key or tooltip is left alone', () => {
-  const preview = tooltipPreview()
-  preview.itemButtons[1].setAttribute('data-preview-tooltip', '')
-  preview.itemButtons[1].setAttribute('data-bs-title', 'Caption of B')
+  const preview = twoTooltipPreview()
   const fake = fakeBootstrap()
   const page = run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
   // A tooltip of another element on the page keeps its own Escape handling.
@@ -1064,8 +1108,24 @@ test('caption tooltips: Escape anywhere on the page hides every caption tooltip,
   assert.deepEqual(fake.hidden, preview.itemButtons)
 })
 
-test('caption tooltips: a tab that leaves the page disposes its tooltip, a tab that is moved keeps it', () => {
+test('caption tooltips: Escape still reaches the other listeners of the page, with its default action', () => {
   const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  const page = run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
+  // Listeners the page adds after the script: on the document in the capture phase, on the
+  // focused element and on the document in the bubble phase.
+  const heard = []
+  const listen = name => event => heard.push(`${name} ${event.defaultPrevented ? 'prevented' : 'default'}`)
+  page.document.addEventListener('keydown', listen('document capture'), true)
+  preview.open.addEventListener('keydown', listen('element'))
+  page.document.addEventListener('keydown', listen('document'))
+  preview.open.dispatch('keydown', { key: 'Escape' })
+  assert.deepEqual(fake.hidden, [preview.itemButtons[0]])
+  assert.deepEqual(heard, ['document capture default', 'element default', 'document default'])
+})
+
+test('caption tooltips: a tab that leaves the page disposes its tooltip, a tab that is moved keeps it', () => {
+  const preview = twoTooltipPreview()
   const fake = fakeBootstrap()
   const mutations = fakeMutations()
   run(preview, 1280, { globals: { bootstrap: fake.bootstrap, MutationObserver: mutations.MutationObserver } })
@@ -1076,12 +1136,12 @@ test('caption tooltips: a tab that leaves the page disposes its tooltip, a tab t
   assert.deepEqual(fake.disposed, [])
   detach(preview.section)
   mutations.deliver({ removedNodes: [{ nodeType: 3 }, preview.section] })
-  assert.deepEqual(fake.disposed, [preview.itemButtons[0]])
+  assert.deepEqual(fake.disposed, preview.itemButtons)
   assert.equal(fake.bootstrap.Tooltip.getInstance(preview.open) !== null, true)
 })
 
-test('caption tooltips: a tab taken out of the page by itself disposes its tooltip', () => {
-  const preview = tooltipPreview()
+test('caption tooltips: a tab taken out of the page by itself disposes its tooltip, the other tab keeps its own', () => {
+  const preview = twoTooltipPreview()
   const fake = fakeBootstrap()
   const mutations = fakeMutations()
   run(preview, 1280, { globals: { bootstrap: fake.bootstrap, MutationObserver: mutations.MutationObserver } })
@@ -1089,6 +1149,35 @@ test('caption tooltips: a tab taken out of the page by itself disposes its toolt
   detach(tab)
   mutations.deliver({ removedNodes: [tab] })
   assert.deepEqual(fake.disposed, [tab])
+  assert.equal(fake.bootstrap.Tooltip.getInstance(preview.itemButtons[1]) !== null, true)
+})
+
+// Bootstrap runs the last step of a show or a hide of a tooltip on transitionend on its tip,
+// which a timer dispatches when the transition does not.
+test('caption tooltips: a tab that leaves the page first finishes the transition of its tooltip, then disposes it', () => {
+  const preview = twoTooltipPreview()
+  const fake = fakeBootstrap()
+  const mutations = fakeMutations()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap, MutationObserver: mutations.MutationObserver } })
+  preview.itemButtons.forEach(fake.tip)
+  detach(preview.section)
+  mutations.deliver({ removedNodes: [preview.section] })
+  assert.deepEqual(fake.log, [['transitionend', 'View A'], ['dispose', 'View A'], ['transitionend', 'View B'], ['dispose', 'View B']])
+})
+
+test('caption tooltips: a caption tooltip that shows again first finishes the transition it is in, another tooltip is left alone', () => {
+  const preview = twoTooltipPreview()
+  const fake = fakeBootstrap()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
+  fake.bootstrap.Tooltip.getOrCreateInstance(preview.open)
+  ;[...preview.itemButtons, preview.open].forEach(fake.tip)
+  // Bootstrap triggers show.bs.tooltip on the tab before it replaces the tip. A listener of the
+  // page that stops the event at the tab does not keep the transition from ending.
+  preview.open.dispatch('show.bs.tooltip')
+  assert.deepEqual(fake.log, [])
+  preview.itemButtons[1].addEventListener('show.bs.tooltip', event => event.stopPropagation())
+  preview.itemButtons[1].dispatch('show.bs.tooltip')
+  assert.deepEqual(fake.log, [['transitionend', 'View B']])
 })
 
 for (const [label, globals] of [['without Bootstrap', {}], ['without the Bootstrap tooltip component', { bootstrap: {} }]]) {
@@ -1100,6 +1189,7 @@ for (const [label, globals] of [['without Bootstrap', {}], ['without the Bootstr
     assert.equal(preview.itemButtons[0].getAttribute('title'), 'Caption of A')
     assert.equal(preview.itemButtons[1].getAttribute('title'), null, 'a tab without a caption gets no title')
     preview.itemButtons[0].dispatch('keydown', { key: 'Escape' })
+    preview.itemButtons[0].dispatch('show.bs.tooltip')
     preview.itemButtons[1].click()
     assert.equal(src(preview.panes.desktop), B)
     const tab = preview.itemButtons[0]

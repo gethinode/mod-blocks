@@ -64,8 +64,10 @@
  * the caption on hover and on keyboard focus. Escape, wherever the focus is in
  * the page outside a frame, hides every caption tooltip that shows, whether
  * hover or focus showed it, and does not move the focus. The script disposes
- * the tooltip of a tab that leaves the page. Without the Bootstrap tooltip
- * component, such a tab gets its caption as a native title instead.
+ * the tooltip of a tab that leaves the page, and first runs the last step of a
+ * show or a hide of the tooltip that still waits for its fade, as it does when
+ * a caption tooltip shows again during its fade-out. Without the Bootstrap
+ * tooltip component, such a tab gets its caption as a native title instead.
  *
  * Each navigation the script starts gets a deadline of data-load-timeout
  * seconds, 15 when that is not a positive number, which starts when the iframe
@@ -819,10 +821,21 @@
   }
 
   /**
+   * Runs now the last step of a show or a hide of tooltip that waits on its
+   * tooltip element. Bootstrap runs that step on transitionend on the element,
+   * which a timer dispatches when the transition does not. Run once the tooltip
+   * has been disposed, the last step of a hide throws.
+   */
+  function finishTooltipTransition (tooltip) {
+    if (tooltip.tip) tooltip.tip.dispatchEvent(new Event('transitionend'))
+  }
+
+  /**
    * Disposes the caption tooltip of each item tab in node, or of node itself,
-   * that is no longer in the page. Bootstrap appends a tooltip to the body, so
-   * one that shows when its tab is removed would stay. A tab that was moved,
-   * and so is in the page again, keeps its tooltip.
+   * that is no longer in the page, after it runs the last step of a show or a
+   * hide of the tooltip that still waits. Bootstrap appends a tooltip to the
+   * body, so one that shows when its tab is removed would stay. A tab that was
+   * moved, and so is in the page again, keeps its tooltip.
    */
   function disposeCaptionTooltips (node) {
     if (!tooltipsLoaded()) return
@@ -830,9 +843,23 @@
     if (node.matches('[data-preview-tooltip]')) tabs.push(node)
     tabs.forEach(tab => {
       const tooltip = !tab.isConnected && bootstrap.Tooltip.getInstance(tab)
-      if (tooltip) tooltip.dispose()
+      if (!tooltip) return
+      finishTooltipTransition(tooltip)
+      tooltip.dispose()
     })
   }
+
+  // When a caption tooltip shows again during its fade-out, the last step of
+  // that hide runs first. Bootstrap then replaces the tooltip element, and the
+  // step, which waits on the old element, would otherwise run later, also once
+  // the tooltip has been disposed. The listener captures, so a listener that
+  // stops the event at the tab does not keep the step from running.
+  document.addEventListener('show.bs.tooltip', event => {
+    const tab = event.target
+    if (!tooltipsLoaded() || !tab.hasAttribute || !tab.hasAttribute('data-preview-tooltip')) return
+    const tooltip = bootstrap.Tooltip.getInstance(tab)
+    if (tooltip) finishTooltipTransition(tooltip)
+  }, true)
 
   // Escape hides every caption tooltip that shows, by hover or by focus, so it
   // can be dismissed without moving the pointer or the focus, which stays where
