@@ -118,6 +118,7 @@ const rules = {
   'iframe[data-src]': el => el.classList.contains('preview-iframe') && 'src' in el.dataset,
   '.preview-controls [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab',
   '.preview-controls .btn-group .btn': el => el.attrs['data-bs-toggle'] === 'tab',
+  'section.preview [data-preview-tooltip]': el => 'data-preview-tooltip' in el.attrs && !!el.closest('section.preview'),
   '.preview-items [data-bs-toggle="tab"]': el => el.attrs['data-bs-toggle'] === 'tab' && !!el.parent.closest('.preview-items'),
   '.preview-error:not(.d-none)': el => el.classList.contains('preview-error') && !el.classList.contains('d-none'),
   '.preview-open, .preview-unavailable-link': el => el.classList.contains('preview-open') || el.classList.contains('preview-unavailable-link'),
@@ -296,6 +297,8 @@ function run (preview, width, { until = 'load', readyState = 'loading', globals 
   const fire = type => (windowListeners[type] || []).forEach(fn => fn({}))
   const page = {
     document,
+    // The global object of the script, to define a global after it ran.
+    context,
     delays,
     // Runs every pending timer, as if its delay had passed.
     elapse () { const due = [...timers.values()]; timers.clear(); due.forEach(fn => fn()) },
@@ -959,3 +962,69 @@ test('with a ready message and click activation, a message before activation cha
   page.message(TOKEN, frame(preview.panes.desktop).contentWindow)
   assert.equal(state(preview.panes.desktop), 'ready')
 })
+
+// With caption-placement tooltip, every item tab with a caption carries data-preview-tooltip and
+// its caption in data-bs-title. The fake Tooltip records the tabs it was created for, once each,
+// as Bootstrap's getOrCreateInstance does, and the tabs it hid.
+function fakeBootstrap () {
+  const instances = new Map()
+  const hidden = []
+  const Tooltip = {
+    getOrCreateInstance (el) {
+      if (!instances.has(el)) instances.set(el, { hide () { hidden.push(el) } })
+      return instances.get(el)
+    },
+    getInstance: el => instances.get(el) || null
+  }
+  return { bootstrap: { Tooltip }, instances, hidden }
+}
+function tooltipPreview () {
+  const preview = buildPreview({ devices: ['desktop'], active: 'desktop', controls: false, items: ITEMS })
+  preview.itemButtons[0].setAttribute('data-preview-tooltip', '')
+  preview.itemButtons[0].setAttribute('data-bs-title', 'Caption of A')
+  return preview
+}
+
+test('caption tooltips: each item tab with data-preview-tooltip gets one Bootstrap tooltip', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  const page = run(preview, 1280, { until: 'ready', globals: { bootstrap: fake.bootstrap } })
+  assert.deepEqual([...fake.instances.keys()], [preview.itemButtons[0]], 'only the captioned tab')
+  page.load()
+  page.resize(1000)
+  assert.equal(fake.instances.size, 1, 'later passes reuse the tooltip')
+})
+
+test('caption tooltips: a tooltip is created at window load when Bootstrap arrives after DOMContentLoaded', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  const page = run(preview, 1280, { until: 'ready' })
+  assert.equal(fake.instances.size, 0)
+  page.context.bootstrap = fake.bootstrap
+  page.load()
+  assert.deepEqual([...fake.instances.keys()], [preview.itemButtons[0]])
+})
+
+test('caption tooltips: Escape on a tab hides its tooltip, another key or element does not', () => {
+  const preview = tooltipPreview()
+  const fake = fakeBootstrap()
+  run(preview, 1280, { globals: { bootstrap: fake.bootstrap } })
+  // A tooltip of another element on the page keeps its own Escape handling.
+  fake.bootstrap.Tooltip.getOrCreateInstance(preview.open)
+  preview.open.dispatch('keydown', { key: 'Escape' })
+  preview.itemButtons[0].dispatch('keydown', { key: 'Enter' })
+  preview.itemButtons[1].dispatch('keydown', { key: 'Escape' })
+  assert.deepEqual(fake.hidden, [])
+  preview.itemButtons[0].dispatch('keydown', { key: 'Escape' })
+  assert.deepEqual(fake.hidden, [preview.itemButtons[0]])
+})
+
+for (const [label, globals] of [['without Bootstrap', {}], ['without the Bootstrap tooltip component', { bootstrap: {} }]]) {
+  test(`caption tooltips: ${label}, the block still works`, () => {
+    const preview = tooltipPreview()
+    run(preview, 1280, { globals })
+    assert.deepEqual(loaded(preview), ['desktop'])
+    preview.itemButtons[1].click()
+    assert.equal(src(preview.panes.desktop), B)
+  })
+}

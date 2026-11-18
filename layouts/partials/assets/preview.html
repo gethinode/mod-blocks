@@ -35,14 +35,18 @@
     </div>
 {{- end -}}
 
-{{/* Inline partial — renders the item tabs, above the frame or in the title bar of a window */}}
+{{/* Inline partial — renders the item tabs, above the frame or in the title bar of a window. With
+     tooltip, the caption of an item, as plain text, is the tooltip title of its tab; the script
+     initializes a tooltip for every tab that has data-preview-tooltip. */}}
 {{- define "_partials/inline/preview-item-tabs.html" -}}
     {{- $id := .id -}}
     {{- $headed := .headed -}}
+    {{- $tooltip := .tooltip -}}
+    {{- $page := .page -}}
     <div class="nav nav-pills {{ if .bar }}preview-items preview-window-tabs{{ else }}justify-content-center mb-3 preview-items{{ end }}" role="tablist" aria-label="{{ T "previewViewSelection" }}">
         {{- range $n, $item := .items }}
             {{- $isActive := eq $n 0 }}
-                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}">{{ $item.title }}</button>
+                <button type="button" id="{{ $id }}-item-{{ $n }}-tab" class="nav-link{{ if $isActive }} active{{ end }}" data-bs-toggle="tab" data-bs-target="#{{ $id }}-item-{{ $n }}" data-preview-url="{{ $item.url }}" data-preview-open-url="{{ or (index $item "open-url") $item.url }}" role="tab" aria-selected="{{ if $isActive }}true{{ else }}false{{ end }}" aria-controls="{{ $id }}-{{ if $headed }}item-{{ $n }}{{ else }}items-panel{{ end }}"{{ if $tooltip }}{{ with $item.caption }}{{ with trim ($page.RenderString (dict "display" "inline") . | plainify | htmlUnescape) " \n\t" }} data-preview-tooltip data-bs-title="{{ . }}" data-bs-placement="bottom"{{ end }}{{ end }}{{ end }}>{{ $item.title }}</button>
         {{- end }}
         </div>
 {{- end -}}
@@ -500,9 +504,10 @@
          item headings, every tab controls the content, which the script labels with the shown
          tab. */}}
     {{- $sharedPanel := and $itemTabs (not $headed) -}}
+    {{- $captionTooltip := and $itemTabs (eq $args.captionPlacement "tooltip") -}}
     {{- $barTabs := and $itemTabs $window (eq $args.tabsPlacement "bar") -}}
     {{- if and $itemTabs (not $barTabs) }}
-        {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" false) }}
+        {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" false "tooltip" $captionTooltip "page" $page) }}
     {{- end }}
 
     {{/* Device selection button group — rendered above or below the preview */}}
@@ -515,7 +520,7 @@
         <div class="preview-window-bar">
             <span class="preview-window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
             {{- if $barTabs }}
-            {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" true) }}
+            {{ partial "inline/preview-item-tabs.html" (dict "id" $id "headed" $headed "items" $items "bar" true "tooltip" $captionTooltip "page" $page) }}
             {{- else }}
             <span class="preview-window-title">{{ $args.frameTitle }}</span>
             {{- end }}
@@ -633,10 +638,11 @@
     {{- end }}
 
     {{- /* Caption strip under the frame, a window or the plain content — the caption of every
-         item, of which only the shown one lacks d-none */}}
+         item, of which only the shown one lacks d-none. With caption-placement tooltip, the
+         captions are tooltips of the item tabs instead, and no strip renders. */}}
     {{- $captioned := false -}}
     {{- range $items }}{{ if .caption }}{{ $captioned = true }}{{ end }}{{ end -}}
-    {{- if $captioned }}
+    {{- if and $captioned (not $captionTooltip) }}
         <div class="preview-caption">
             {{- range $n, $item := $items }}
             <div class="preview-caption-item{{ if gt $n 0 }} d-none{{ end }}" data-preview-item="{{ $n }}">{{ with $item.caption }}{{ $page.RenderString (dict "display" "inline") . }}{{ end }}</div>

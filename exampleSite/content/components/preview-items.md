@@ -68,4 +68,33 @@ content_blocks:
         caption: The activity view, with a poster of its own.
         poster:
           desktop: img/preview-demo/activity-desktop.png
+  - _bookshop_name: preview
+    heading:
+      preheading: Live preview
+      title: Captions as tooltips
+      content: >-
+        Each caption shows as a tooltip of its item tab, on hover and on
+        keyboard focus, and no caption strip renders under the window. This
+        suits a tall preview, whose strip would fall below the viewport.
+    frame: window
+    tabs_placement: bar
+    caption_placement: tooltip
+    devices: [desktop]
+    controls: false
+    activation: visible
+    open_link: true
+    ready_message: example:ready
+    theme_message: example:theme
+    mode: true
+    items:
+      - title: Workspace
+        url: /preview-demo/ready/
+        caption: The workspace view, with **ready** and theme messages.
+        poster:
+          desktop: img/preview-demo/ready-desktop.png
+      - title: Activity
+        url: /preview-demo/activity/
+        caption: The activity view, with a poster of its own.
+        poster:
+          desktop: img/preview-demo/activity-desktop.png
 ---

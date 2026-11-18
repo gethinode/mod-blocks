@@ -144,6 +144,9 @@ const PAGES = {
   // Item tabs in the title bar of a window, with a caption per item.
   'tabs-bar': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true', 'items:',
     '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of **a**', '  - title: View b', `    url: ${TARGET}b`, '    caption: Caption of b'] },
+  // The same, with each caption as a tooltip of its item tab instead of a strip.
+  'tabs-tooltip': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'caption_placement: tooltip', 'devices: [desktop]', 'controls: false', 'items:',
+    '  - title: View a', `    url: ${TARGET}a`, '    caption: Caption of **a**', '  - title: View b', `    url: ${TARGET}b`, '    caption: Caption of b'] },
   // The same, with a poster per item instead of the frame below 768px wide or 500px high.
   'tabs-static': { url: null, lines: ['frame: window', 'tabs_placement: bar', 'devices: [desktop]', 'controls: false', 'open_link: true',
     'static_below: 768', 'static_max_height: 500', 'mode: true', 'items:',
@@ -3732,3 +3735,53 @@ for (const [name, width, height] of [['tabs-bar-three', 1280, 260], ['tabs-bar-s
     } finally { await page.close() }
   })
 }
+
+// Captions as tooltips of the item tabs. TOOLTIP_STATE reports whether a caption strip rendered,
+// each tooltip in the document with its text, whether it shows and its top edge, the tooltip each
+// item tab names in aria-describedby, the bottom edge of each tab and the focused tab.
+const TOOLTIP_STATE = `(() => {
+  const tabs = [...document.querySelectorAll('section.preview .preview-items [role="tab"]')]
+  return {
+    strip: !!document.querySelector('section.preview .preview-caption'),
+    tips: [...document.querySelectorAll('.tooltip')].map(tip => ({ id: tip.id, text: tip.textContent.trim(), shown: tip.classList.contains('show'), top: tip.getBoundingClientRect().top })),
+    described: tabs.map(tab => tab.getAttribute('aria-describedby')),
+    bottoms: tabs.map(tab => tab.getBoundingClientRect().bottom),
+    focused: document.activeElement && document.activeElement.textContent.trim()
+  }
+})()`
+const shownTips = state => state.tips.filter(tip => tip.shown).map(tip => tip.text)
+
+test('tabs-tooltip at 1280x800: no caption strip renders, and a caption shows as the tooltip of its tab on hover, on focus and by arrow key', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800 })
+  try {
+    await page.settle(['desktop'])
+    let state = await page.evaluate(TOOLTIP_STATE)
+    assert.deepEqual({ strip: state.strip, tips: state.tips }, { strip: false, tips: [] })
+
+    // Hover: the pointer over tab b shows its caption below it.
+    const rect = await page.evaluate("(() => { const r = document.querySelectorAll('section.preview .preview-items [role=\"tab\"]')[1].getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })()")
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...rect })
+    await waitFor(async () => shownTips(await page.evaluate(TOOLTIP_STATE)).includes(CAPTION_B), 'the hover tooltip')
+    state = await page.evaluate(TOOLTIP_STATE)
+    assert.deepEqual(shownTips(state), [CAPTION_B])
+    const tip = state.tips.find(tip => tip.text === CAPTION_B)
+    assert.equal(state.described[1], tip.id, 'the tab names its tooltip in aria-describedby')
+    assert.ok(tip.top >= state.bottoms[1] - 1, `the tooltip sits below the tab: ${JSON.stringify(state)}`)
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 790 })
+    await waitFor(async () => (await page.evaluate(TOOLTIP_STATE)).tips.length === 0, 'the hover tooltip to hide')
+
+    // Keyboard: focus on tab a shows its caption, the arrow key moves focus and the tooltip to
+    // tab b, and Escape hides it while the focus stays.
+    await page.evaluate("document.querySelector('section.preview .preview-items [role=\"tab\"]').focus()")
+    await waitFor(async () => shownTips(await page.evaluate(TOOLTIP_STATE)).includes('Caption of a'), 'the focus tooltip')
+    state = await page.evaluate(TOOLTIP_STATE)
+    assert.equal(state.focused, 'View a')
+    assert.equal(state.described[0], state.tips.find(tip => tip.text === 'Caption of a').id)
+    await page.pressArrow('ArrowRight')
+    await waitFor(async () => { const s = await page.evaluate(TOOLTIP_STATE); return s.focused === 'View b' && s.tips.length === 1 && shownTips(s)[0] === CAPTION_B }, 'the tooltip of tab b')
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await waitFor(async () => (await page.evaluate(TOOLTIP_STATE)).tips.length === 0, 'Escape to hide the tooltip')
+    assert.equal((await page.evaluate(TOOLTIP_STATE)).focused, 'View b')
+  } finally { await page.close() }
+})

@@ -82,6 +82,21 @@ arguments:
       values:
         - above
         - bar
+  caption-placement:
+    type: select
+    optional: true
+    default: below
+    comment: >-
+      Where the item captions show. With below, the caption of the shown item
+      renders in a strip under the frame. With tooltip, the caption of each
+      item shows as a plain-text tooltip below its item tab, on hover and on
+      keyboard focus, and no caption strip renders. Use tooltip when the
+      strip would fall below the viewport, such as on a full-height preview.
+      A block that shows its fallback has no item tabs, and keeps the strip.
+    options:
+      values:
+        - below
+        - tooltip
   static-below:
     type: int
     optional: true

@@ -54,6 +54,7 @@ blueprint:
         content:
       caption:
   tabs_placement: above
+  caption_placement: below
   open_link: false
   links:
     -

@@ -58,7 +58,10 @@
  * poster and the caption of the item in the caption strip under the frame,
  * points every .preview-open link and the link of every failure alert
  * at the open URL of the item, and dispatches a bubbling preview:item event on
- * the section, with the index of the item in its detail.
+ * the section, with the index of the item in its detail. With
+ * caption-placement tooltip, an item tab with a caption carries
+ * data-preview-tooltip, and the script gives it a Bootstrap tooltip that shows
+ * the caption on hover and on keyboard focus, and hides on Escape.
  *
  * Each navigation the script starts gets a deadline of data-load-timeout
  * seconds, 15 when that is not a positive number, which starts when the iframe
@@ -788,7 +791,34 @@
     return controller
   }
 
+  /**
+   * With caption-placement tooltip, gives every item tab that carries
+   * data-preview-tooltip a Bootstrap tooltip, which shows its data-bs-title on
+   * hover and on keyboard focus. An item tab carries data-bs-toggle="tab", so
+   * a script that looks for data-bs-toggle="tooltip" does not pick it up. Runs
+   * on every discovery pass, as Bootstrap may load after this script, and
+   * creates a tooltip once per tab. Without the Bootstrap tooltip component,
+   * the tabs get no tooltip.
+   */
+  function initCaptionTooltips () {
+    if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return
+    document.querySelectorAll('section.preview [data-preview-tooltip]').forEach(tab => {
+      bootstrap.Tooltip.getOrCreateInstance(tab)
+    })
+  }
+
+  // Escape hides the caption tooltip of the focused item tab, so a keyboard
+  // user can dismiss it without moving focus.
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return
+    const tab = event.target
+    if (!tab || !tab.hasAttribute || !tab.hasAttribute('data-preview-tooltip')) return
+    const tooltip = bootstrap.Tooltip.getInstance(tab)
+    if (tooltip) tooltip.hide()
+  })
+
   function discoverPreviews () {
+    initCaptionTooltips()
     measuredWindows.forEach((bar, container) => { if (!owned(container)) releaseOwnership(container) })
     controllers.forEach((controller, container) => { if (!owned(container)) releaseOwnership(container) })
     document.querySelectorAll('section.preview .preview-content').forEach(container => {

@@ -241,6 +241,52 @@ test('preview: a height limit alone keeps the mobile-static width boundary', () 
   assert.doesNotMatch(output, /data-static-below/)
 })
 
+// With caption-placement tooltip, each caption becomes the plain-text tooltip title of its item
+// tab, and no caption strip renders.
+for (const [label, render] of [
+  ['underscore Bookshop arguments', (extra = {}) => renderPreview({ frame: 'window', caption_placement: 'tooltip', items: ITEMS, ...extra })],
+  ['kebab-case partial arguments', (extra = {}) => renderPartial({ frame: 'window', 'caption-placement': 'tooltip', items: ITEMS, ...extra })]
+]) {
+  test(`preview: caption_placement tooltip moves the captions to the item tabs, from ${label}`, () => {
+    const { error, output } = render()
+    assert.equal(error, null)
+    const html = squash(output)
+    assert.doesNotMatch(html, /preview-caption/, 'no caption strip renders')
+    assert.match(html, /<button type="button" id="[^"]+-item-0-tab" class="nav-link active" data-bs-toggle="tab"[^>]* data-preview-tooltip data-bs-title="First view" data-bs-placement="bottom">View A<\/button>/)
+    assert.match(html, /<button type="button" id="[^"]+-item-1-tab" class="nav-link" data-bs-toggle="tab"[^>]* data-preview-tooltip data-bs-title="Second view" data-bs-placement="bottom">View B<\/button>/)
+  })
+
+  test(`preview: caption_placement tooltip also applies to tabs in the title bar, from ${label}`, () => {
+    const { error, output } = render(label.startsWith('underscore') ? { tabs_placement: 'bar' } : { 'tabs-placement': 'bar' })
+    assert.equal(error, null)
+    const html = squash(output)
+    const bar = between(html, '<div class="preview-window-bar', '<span class="preview-window-end">')
+    assert.equal(bar.match(/ data-preview-tooltip data-bs-title="/g).length, 2)
+    assert.doesNotMatch(html, /preview-caption/)
+  })
+}
+
+test('preview: a tooltip caption is plain text, and an item without a caption gets no tooltip', () => {
+  const items = [
+    { title: 'View A', url: '/a/', caption: 'Fish & <em>chips</em> [here](/x/) 2 < 3' },
+    { title: 'View B', url: '/b/' }
+  ]
+  const { error, output } = renderPreview({ caption_placement: 'tooltip', items })
+  assert.equal(error, null)
+  const html = squash(output)
+  assert.match(html, / data-bs-title="Fish &amp; chips here 2 &lt; 3" data-bs-placement="bottom">View A<\/button>/)
+  assert.match(html, /aria-controls="[^"]+">View B<\/button>/)
+  assert.equal(html.match(/data-preview-tooltip/g).length, 1)
+})
+
+test('preview: caption_placement below keeps the caption strip and adds no tooltips', () => {
+  const { error, output } = renderPreview({ frame: 'window', caption_placement: 'below', items: ITEMS })
+  assert.equal(error, null)
+  const html = squash(output)
+  assert.match(html, /<div class="preview-caption">/)
+  assert.doesNotMatch(html, /data-preview-tooltip|data-bs-title/)
+})
+
 // Byte compatibility: without the new arguments, the block renders exactly what the template
 // at PREVIEW_BASE_REF rendered. Set PREVIEW_BASE_REF to a git ref, such as origin/main, to run it.
 const BASE_REF = process.env.PREVIEW_BASE_REF
@@ -251,7 +297,10 @@ const COMPAT = {
   click: { url: '/a/', activation: 'click' },
   'static items': { frame: 'window', mobile_static: true, items: ITEMS.map(({ caption, ...item }) => item) },
   items: { items: ITEMS.map(({ caption, ...item }) => item), heading: { title: 'H' } },
-  'window items': { frame: 'window', open_link: true, ready_message: 'x:ready', items: ITEMS.map(({ caption, ...item }) => item) }
+  'window items': { frame: 'window', open_link: true, ready_message: 'x:ready', items: ITEMS.map(({ caption, ...item }) => item) },
+  'captioned items': { items: ITEMS },
+  'captioned window items': { frame: 'window', items: ITEMS },
+  'captioned bar items': { frame: 'window', tabs_placement: 'bar', items: ITEMS }
 }
 for (const [name, block] of Object.entries(COMPAT)) {
   test(`preview: without the new arguments, ${name} renders as at ${BASE_REF || 'the base ref'}`, { skip: !BASE_REF && 'set PREVIEW_BASE_REF' }, () => {
