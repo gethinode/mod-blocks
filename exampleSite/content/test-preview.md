@@ -312,6 +312,24 @@ fixtures:
     count:
       'src="https://example.org/a"': 0
       'class="preview-poster"': 3
+  - case: items-caption-tooltip
+    block:
+      _bookshop_name: preview
+      frame: window
+      tabs_placement: bar
+      caption_placement: tooltip
+      items:
+        - title: View A
+          url: https://example.org/a
+          caption: Caption of **A**
+        - title: View B
+          url: https://example.org/b
+    want:
+      - 'data-preview-tooltip data-bs-title="Caption of A" data-bs-placement="bottom">View A</button>'
+    reject:
+      - 'preview-caption'
+    count:
+      'data-preview-tooltip': 1
   - case: items-heading-fallback
     block:
       _bookshop_name: preview

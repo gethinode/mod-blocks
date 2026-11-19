@@ -58,7 +58,16 @@
  * poster and the caption of the item in the caption strip under the frame,
  * points every .preview-open link and the link of every failure alert
  * at the open URL of the item, and dispatches a bubbling preview:item event on
- * the section, with the index of the item in its detail.
+ * the section, with the index of the item in its detail. With
+ * caption-placement tooltip, an item tab with a caption carries
+ * data-preview-tooltip, and the script gives it a Bootstrap tooltip that shows
+ * the caption on hover and on keyboard focus. Escape, wherever the focus is in
+ * the page outside a frame, hides every caption tooltip that shows, whether
+ * hover or focus showed it, and does not move the focus. The script disposes
+ * the tooltip of a tab that leaves the page, and first runs the last step of a
+ * show or a hide of the tooltip that still waits for its fade, as it does when
+ * a caption tooltip shows again during its fade-out. Without the Bootstrap
+ * tooltip component, such a tab gets its caption as a native title instead.
  *
  * Each navigation the script starts gets a deadline of data-load-timeout
  * seconds, 15 when that is not a positive number, which starts when the iframe
@@ -788,7 +797,85 @@
     return controller
   }
 
+  function tooltipsLoaded () {
+    return typeof bootstrap !== 'undefined' && !!bootstrap.Tooltip
+  }
+
+  /**
+   * With caption-placement tooltip, gives every item tab that carries
+   * data-preview-tooltip a Bootstrap tooltip, which shows its data-bs-title on
+   * hover and on keyboard focus. An item tab carries data-bs-toggle="tab", so
+   * a script that looks for data-bs-toggle="tooltip" does not pick it up. Runs
+   * on every discovery pass, as Bootstrap may load after this script, and
+   * creates a tooltip once per tab. Without the Bootstrap tooltip component,
+   * the tab gets its data-bs-title as a native title, so the caption is not
+   * lost; a later pass that creates the tooltip removes that title first.
+   */
+  function initCaptionTooltips () {
+    const loaded = tooltipsLoaded()
+    document.querySelectorAll('section.preview [data-preview-tooltip]').forEach(tab => {
+      if (!loaded) { tab.setAttribute('title', tab.getAttribute('data-bs-title')); return }
+      tab.removeAttribute('title')
+      bootstrap.Tooltip.getOrCreateInstance(tab)
+    })
+  }
+
+  /**
+   * Runs now the last step of a show or a hide of tooltip that waits on its
+   * tooltip element. Bootstrap runs that step on transitionend on the element,
+   * which a timer dispatches when the transition does not. Run once the tooltip
+   * has been disposed, the last step of a hide throws.
+   */
+  function finishTooltipTransition (tooltip) {
+    if (tooltip.tip) tooltip.tip.dispatchEvent(new Event('transitionend'))
+  }
+
+  /**
+   * Disposes the caption tooltip of each item tab in node, or of node itself,
+   * that is no longer in the page, after it runs the last step of a show or a
+   * hide of the tooltip that still waits. Bootstrap appends a tooltip to the
+   * body, so one that shows when its tab is removed would stay. A tab that was
+   * moved, and so is in the page again, keeps its tooltip.
+   */
+  function disposeCaptionTooltips (node) {
+    if (!tooltipsLoaded()) return
+    const tabs = [...node.querySelectorAll('[data-preview-tooltip]')]
+    if (node.matches('[data-preview-tooltip]')) tabs.push(node)
+    tabs.forEach(tab => {
+      const tooltip = !tab.isConnected && bootstrap.Tooltip.getInstance(tab)
+      if (!tooltip) return
+      finishTooltipTransition(tooltip)
+      tooltip.dispose()
+    })
+  }
+
+  // When a caption tooltip shows again during its fade-out, the last step of
+  // that hide runs first. Bootstrap then replaces the tooltip element, and the
+  // step, which waits on the old element, would otherwise run later, also once
+  // the tooltip has been disposed. The listener captures, so a listener that
+  // stops the event at the tab does not keep the step from running.
+  document.addEventListener('show.bs.tooltip', event => {
+    const tab = event.target
+    if (!tooltipsLoaded() || !tab.hasAttribute || !tab.hasAttribute('data-preview-tooltip')) return
+    const tooltip = bootstrap.Tooltip.getInstance(tab)
+    if (tooltip) finishTooltipTransition(tooltip)
+  }, true)
+
+  // Escape hides every caption tooltip that shows, by hover or by focus, so it
+  // can be dismissed without moving the pointer or the focus, which stays where
+  // it is. Bootstrap tooltips do not hide on Escape themselves. The listener
+  // captures, so an element that stops Escape from bubbling does not keep the
+  // tooltip open.
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !tooltipsLoaded()) return
+    document.querySelectorAll('section.preview [data-preview-tooltip]').forEach(tab => {
+      const tooltip = bootstrap.Tooltip.getInstance(tab)
+      if (tooltip) tooltip.hide()
+    })
+  }, true)
+
   function discoverPreviews () {
+    initCaptionTooltips()
     measuredWindows.forEach((bar, container) => { if (!owned(container)) releaseOwnership(container) })
     controllers.forEach((controller, container) => { if (!owned(container)) releaseOwnership(container) })
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
@@ -1122,6 +1209,7 @@
           if (node.nodeType !== 1) return
           if (node.matches('.preview-content')) releaseOwnership(node)
           node.querySelectorAll('.preview-content').forEach(releaseOwnership)
+          disposeCaptionTooltips(node)
         }))
         const changed = records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
           node.nodeType === 1 && (node.matches(`section.preview, .preview-content, .preview-window, ${ownershipTag}`) || node.querySelector('section.preview, .preview-content, .preview-window'))))
