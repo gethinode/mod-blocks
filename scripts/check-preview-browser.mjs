@@ -3851,6 +3851,9 @@ const REMOVE_WHILE_FADING = gap => `(() => {
     }, ${gap})
   }).observe(tip, { attributes: true, attributeFilter: ['class'] }))
 })()`
+// Bootstrap drops the fade of a tooltip under prefers-reduced-motion: reduce, which some hosts
+// report by default. The checks that remove a block during the fade-out need the fade.
+const WITH_FADE = [{ name: 'prefers-reduced-motion', value: 'no-preference' }]
 const REMOVAL = 'Promise.race([window.removal, new Promise(resolve => setTimeout(() => resolve("timed out"), 5000))])'
 const LEAVE = page => page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 790 })
 const ESCAPE = async page => {
@@ -3873,6 +3876,7 @@ for (const [trigger, hide] of [['the pointer leaving its tab', LEAVE], ['Escape'
     test(`tabs-tooltip at 1280x800: a block removed ${gap} ms into the tooltip fade-out that ${trigger} starts leaves no tooltip and throws nothing`, { skip }, async () => {
       const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800, beforeScript: RECORD_ERRORS })
       try {
+        await page.emulateMedia(WITH_FADE)
         await page.settle(['desktop'])
         await hoverUntilShown(page)
         await page.evaluate(REMOVE_WHILE_FADING(gap))
@@ -3890,6 +3894,7 @@ for (const [trigger, hide] of [['the pointer leaving its tab', LEAVE], ['Escape'
 test('tabs-tooltip at 1280x800: a block removed after its tooltip shows again during its fade-out leaves no tooltip and throws nothing', { skip }, async () => {
   const page = await openPage(browser.cdp, base, 'tabs-tooltip', 1280, { height: 800, beforeScript: RECORD_ERRORS })
   try {
+    await page.emulateMedia(WITH_FADE)
     await page.settle(['desktop'])
     await hoverUntilShown(page)
     // Once the tooltip starts to fade out, focus on its tab shows it again, and the block is
