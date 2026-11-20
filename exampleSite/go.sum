@@ -132,6 +132,8 @@ github.com/gethinode/hinode/v3 v3.53.6 h1:b71QjHSwKNujxThK+nBcF4918rJFYuy1+gckVV
 github.com/gethinode/hinode/v3 v3.53.6/go.mod h1:+y4E2lulg1RXQIcdRPzZV6JwZ4aG69IfAdttWLdxK/Q=
 github.com/gethinode/hinode/v3 v3.54.0 h1:BDaK4YlOaXzvkXk0pXXEF3mWuZXDVjX6HNyhe/osDL4=
 github.com/gethinode/hinode/v3 v3.54.0/go.mod h1:+y4E2lulg1RXQIcdRPzZV6JwZ4aG69IfAdttWLdxK/Q=
+github.com/gethinode/hinode/v3 v3.54.1 h1:10Nx4OBga/Rf1Cfcn5Y5FryrRsKedQvBkBOIDy6eT0E=
+github.com/gethinode/hinode/v3 v3.54.1/go.mod h1:+y4E2lulg1RXQIcdRPzZV6JwZ4aG69IfAdttWLdxK/Q=
 github.com/gethinode/mod-blocks/v2 v2.2.5 h1:8glKSX7OENSgbRAp+Bc1JL68Ix3DSWcHWh5dlsNrNsk=
 github.com/gethinode/mod-blocks/v2 v2.2.5/go.mod h1:1a4A2RrNSEoqgUjJoNPc2T+JtfPe0GvjHNrxjXauWCA=
 github.com/gethinode/mod-blocks/v2 v2.2.6 h1:gTrTTyUcFLjcjuqvr5Ex923F2E777vOzkbFJDzNaSz0=
