@@ -717,7 +717,11 @@ async function openPage (cdp, base, name, width, { hold = false, height = 900, h
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false })
   await send('Page.navigate', { url: `${base}/${name}/` })
 
-  const evaluate = async expression => (await send('Runtime.evaluate', { expression: typeof expression === 'function' ? `(${expression})()` : expression, returnByValue: true, awaitPromise: true })).result.value
+  const evaluate = async expression => {
+    const response = await send('Runtime.evaluate', { expression: typeof expression === 'function' ? `(${expression})()` : expression, returnByValue: true, awaitPromise: true })
+    if (response.exceptionDetails) throw new Error(JSON.stringify(response.exceptionDetails))
+    return response.result.value
+  }
   return {
     requests,
     localRequests,
@@ -806,6 +810,38 @@ if (!skip) {
   }
 }
 if (skip) console.log(`# skipped: ${skip}`)
+
+test('evaluation adapter preserves normal values and undefined', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'default', 1280)
+  try {
+    await page.settle([])
+    assert.equal(await page.evaluate('42'), 42)
+    assert.deepEqual(await page.evaluate('({ answer: 42 })'), { answer: 42 })
+    assert.equal(await page.evaluate('undefined'), undefined)
+    assert.equal(await page.evaluate(() => undefined), undefined)
+  } finally {
+    await page.close()
+  }
+})
+
+test('evaluation adapter rejects native sync and async exceptions', { skip }, async t => {
+  const page = await openPage(browser.cdp, base, 'default', 1280)
+  try {
+    await page.settle([])
+    for (const [name, expression, message] of [
+      ['synchronous Error', '(() => { throw new Error("adapter sync") })()', /adapter sync/],
+      ['rejected Promise', 'Promise.reject(new Error("adapter async"))', /adapter async/],
+      ['thrown primitive', '(() => { throw "adapter primitive" })()', /adapter primitive/],
+      ['syntax error', '(() =>', /SyntaxError|syntax/i]
+    ]) {
+      await t.test(name, async () => {
+        await assert.rejects(page.evaluate(expression), message)
+      })
+    }
+  } finally {
+    await page.close()
+  }
+})
 
 // This mode uses an installed native tool rather than a DOM hit-test surrogate.
 // Each popup loads the ordinary public child over HTTP; no document is replaced.
