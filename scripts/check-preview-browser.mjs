@@ -1971,16 +1971,49 @@ test('components/preview-ready: the Ready tab shows its view, the Silent tab fai
     assert.ok(reloaded.got.filter(data=>typeof data==='object').every(data=>data.type==='example:theme'&&typeof data.applied==='boolean'))
     assert.equal(reloaded.seen,1,'the local page receives its self-post without replying to it')
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/ready/`])
+    const silentPath = '/preview-demo/silent/'
+    const requestCount = servers[0].previewRequests.length
+    servers[0].hold(silentPath)
     await clickItem(page, 1)
     await assertWaiting(page, 'Silent')
-    await assertWaiting(page, 'Silent before its deadline')
+    await waitFor(() => servers[0].previewRequests.slice(requestCount).includes(silentPath), 'the held Silent response')
+    await page.evaluate(`(() => {
+      const iframe = document.querySelector('section.preview .preview-content > .tab-pane.active iframe')
+      iframe.addEventListener('load', () => {
+        if (iframe.contentDocument?.location.pathname === ${JSON.stringify(silentPath)}) window.silentDocumentLoaded = true
+      })
+    })()`)
     await fireDeadline(page)
-    await assertFailed(page, `${base}/preview-demo/silent/`, 'Silent')
+    await assertFailed(page, `${base}${silentPath}`, 'Silent before the first document loads')
+    servers[0].release(silentPath)
+    await waitFor(() => page.evaluate('window.silentDocumentLoaded === true'), 'the late Silent document load')
+    await assertFailed(page, `${base}${silentPath}`, 'Silent after the first document loads')
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll(\'section.preview .preview-open\')].map(el => el.href)'), [`${base}/preview-demo/silent/`])
     await clickItem(page, 0)
     await assertReady(page, 'Ready again')
   } finally {
     servers[0].release('/preview-demo/ready/')
+    servers[0].release('/preview-demo/silent/')
+    await page.close()
+  }
+})
+
+test('components/preview-ready: the Ready tab recovers when its first document loads after the deadline', { skip }, async () => {
+  const page = await openPage(browser.cdp, base, 'components/preview-ready', 1280, { beforeScript: CONTROL_DEADLINE })
+  const readyPath = '/preview-demo/ready/'
+  const requestCount = servers[0].previewRequests.length
+  try {
+    await page.settle([])
+    servers[0].hold(readyPath)
+    await activateWithEnter(page)
+    await assertWaiting(page, 'Ready')
+    await waitFor(() => servers[0].previewRequests.slice(requestCount).includes(readyPath), 'the held Ready response')
+    await fireDeadline(page)
+    await assertFailed(page, `${base}${readyPath}`, 'Ready before the first document loads')
+    servers[0].release(readyPath)
+    await assertReady(page, 'Ready after late readiness proof')
+  } finally {
+    servers[0].release(readyPath)
     await page.close()
   }
 })

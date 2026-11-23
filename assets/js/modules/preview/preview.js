@@ -437,7 +437,9 @@
         const wasLoaded = record.loaded
         record.loaded = true
         const wasReady = record.state === 'ready'
-        reprove(record)
+        // Keep the timeout visible if the first document arrives late.
+        // The readiness request below can still recover the view.
+        if (wasLoaded || record.state !== 'failed') reprove(record)
         if (wasLoaded || wasReady) { stopDeadline(record); startDeadline(record) }
       }
       if (readyMessage(record.container)) askReady(record); else markReady(record)
