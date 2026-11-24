@@ -14,3 +14,7 @@ overrides:
   # Scope the compiler replacement to the Hugo engine; its config API is compatible.
   liquidjs@10: "^10.27.2"
   "@bookshop/hugo-engine>esbuild": "^0.28.2"
+
+# Select standard Hugo archives from 0.170.0 and Extended archives for older Hugo.
+patchedDependencies:
+  hugo-extended@0.170.0: patches/hugo-extended@0.170.0.patch
