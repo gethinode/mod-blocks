@@ -54,6 +54,8 @@ const files = {
     hero: { 'hero.bookshop': { blueprint: { heading_level: 2 } } },
     text: { 'text.bookshop': { blueprint: {} } }
   }),
+  'data/structures/components/preview/preview.bookshop.yml': fs.readFileSync('component-library/components/preview/preview.bookshop.yml', 'utf8'),
+  'data/structures/components/preview/preview.yml': fs.readFileSync('component-library/components/preview/preview.yml', 'utf8'),
   'data/structures/table.json': JSON.stringify({ arguments: { 'controls-layout': {} } }),
   [`layouts/_partials/${LIST}`]: fs.readFileSync(LIST, 'utf8'),
   'layouts/_partials/page/blocks.html': fs.readFileSync(BLOCKS, 'utf8'),
@@ -146,6 +148,38 @@ const ITEMS = [
   { title: 'View A', url: '/a/', caption: 'First **view**', poster: { desktop: 'img/a.png' } },
   { title: 'View B', url: '/b/', caption: 'Second view', poster: { desktop: 'img/b.png' } }
 ]
+
+test('preview: Bookshop renders the block poster map and uses the desktop poster as fallback', () => {
+  const { error, output } = renderPreview({
+    url: '/a/', activation: 'click', poster: { desktop: 'img/desktop.png', mobile: 'img/mobile.png' }
+  })
+  assert.equal(error, null)
+  assert.deepEqual(
+    [...output.matchAll(/class="preview-poster-image" data-src="([^"]+)"/g)].map(([, source]) => source),
+    ['img/desktop.png', 'img/desktop.png', 'img/mobile.png']
+  )
+})
+
+test('preview: a plain Hugo dict still renders a block poster', () => {
+  const { error, output } = renderer.render(
+    '{{ partial "assets/preview.html" (dict "page" . "url" "/a/" "activation" "click" "poster" (dict "desktop" "img/desktop.png")) }}'
+  )
+  assert.equal(error, null)
+  assert.match(output, /class="preview-poster-image" data-src="img\/desktop\.png"/)
+})
+
+for (const [kind, label] of [['structure', 'partial'], ['bookshop', 'Bookshop component']]) {
+  test(`preview: the ${label} schema accepts a live poster map and rejects a string`, () => {
+    const template = `{{- $result := partial "utilities/Args.html" (dict "${kind}" "preview" "args" (dict "poster" .Params.poster)) -}}
+{{- $result.err }}:{{ delimit $result.errmsg "|" -}}`
+    const accepted = renderer.render(template, { poster: { desktop: 'img/desktop.png' } })
+    assert.equal(accepted.error, null)
+    assert.equal(accepted.output, 'false:')
+    const rejected = renderer.render(template, { poster: 'img/desktop.png' })
+    assert.equal(rejected.error, null)
+    assert.match(rejected.output, /^true:.*argument &#39;poster&#39;: expected type/)
+  })
+}
 
 test('preview: item captions render in a strip under the window, only the first one shown', () => {
   const { error, output } = renderPreview({ frame: 'window', items: ITEMS })

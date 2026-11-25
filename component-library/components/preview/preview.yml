@@ -125,7 +125,9 @@ arguments:
         - click
         - visible
   poster:
-    type: map[string]interface {}
+    type:
+      - map[string]interface {}
+      - maps.Params
     optional: true
     comment: >-
       Poster image per device view. With click activation, every view shows
