@@ -1038,6 +1038,50 @@ test('desktop-mobile-nocontrols resized 1280px to 600px swaps to mobile and load
   }
 })
 
+for (const width of [800, 1280]) {
+  for (const name of ['default', 'nocontrols', 'click-nocontrols']) {
+    test(`fresh preview replacement: ${name} at ${width}px`, { skip }, async () => {
+      const click = name === 'click-nocontrols'
+      const device = width === 1280 ? 'desktop' : (click ? 'mobile' : 'tablet')
+      const page = await openPage(browser.cdp, base, name, width)
+      try {
+        page.width = width
+        const initialRequests = click ? [] : [device]
+        assertView(page, await page.settle(initialRequests), device, initialRequests, 'initial preview')
+        page.requests.length = 0
+
+        // Start with the markup Hugo emitted, including its initial device classes,
+        // rather than copying a section already changed by the preview script.
+        await page.evaluate(`(async () => {
+          const response = await fetch(location.pathname);
+          if (!response.ok) throw new Error('could not fetch the fresh preview markup');
+          const rendered = new DOMParser().parseFromString(await response.text(), 'text/html');
+          const fresh = rendered.querySelector('section.preview');
+          for (const frame of fresh.querySelectorAll('iframe[data-src]')) {
+            const url = new URL(frame.dataset.src, location.href);
+            url.searchParams.set('replacement', '1');
+            frame.dataset.src = url.href;
+            if (frame.hasAttribute('src')) frame.src = url.href;
+          }
+          document.querySelector('section.preview').replaceWith(fresh);
+        })()`)
+
+        const inserted = await page.settle([])
+        assertView(page, inserted, device, initialRequests, 'replacement preview')
+        assert.ok(await page.evaluate(`parseFloat(document.querySelector('.preview-content > .tab-pane.active iframe').style.getPropertyValue('--preview-scale')) > 0`),
+          'the visible replacement iframe is scaled')
+        if (click) {
+          assert.equal(visiblePoster(inserted).visible, true, 'replacement poster is visible before activation')
+          await activateWithEnter(page)
+          assertView(page, await page.settle([device]), device, [device], 'activated replacement')
+        }
+      } finally {
+        await page.close()
+      }
+    })
+  }
+}
+
 test('default: a tablet click before window load loads the tablet view', { skip }, async () => {
   const page = await openPage(browser.cdp, base, 'default', 1280, { hold: true })
   try {

@@ -651,9 +651,10 @@
     return staticEnhancements.has(container) || (enhanced(container) && !ownershipSupported) || pastStaticLimit(container)
   }
 
-  // Only opt-in lifecycle modes need discovery and an eligibility controller.
-  // Existing editor/load behavior remains on the original initialization path.
+  // Only opt-in lifecycle modes need an eligibility controller. Every preview
+  // needs its device selected when the container is first discovered.
   const controllers = new Map()
+  const initializedDevices = new WeakSet()
   const measuredWindows = new Map()
   const geometryObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updatePreviewScale) : null
   const staticEnhancements = new WeakSet()
@@ -761,6 +762,7 @@
   }
 
   function releaseOwnership (container) {
+    if (!owned(container)) initializedDevices.delete(container)
     const hook = ownershipHooks.get(container)
     if (hook) {
       ownershipHooks.delete(container)
@@ -881,6 +883,7 @@
     measuredWindows.forEach((bar, container) => { if (!owned(container)) releaseOwnership(container) })
     controllers.forEach((controller, container) => { if (!owned(container)) releaseOwnership(container) })
     document.querySelectorAll('section.preview .preview-content').forEach(container => {
+      if (!initializedDevices.has(container)) updatePreviewDevice(container)
       if (geometryObserver && container.dataset.frame === 'window' && !measuredWindows.has(container)) {
         const bar = container.closest('.preview-window').querySelector('.preview-window-bar')
         measuredWindows.set(container, bar)
@@ -1109,46 +1112,29 @@
     })
   }
 
-  function initPreviewAutoPick () {
-    document.querySelectorAll('section.preview .preview-content[data-controls="false"]').forEach(container => {
-      const show = () => {
-        const target = showFittingPane(container)
-        if (!target) return
-        if (isActivated(container)) loadPane(target)
-        updateWindowStatus(container)
-        updatePreviewScale()
-      }
+  function updatePreviewDevice (container) {
+    initializedDevices.add(container)
+    if (container.dataset.controls === 'false') {
+      const pane = showFittingPane(container)
+      if (!pane) return
+      loadPane(pane)
+      updateWindowStatus(container)
+      return
+    }
 
-      onBreakpointChange(show)
-      show()
-    })
-  }
+    // Keep a manually selected view while its control is visible. If the
+    // stylesheet hides it, use Bootstrap to select a fitting device.
+    const section = container.closest('section.preview')
+    const buttons = Array.from(section.querySelectorAll('.preview-controls .btn-group .btn'))
+    const isHidden = button => window.getComputedStyle(button).display === 'none'
+    const activeButton = buttons.find(button => button.classList.contains('active'))
+    if (!activeButton || !isHidden(activeButton)) return
 
-  function initPreviewAutoSwitch () {
-    document.querySelectorAll('section.preview').forEach(section => {
-      const buttons = Array.from(section.querySelectorAll('.preview-controls .btn-group .btn'))
-      if (buttons.length === 0) return
-
-      const isHidden = button => window.getComputedStyle(button).display === 'none'
-      const deviceOf = button => PREVIEW_DEVICES.find(device => button.dataset.bsTarget.endsWith(`-${device}`))
-
-      /**
-       * When the stylesheet hides the active button, switch to the device that
-       * pickDevice chooses among the visible buttons
-       */
-      const checkAndSwitchDevice = () => {
-        const activeButton = buttons.find(button => button.classList.contains('active'))
-        if (!activeButton || !isHidden(activeButton)) return
-
-        const visibleButtons = buttons.filter(button => !isHidden(button))
-        const device = pickDevice(visibleButtons.map(deviceOf))
-        const target = visibleButtons.find(button => deviceOf(button) === device)
-        if (target) target.click()
-      }
-
-      onBreakpointChange(checkAndSwitchDevice)
-      checkAndSwitchDevice()
-    })
+    const deviceOf = button => PREVIEW_DEVICES.find(device => button.dataset.bsTarget.endsWith(`-${device}`))
+    const visibleButtons = buttons.filter(button => !isHidden(button))
+    const device = pickDevice(visibleButtons.map(deviceOf))
+    const target = visibleButtons.find(button => deviceOf(button) === device)
+    if (target) target.click()
   }
 
   // Load a view when its tab is first shown, and show an item when its tab is.
@@ -1201,9 +1187,12 @@
   function init () {
     initPreviewReady()
     updatePreviewScale()
-    initPreviewAutoPick()
-    initPreviewAutoSwitch()
     discoverPreviews()
+    updatePreviewScale()
+    onBreakpointChange(() => {
+      document.querySelectorAll('section.preview .preview-content').forEach(updatePreviewDevice)
+      updatePreviewScale()
+    })
     document.querySelectorAll('section.preview .preview-content').forEach(updateWindowStatus)
     if (typeof MutationObserver !== 'undefined') {
       new MutationObserver(records => {
