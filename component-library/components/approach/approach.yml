@@ -10,6 +10,9 @@ comment: >-
   element icon such as '1-circle'. Both arguments default to the existing
   card grid.
 arguments:
+  elements:
+    type: basic-elements
+    comment: Steps in the Approach block.
   numbered:
     type: bool
     optional: true
