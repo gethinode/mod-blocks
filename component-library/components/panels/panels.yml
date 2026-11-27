@@ -1,5 +1,9 @@
 comment: >-
   Renders a set of expandable panels with icons and content.
+arguments:
+  elements:
+    type: basic-elements
+    comment: Panels displayed under the tab controls.
 example: |
   heading:
     title: Features
