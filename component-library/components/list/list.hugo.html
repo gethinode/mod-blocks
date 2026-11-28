@@ -15,7 +15,7 @@
     {{ $bookshop := "list" }}
 	{{/* Exclude the injected block-dispatcher props from validation */}}
 	{{ $props := dict }}
-	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed" "_selected_pages") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
 	{{ $result := partial "utilities/Args.html" (dict "bookshop" $bookshop "args" $props "strict" false) }}
     {{ $err := $result.err }}
     {{ $msg := ($result.errmsg | append $result.warnmsg) }}
@@ -53,16 +53,7 @@
 	{{ $pages := slice }}
 	{{ $result := dict "total" 0 }}
 	{{ with .input }}
-		{{ $result = partial "assets/live-pages.html" (dict 
-			"page"       $page
-			"section"    .section
-			"nested"     .nested
-			"keywords"   .keywords
-			"categories" .categories
-			"tags"       .tags
-			"sort"       .sort
-			"reverse"    .reverse
-		)}}
+		{{ $result = or $._selected_pages (partial "bookshop/shared/hugo/select-pages.hugo.html" (dict "page" $page "input" .)) }}
 		{{ $pages = $result.pages }}
 	{{ end }}
 

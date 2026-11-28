@@ -14,7 +14,7 @@
 {{ if not site.Params.env_bookshop_live }}
 	{{/* Exclude the injected block-dispatcher props from validation */}}
 	{{ $props := dict }}
-	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
+	{{ range $k, $v := . }}{{ if not (in (slice "_page" "_embed" "_selected_pages") $k) }}{{ $props = merge $props (dict $k $v) }}{{ end }}{{ end }}
 	{{ $result := partial "utilities/Args.html" (dict "bookshop" "team" "args" $props "strict" false) }}
 	{{ if or $result.err $result.warnmsg }}
 		{{ partial (cond $result.err "utilities/LogErr.html" "utilities/LogWarn.html") (dict 
@@ -42,16 +42,7 @@
 	{{ with .input }}
 		{{ $section = .section }}
 		{{ $categories = .categories }}
-		{{ $result = partial "assets/live-pages.html" (dict 
-			"page"       (or $.page $page)
-			"section"    .section
-			"nested"     .nested
-			"keywords"   .keywords
-			"categories" .categories
-			"tags"       .tags
-			"sort"       .sort
-			"reverse"    (.reverse | default false)
-		)}}
+		{{ $result = or $._selected_pages (partial "bookshop/shared/hugo/select-pages.hugo.html" (dict "page" (or $.page $page) "input" .)) }}
 		{{ $pages = $result.pages }}
 	{{ end }}
 

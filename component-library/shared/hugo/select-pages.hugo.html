@@ -1,0 +1,14 @@
+{{- $result := dict "pages" slice "total" 0 -}}
+{{- with .input -}}
+    {{- $result = partial "assets/live-pages.html" (dict
+        "page"       $.page
+        "section"    .section
+        "nested"     .nested
+        "keywords"   .keywords
+        "categories" .categories
+        "tags"       .tags
+        "sort"       .sort
+        "reverse"    .reverse
+    ) -}}
+{{- end -}}
+{{- return $result -}}
