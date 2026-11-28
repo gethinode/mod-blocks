@@ -24,15 +24,14 @@
          itself when a page's content is rendered. A block that suppresses its own heading (an
          explicit level of 0) or whose component does not declare heading_level in its blueprint
          is passed over. A block that hides itself when its section is empty (hide_empty)
-         ranks last: a later titled block wins over it, and the first such block leads only when
-         no other candidate exists. Whether such a block will render is unknown here; when every
-         candidate hides itself and the first turns out empty while a later one renders, the
-         page has no h1. */}}
+         ranks last: use the first conditional block that will render only if no
+         unconditional titled candidate exists. */}}
     {{ $data := partial "utilities/GetData.html" . }}
     {{ $components := $data.structures.components | default dict }}
     {{ $lead := -1 }}
-    {{ if gt $headingLevel 0 }}
-        {{ $fallback := -1 }}
+    {{ $selections := dict }}
+    {{ if eq $headingLevel 1 }}
+        {{ $fallbacks := slice }}
         {{ range $k, $v := . }}
             {{ if lt $lead 0 }}
                 {{- $name := index $v "_bookshop_name" | default "" }}
@@ -49,14 +48,37 @@
                 {{- if and $leveled $titled (not $suppressed) }}
                     {{- if not $hidden }}
                         {{- $lead = $k }}
-                    {{- else if lt $fallback 0 }}
-                        {{- $fallback = $k }}
+                    {{- else }}
+                        {{- $fallbacks = $fallbacks | append $k }}
                     {{- end }}
                 {{- end }}
             {{- end }}
         {{ end }}
         {{ if lt $lead 0 }}
-            {{ $lead = $fallback }}
+            {{ $source := . }}
+            {{ range $fallbacks }}
+                {{ $block := index $source . }}
+                {{ $name := $block._bookshop_name }}
+                {{/* Only these wrappers hide based on their page selection.
+                     Articles reads hide_empty, while List and Team also accept hide-empty. */}}
+                {{ $hidesEmpty := in (slice "articles" "list" "team") $name }}
+                {{ if eq $name "articles" }}{{ $hidesEmpty = $block.hide_empty }}{{ end }}
+                {{ if not $hidesEmpty }}
+                    {{ $lead = . }}
+                    {{ break }}
+                {{ end }}
+                {{ if reflect.IsMap $block.input }}
+                    {{ $owner := $page }}
+                    {{ if ne $name "list" }}{{ $owner = or $block.page $page }}{{ end }}
+                    {{ $selection := partial "bookshop/shared/hugo/select-pages.hugo.html" (dict "page" $owner "input" $block.input) }}
+                    {{/* Reuse this dispatch's selection during render, including empty results. */}}
+                    {{ $selections = merge $selections (dict (string .) $selection) }}
+                    {{ if $selection.pages }}
+                        {{ $lead = . }}
+                        {{ break }}
+                    {{ end }}
+                {{ end }}
+            {{ end }}
         {{ end }}
     {{ end }}
 
@@ -64,6 +86,7 @@
     {{ $blocks := slice }}
     {{ range $k, $v := .  }}
         {{ $b := merge $v (dict "_ordinal" $k "_page" $page) }}
+        {{ with index $selections (string $k) }}{{ $b = merge $b (dict "_selected_pages" .) }}{{ end }}
         {{ if ne $embed nil }}{{ $b = merge $b (dict "_embed" $embed) }}{{ end }}
         {{ if and (gt $headingLevel 0) (not (or (isset $v "heading_level") (isset $v "heading-level"))) }}
             {{- $name := index $v "_bookshop_name" | default "" }}

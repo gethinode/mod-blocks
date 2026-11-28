@@ -25,7 +25,7 @@ const partials = {
   'utilities/AddModule.html': '',
   'utilities/LogWarn.html': '',
   // Live editing supplies pages as plain maps, which the list renders into its default table.
-  'assets/live-pages.html': '{{ return (dict "pages" (slice (dict "title" "A" "description" "a")) "total" 1) }}',
+  'assets/live-pages.html': '{{ $pages := slice }}{{ if ne .section "empty" }}{{ $pages = slice (dict "title" "A" "description" "a") }}{{ end }}{{ return (dict "pages" $pages "total" (len $pages)) }}',
   'assets/section-title.html': '',
   // Reports which table arguments the list passed, so the controls-layout default is visible.
   'assets/table.html': '{{ range $k, $v := . }}[{{ $k }}={{ $v }}]{{ end }}',
@@ -49,9 +49,11 @@ const files = {
   ...readTree(`${MOD_UTILS}/data`, 'data'),
   ...readTree('i18n', 'i18n'),
   ...readTree('data', 'data'),
+  ...readTree('component-library/shared/hugo', 'layouts/_partials/bookshop/shared/hugo'),
   // The component blueprints that Bookshop supplies, and the table schema that Hinode supplies.
   'data/structures/components.json': JSON.stringify({
     hero: { 'hero.bookshop': { blueprint: { heading_level: 2 } } },
+    articles: { 'articles.bookshop': { blueprint: { heading_level: 2 } } },
     text: { 'text.bookshop': { blueprint: {} } }
   }),
   'data/structures/components/preview/preview.bookshop.yml': fs.readFileSync('component-library/components/preview/preview.bookshop.yml', 'utf8'),
@@ -97,6 +99,18 @@ test('blocks.html reads the component blueprints through GetData', () => {
   // is the lead block and takes the requested level 1. text declares none and gets no level.
   assert.match(output, /<block text level=none>/)
   assert.match(output, /<block hero level=1>/)
+})
+
+test('blocks.html skips conditional candidates without live pages', () => {
+  const makeBlock = (title, input) => ({ _bookshop_name: 'articles', heading: { title }, hide_empty: true, input })
+  const template = '{{ partial "page/blocks.html" (dict "page" . "heading-level" 1) }}'
+  const empty = [makeBlock('No input'), makeBlock('No matching pages', { section: 'empty' })]
+  const result = renderer.render(template, { content_blocks: [...empty, makeBlock('Available', { section: 'x' })] })
+  assert.equal(result.error, null)
+  assert.deepEqual([...result.output.matchAll(/<block articles level=(\d)>/g)].map(match => match[1]), ['2', '2', '1'])
+  const allEmpty = renderer.render(template, { content_blocks: empty })
+  assert.equal(allEmpty.error, null)
+  assert.doesNotMatch(allEmpty.output, /level=1/)
 })
 
 test('list reads the table schema through GetData', () => {
